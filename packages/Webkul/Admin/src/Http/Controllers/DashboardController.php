@@ -3,18 +3,25 @@
 namespace Webkul\Admin\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Webkul\Admin\Exports\Dashboard\DashboardExport;
 use Webkul\Admin\Helpers\Dashboard;
 use Webkul\Lead\Repositories\PipelineRepository;
+
+
+
 
 class DashboardController extends Controller
 {
     /**
-     * Request param functions
+     * Mapping tipe statistik dashboard.
      *
-     * @var array
+     * @var array<string, string>
      */
-    protected $typeFunctions = [
+    protected array $typeFunctions = [
         'over-all' => 'getOverAllStats',
         'revenue-stats' => 'getRevenueStats',
         'total-leads' => 'getTotalLeadsStats',
@@ -27,8 +34,6 @@ class DashboardController extends Controller
 
     /**
      * Create a new controller instance.
-     *
-     * @return void
      */
     public function __construct(
         protected Dashboard $dashboardHelper,
@@ -36,11 +41,9 @@ class DashboardController extends Controller
     ) {}
 
     /**
-     * Display a listing of the resource.
-     *
-     * @return View
+     * Menampilkan halaman dashboard.
      */
-    public function index()
+    public function index(): View
     {
         return view('admin::dashboard.index')->with([
             'startDate' => $this->dashboardHelper->getStartDate(),
@@ -51,17 +54,101 @@ class DashboardController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
-     *
-     * @return JsonResponse
+     * Mengambil statistik dashboard.
      */
-    public function stats()
+    public function stats(): JsonResponse
     {
-        $stats = $this->dashboardHelper->{$this->typeFunctions[request()->query('type')]}();
+        $type = request()->query('type');
+
+        abort_unless(
+            isset($this->typeFunctions[$type]),
+            404,
+            'Tipe statistik dashboard tidak ditemukan.'
+        );
+
+        $stats = $this->dashboardHelper->{$this->typeFunctions[$type]}();
 
         return response()->json([
             'statistics' => $stats,
             'date_range' => $this->dashboardHelper->getDateRange(),
         ]);
+    }
+
+    /**
+     * Export dashboard berdasarkan range tanggal.
+     *
+     * Hanya role Administrator yang boleh melakukan export.
+     */
+    public function export(Request $request): BinaryFileResponse
+    {
+        $user = auth()->guard('user')->user();
+
+        abort_unless(
+            $user
+            && strcasecmp(
+                (string) $user->role?->name,
+                'Administrator'
+            ) === 0,
+            403,
+            'Anda tidak memiliki izin untuk mengekspor dashboard.'
+        );
+
+        $validated = $request->validate([
+            'start' => [
+                'required',
+                'date_format:Y-m-d',
+            ],
+
+            'end' => [
+                'required',
+                'date_format:Y-m-d',
+                'after_or_equal:start',
+                'before_or_equal:today',
+            ],
+
+            'pipeline_id' => [
+                'nullable',
+                'integer',
+            ],
+        ]);
+
+        $pipeline = ! empty($validated['pipeline_id'])
+            ? $this->pipelineRepository->find($validated['pipeline_id'])
+            : $this->pipelineRepository->getDefaultPipeline();
+
+        abort_unless(
+            $pipeline,
+            404,
+            'Pipeline tidak ditemukan.'
+        );
+
+        /*
+         * DashboardHelper membaca parameter start, end, dan pipeline_id
+         * langsung dari request yang sama.
+         */
+        $startDate = $this->dashboardHelper
+            ->getStartDate()
+            ->format('Y-m-d');
+
+        $endDate = $this->dashboardHelper
+            ->getEndDate()
+            ->format('Y-m-d');
+
+        $fileName = sprintf(
+            'dashboard-report-%s-to-%s.xlsx',
+            $startDate,
+            $endDate
+        );
+
+        return Excel::download(
+            new DashboardExport(
+                dashboard: $this->dashboardHelper,
+                pipelineName: $pipeline->name,
+                startDate: $startDate,
+                endDate: $endDate,
+                generatedBy: $user->name
+            ),
+            $fileName
+        );
     }
 }

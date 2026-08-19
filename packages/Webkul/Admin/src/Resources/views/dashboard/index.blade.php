@@ -140,6 +140,21 @@
                         placeholder="@lang('admin::app.dashboard.index.end-date')"
                     />
                 </x-admin::flat-picker.date>
+
+                            @if (
+                strcasecmp(
+                    (string) auth()->guard('user')->user()?->role?->name,
+                    'Administrator'
+                ) === 0
+            )
+                <a
+                    :href="exportUrl"
+                    class="primary-button flex min-h-[39px] items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm"
+                    title="Export dashboard sesuai rentang tanggal"
+                >
+                    Export Excel
+                </a>
+            @endif
             </div>
 
             {!! view_render_event('admin.dashboard.index.date_filters.after') !!}
@@ -161,6 +176,18 @@
                             end: "{{ $endDate->format('Y-m-d') }}",
                         }
                     }
+                },
+
+                                computed: {
+                    exportUrl() {
+                        const params = new URLSearchParams({
+                            start: this.filters.start,
+                            end: this.filters.end,
+                            pipeline_id: this.filters.pipeline_id || '',
+                        });
+
+                        return `{{ route('admin.dashboard.export') }}?${params.toString()}`;
+                    },
                 },
 
                 watch: {

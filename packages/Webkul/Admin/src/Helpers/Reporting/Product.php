@@ -2,6 +2,7 @@
 
 namespace Webkul\Admin\Helpers\Reporting;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Webkul\Lead\Repositories\ProductRepository;
@@ -20,75 +21,95 @@ class Product extends AbstractReporting
     }
 
     /**
+     * Build a lead-product query and apply visibility through the lead owner.
+     */
+    protected function getScopedLeadProductQuery(): Builder
+    {
+        $query = $this->productRepository
+            ->resetModel()
+            ->getModel()
+            ->newQuery()
+            ->leftJoin('leads', 'lead_products.lead_id', '=', 'leads.id');
+
+        if (auth()->guard('user')->check()) {
+            $userIds = bouncer()->getAuthorizedUserIds();
+
+            if ($userIds !== null) {
+                $query->whereIn('leads.user_id', $userIds);
+            }
+        }
+
+        return $query;
+    }
+
+    /**
      * Gets top-selling products by revenue.
      *
-     * @param  int  $limit
+     * @param  int|null  $limit
      */
     public function getTopSellingProductsByRevenue($limit = null): Collection
     {
-        $tablePrefix = DB::getTablePrefix();
-
-        $items = $this->productRepository
-            ->resetModel()
+        $query = $this->getScopedLeadProductQuery()
             ->with('product')
-            ->leftJoin('leads', 'lead_products.lead_id', '=', 'leads.id')
-            ->leftJoin('products', 'lead_products.product_id', '=', 'products.id')
-            ->select('*')
-            ->addSelect(DB::raw('SUM('.$tablePrefix.'lead_products.amount) as revenue'))
+            ->select(
+                'lead_products.product_id',
+                DB::raw('SUM(lead_products.amount) as revenue')
+            )
             ->whereBetween('leads.closed_at', [$this->startDate, $this->endDate])
-            ->having(DB::raw('SUM('.$tablePrefix.'lead_products.amount)'), '>', 0)
-            ->groupBy('product_id')
-            ->orderBy('revenue', 'DESC')
-            ->limit($limit)
-            ->get();
+            ->groupBy('lead_products.product_id')
+            ->havingRaw('SUM(lead_products.amount) > 0')
+            ->orderByDesc('revenue');
 
-        $items = $items->map(function ($item) {
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        return $query->get()->map(function ($item) {
+            $price = $item->product?->price ?? 0;
+
             return [
                 'id' => $item->product_id,
-                'name' => $item->name,
-                'price' => $item->product?->price,
-                'formatted_price' => core()->formatBasePrice($item->price),
-                'revenue' => $item->revenue,
+                'name' => $item->product?->name,
+                'price' => $price,
+                'formatted_price' => core()->formatBasePrice($price),
+                'revenue' => (float) $item->revenue,
                 'formatted_revenue' => core()->formatBasePrice($item->revenue),
             ];
         });
-
-        return $items;
     }
 
     /**
      * Gets top-selling products by quantity.
      *
-     * @param  int  $limit
+     * @param  int|null  $limit
      */
     public function getTopSellingProductsByQuantity($limit = null): Collection
     {
-        $tablePrefix = DB::getTablePrefix();
-
-        $items = $this->productRepository
-            ->resetModel()
+        $query = $this->getScopedLeadProductQuery()
             ->with('product')
-            ->leftJoin('leads', 'lead_products.lead_id', '=', 'leads.id')
-            ->leftJoin('products', 'lead_products.product_id', '=', 'products.id')
-            ->select('*')
-            ->addSelect(DB::raw('SUM('.$tablePrefix.'lead_products.quantity) as total_qty_ordered'))
+            ->select(
+                'lead_products.product_id',
+                DB::raw('SUM(lead_products.quantity) as total_qty_ordered')
+            )
             ->whereBetween('leads.closed_at', [$this->startDate, $this->endDate])
-            ->having(DB::raw('SUM('.$tablePrefix.'lead_products.quantity)'), '>', 0)
-            ->groupBy('product_id')
-            ->orderBy('total_qty_ordered', 'DESC')
-            ->limit($limit)
-            ->get();
+            ->groupBy('lead_products.product_id')
+            ->havingRaw('SUM(lead_products.quantity) > 0')
+            ->orderByDesc('total_qty_ordered');
 
-        $items = $items->map(function ($item) {
+        if ($limit !== null) {
+            $query->limit($limit);
+        }
+
+        return $query->get()->map(function ($item) {
+            $price = $item->product?->price ?? 0;
+
             return [
                 'id' => $item->product_id,
-                'name' => $item->name,
-                'price' => $item->product?->price,
-                'formatted_price' => core()->formatBasePrice($item->price),
-                'total_qty_ordered' => $item->total_qty_ordered,
+                'name' => $item->product?->name,
+                'price' => $price,
+                'formatted_price' => core()->formatBasePrice($price),
+                'total_qty_ordered' => (float) $item->total_qty_ordered,
             ];
         });
-
-        return $items;
     }
 }

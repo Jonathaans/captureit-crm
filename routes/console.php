@@ -20,3 +20,11 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('inbound-emails:process')->everyFiveMinutes();
+
+Schedule::job(
+    new \Webkul\Google\Jobs\PeriodicSynchronizations()
+)->everyFifteenMinutes();
+
+Schedule::job(
+    new \Webkul\Google\Jobs\RefreshWebhookSynchronizations()
+)->daily();

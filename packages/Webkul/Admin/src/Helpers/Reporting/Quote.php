@@ -3,6 +3,7 @@
 namespace Webkul\Admin\Helpers\Reporting;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Webkul\Quote\Repositories\QuoteRepository;
 
 class Quote extends AbstractReporting
@@ -18,7 +19,28 @@ class Quote extends AbstractReporting
     }
 
     /**
-     * Retrieves total quotes and their progress.
+     * Build a fresh quotation query scoped to the current user's visibility.
+     */
+    protected function getScopedQuoteQuery(): Builder
+    {
+        $query = $this->quoteRepository
+            ->resetModel()
+            ->getModel()
+            ->newQuery();
+
+        if (auth()->guard('user')->check()) {
+            $userIds = bouncer()->getAuthorizedUserIds();
+
+            if ($userIds !== null) {
+                $query->whereIn('quotes.user_id', $userIds);
+            }
+        }
+
+        return $query;
+    }
+
+    /**
+     * Retrieves total quotations and their progress.
      */
     public function getTotalQuotesProgress(): array
     {
@@ -30,16 +52,15 @@ class Quote extends AbstractReporting
     }
 
     /**
-     * Retrieves total quotes by date
+     * Retrieves total quotations by date.
      *
      * @param  Carbon  $startDate
      * @param  Carbon  $endDate
      */
     public function getTotalQuotes($startDate, $endDate): int
     {
-        return $this->quoteRepository
-            ->resetModel()
-            ->whereBetween('created_at', [$startDate, $endDate])
+        return $this->getScopedQuoteQuery()
+            ->whereBetween('quotes.created_at', [$startDate, $endDate])
             ->count();
     }
 }
