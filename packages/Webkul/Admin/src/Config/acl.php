@@ -66,7 +66,32 @@ return [
         'name' => 'admin::app.acl.delete',
         'route' => ['admin.quotes.delete', 'admin.quotes.mass_delete'],
         'sort' => 4,
-    ], [
+    ], 
+    /**
+ * Invoices.
+ */
+[
+    'key' => 'invoices',
+    'name' => 'admin::app.acl.invoices',
+    'route' => 'admin.invoices.index',
+    'sort' => 4,
+], [
+    'key' => 'invoices.view',
+    'name' => 'admin::app.acl.view',
+    'route' => 'admin.invoices.show',
+    'sort' => 1,
+], [
+    'key' => 'invoices.generate',
+    'name' => 'admin::app.acl.generate-invoice',
+    'route' => 'admin.invoices.generate',
+    'sort' => 2,
+], [
+    'key' => 'invoices.payment',
+    'name' => 'admin::app.acl.add-payment',
+    'route' => 'admin.invoices.payments.store',
+    'sort' => 3,
+],
+    [
         'key' => 'mail',
         'name' => 'admin::app.acl.mail',
         'route' => 'admin.mail.index',

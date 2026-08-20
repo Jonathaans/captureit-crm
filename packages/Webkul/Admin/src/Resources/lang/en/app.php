@@ -6,6 +6,9 @@ return [
         'leads' => 'Leads',
         'lead' => 'Lead',
         'quotes' => 'Quotes',
+        'invoices' => 'Invoices',
+        'generate-invoice' => 'Generate Invoice',
+        'add-payment' => 'Add Payment',
         'mail' => 'Mail',
         'inbox' => 'Inbox',
         'draft' => 'Draft',
@@ -2186,6 +2189,8 @@ return [
         'leads' => 'Leads',
         'quotes' => 'Quotes',
         'quote' => 'Quote',
+        'invoices' => 'Invoices',
+        'invoice' => 'Invoice',
         'mail' => [
             'title' => 'Mail',
             'compose' => 'Compose',
