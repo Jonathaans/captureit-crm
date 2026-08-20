@@ -26,4 +26,10 @@ Route::controller(InvoiceController::class)
 
         Route::post('{id}/expenses', 'addExpense')
             ->name('admin.invoices.expenses.store');
+
+        Route::put('{invoiceId}/expenses/{expenseId}', 'updateExpense')
+            ->name('admin.invoices.expenses.update');
+
+        Route::delete('{invoiceId}/expenses/{expenseId}', 'deleteExpense')
+            ->name('admin.invoices.expenses.delete');
     });

@@ -416,110 +416,350 @@
             </div>
 
 
-            <!-- ================================================= -->
-            <!-- EXPENSE HISTORY -->
-            <!-- ================================================= -->
+ <!-- ================================================= -->
+<!-- EXPENSE HISTORY -->
+<!-- ================================================= -->
 
-            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-                <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
-                    <div>
-                        <h2 class="text-lg font-semibold text-gray-800 dark:text-white">
-                            Expense History
-                        </h2>
+<div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+    <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+        <div>
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-white">
+                Expense History
+            </h2>
+
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Bon dan pengeluaran untuk invoice ini.
+            </p>
+        </div>
+
+        <div class="text-right">
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+                Total Expense
+            </p>
+
+            <p class="font-bold text-orange-600 dark:text-orange-400">
+                Rp {{ number_format($totalExpense, 0, ',', '.') }}
+            </p>
+        </div>
+    </div>
+
+    <div class="divide-y divide-gray-100 dark:divide-gray-800">
+        @forelse ($invoice->expenses->sortByDesc('expense_date') as $expense)
+            <div class="px-6 py-5">
+
+                <!-- EXPENSE ROW -->
+                <div class="flex items-start justify-between gap-4 max-sm:flex-col">
+
+                    <!-- LEFT -->
+                    <div class="flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <p class="font-semibold text-gray-800 dark:text-white">
+                                {{ $expense->description }}
+                            </p>
+
+                            <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                {{ ucwords(str_replace('_', ' ', $expense->category)) }}
+                            </span>
+                        </div>
+
+                        <div class="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
+                            @if ($expense->vendor_name)
+                                <p>
+                                    Vendor: {{ $expense->vendor_name }}
+                                </p>
+                            @endif
+
+                            @if ($expense->reference_number)
+                                <p>
+                                    Reference / No. Bon:
+                                    {{ $expense->reference_number }}
+                                </p>
+                            @endif
+
+                            @if ($expense->notes)
+                                <p>
+                                    Notes: {{ $expense->notes }}
+                                </p>
+                            @endif
+
+                            @if ($expense->creator)
+                                <p>
+                                    Added by: {{ $expense->creator->name }}
+                                </p>
+                            @endif
+                        </div>
+
+                        <!-- ACTIONS -->
+                        <div class="mt-4 flex flex-wrap items-center gap-3">
+
+                            <!-- VIEW BON -->
+                            @if ($expense->receipt_path)
+                                <a
+                                    href="{{ asset('storage/'.$expense->receipt_path) }}"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                                >
+                                    View Receipt / Bon
+                                </a>
+                            @endif
+
+                            <!-- EDIT -->
+                            <details class="group">
+                                <summary
+                                    class="cursor-pointer list-none text-sm font-medium text-yellow-600 hover:underline dark:text-yellow-400"
+                                >
+                                    Edit
+                                </summary>
+
+                                <!-- EDIT FORM -->
+                                <div class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-5 dark:border-gray-700 dark:bg-gray-950">
+                                    <h3 class="mb-4 font-semibold text-gray-800 dark:text-white">
+                                        Edit Expense
+                                    </h3>
+
+                                    <form
+                                        method="POST"
+                                        action="{{ route('admin.invoices.expenses.update', [
+                                            $invoice->id,
+                                            $expense->id
+                                        ]) }}"
+                                        enctype="multipart/form-data"
+                                        class="space-y-4"
+                                    >
+                                        @csrf
+                                        @method('PUT')
+
+                                        <!-- Category -->
+                                        <div>
+                                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Category
+                                                <span class="text-red-600">*</span>
+                                            </label>
+
+                                            <select
+                                                name="category"
+                                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                                required
+                                            >
+                                                <option
+                                                    value="transport"
+                                                    @selected($expense->category === 'transport')
+                                                >
+                                                    Transport
+                                                </option>
+
+                                                <option
+                                                    value="crew"
+                                                    @selected($expense->category === 'crew')
+                                                >
+                                                    Crew
+                                                </option>
+
+                                                <option
+                                                    value="printing"
+                                                    @selected($expense->category === 'printing')
+                                                >
+                                                    Printing
+                                                </option>
+
+                                                <option
+                                                    value="equipment"
+                                                    @selected($expense->category === 'equipment')
+                                                >
+                                                    Equipment
+                                                </option>
+
+                                                <option
+                                                    value="vendor"
+                                                    @selected($expense->category === 'vendor')
+                                                >
+                                                    Vendor
+                                                </option>
+
+                                                <option
+                                                    value="consumption"
+                                                    @selected($expense->category === 'consumption')
+                                                >
+                                                    Consumption
+                                                </option>
+
+                                                <option
+                                                    value="other"
+                                                    @selected($expense->category === 'other')
+                                                >
+                                                    Other
+                                                </option>
+                                            </select>
+                                        </div>
+
+                                        <!-- Description -->
+                                        <div>
+                                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Description
+                                                <span class="text-red-600">*</span>
+                                            </label>
+
+                                            <input
+                                                type="text"
+                                                name="description"
+                                                value="{{ $expense->description }}"
+                                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                                required
+                                            >
+                                        </div>
+
+                                        <!-- Amount -->
+                                        <div>
+                                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Amount
+                                                <span class="text-red-600">*</span>
+                                            </label>
+
+                                            <input
+                                                type="number"
+                                                name="amount"
+                                                value="{{ (float) $expense->amount }}"
+                                                min="1"
+                                                step="1"
+                                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                                required
+                                            >
+                                        </div>
+
+                                        <!-- Expense Date -->
+                                        <div>
+                                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Expense Date
+                                                <span class="text-red-600">*</span>
+                                            </label>
+
+                                            <input
+                                                type="date"
+                                                name="expense_date"
+                                                value="{{ $expense->expense_date?->format('Y-m-d') }}"
+                                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                                required
+                                            >
+                                        </div>
+
+                                        <!-- Vendor -->
+                                        <div>
+                                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Vendor
+                                            </label>
+
+                                            <input
+                                                type="text"
+                                                name="vendor_name"
+                                                value="{{ $expense->vendor_name }}"
+                                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                            >
+                                        </div>
+
+                                        <!-- Reference -->
+                                        <div>
+                                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Reference / No. Bon
+                                            </label>
+
+                                            <input
+                                                type="text"
+                                                name="reference_number"
+                                                value="{{ $expense->reference_number }}"
+                                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                            >
+                                        </div>
+
+                                        <!-- Replace Receipt -->
+                                        <div>
+                                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Replace Bon
+                                            </label>
+
+                                            @if ($expense->receipt_path)
+                                                <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                                                    Bon lama tetap digunakan jika tidak memilih file baru.
+                                                </p>
+                                            @endif
+
+                                            <input
+                                                type="file"
+                                                name="receipt"
+                                                accept=".jpg,.jpeg,.png,.pdf"
+                                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+                                            >
+                                        </div>
+
+                                        <!-- Notes -->
+                                        <div>
+                                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Notes
+                                            </label>
+
+                                            <textarea
+                                                name="notes"
+                                                rows="3"
+                                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+                                            >{{ $expense->notes }}</textarea>
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            class="primary-button"
+                                        >
+                                            Update Expense
+                                        </button>
+                                    </form>
+                                </div>
+                            </details>
+
+
+                            <!-- DELETE -->
+                            <form
+                                method="POST"
+                                action="{{ route('admin.invoices.expenses.delete', [
+                                    $invoice->id,
+                                    $expense->id
+                                ]) }}"
+                                onsubmit="return confirm('Hapus expense ini? Data dan bon yang terkait akan dihapus.');"
+                            >
+                                @csrf
+                                @method('DELETE')
+
+                                <button
+                                    type="submit"
+                                    class="text-sm font-medium text-red-600 hover:underline dark:text-red-400"
+                                >
+                                    Delete
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+
+                    <!-- RIGHT -->
+                    <div class="text-right max-sm:text-left">
+                        <p class="text-lg font-bold text-red-600 dark:text-red-400">
+                            - Rp {{ number_format((float) $expense->amount, 0, ',', '.') }}
+                        </p>
 
                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            Bon dan pengeluaran untuk invoice ini.
+                            {{ $expense->expense_date?->format('d M Y') ?? '-' }}
                         </p>
                     </div>
-
-                    <div class="text-right">
-                        <p class="text-xs text-gray-500 dark:text-gray-400">
-                            Total Expense
-                        </p>
-
-                        <p class="font-bold text-orange-600 dark:text-orange-400">
-                            Rp {{ number_format($totalExpense, 0, ',', '.') }}
-                        </p>
-                    </div>
-                </div>
-
-                <div class="divide-y divide-gray-100 dark:divide-gray-800">
-                    @forelse ($invoice->expenses->sortByDesc('expense_date') as $expense)
-                        <div class="px-6 py-5">
-                            <div class="flex items-start justify-between gap-4 max-sm:flex-col">
-                                <div>
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <p class="font-semibold text-gray-800 dark:text-white">
-                                            {{ $expense->description }}
-                                        </p>
-
-                                        <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                                            {{ ucwords(str_replace('_', ' ', $expense->category)) }}
-                                        </span>
-                                    </div>
-
-                                    <div class="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
-                                        @if ($expense->vendor_name)
-                                            <p>
-                                                Vendor: {{ $expense->vendor_name }}
-                                            </p>
-                                        @endif
-
-                                        @if ($expense->reference_number)
-                                            <p>
-                                                Reference / No. Bon:
-                                                {{ $expense->reference_number }}
-                                            </p>
-                                        @endif
-
-                                        @if ($expense->notes)
-                                            <p>
-                                                Notes: {{ $expense->notes }}
-                                            </p>
-                                        @endif
-
-                                        @if ($expense->creator)
-                                            <p>
-                                                Added by: {{ $expense->creator->name }}
-                                            </p>
-                                        @endif
-                                    </div>
-
-                                    @if ($expense->receipt_path)
-                                        <div class="mt-3">
-                                            <a
-                                                href="{{ asset('storage/'.$expense->receipt_path) }}"
-                                                target="_blank"
-                                                rel="noopener"
-                                                class="font-medium text-blue-600 hover:underline dark:text-blue-400"
-                                            >
-                                                View Receipt / Bon
-                                            </a>
-                                        </div>
-                                    @endif
-                                </div>
-
-                                <div class="text-right max-sm:text-left">
-                                    <p class="text-lg font-bold text-red-600 dark:text-red-400">
-                                        - Rp {{ number_format((float) $expense->amount, 0, ',', '.') }}
-                                    </p>
-
-                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                        {{ $expense->expense_date?->format('d M Y') ?? '-' }}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    @empty
-                        <div class="px-6 py-10 text-center">
-                            <p class="text-gray-500 dark:text-gray-400">
-                                Belum ada pengeluaran.
-                            </p>
-                        </div>
-                    @endforelse
                 </div>
             </div>
-        </div>
+
+        @empty
+            <div class="px-6 py-10 text-center">
+                <p class="text-gray-500 dark:text-gray-400">
+                    Belum ada pengeluaran.
+                </p>
+            </div>
+        @endforelse
+    </div>
+</div>
 
 
         <!-- ===================================================== -->

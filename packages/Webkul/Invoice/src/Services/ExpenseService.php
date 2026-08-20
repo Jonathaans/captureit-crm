@@ -34,4 +34,39 @@ class ExpenseService
             ]);
         });
     }
+    public function updateExpense(
+    Expense $expense,
+    array $data
+): Expense {
+    return DB::transaction(function () use ($expense, $data) {
+        $amount = (float) ($data['amount'] ?? 0);
+
+        if ($amount <= 0) {
+            throw new InvalidArgumentException(
+                'Expense amount must be greater than zero.'
+            );
+        }
+
+        $expense->update([
+            'category'         => $data['category'],
+            'description'      => $data['description'],
+            'amount'           => $amount,
+            'expense_date'     => $data['expense_date'],
+            'vendor_name'      => $data['vendor_name'] ?? null,
+            'reference_number' => $data['reference_number'] ?? null,
+            'receipt_path'     => $data['receipt_path']
+                ?? $expense->receipt_path,
+            'notes'            => $data['notes'] ?? null,
+        ]);
+
+        return $expense->fresh();
+    });
+}
+
+public function deleteExpense(Expense $expense): void
+{
+    DB::transaction(function () use ($expense) {
+        $expense->delete();
+    });
+}
 }
