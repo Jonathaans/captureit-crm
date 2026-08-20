@@ -40,6 +40,8 @@ require 'activities-routes.php';
  */
 require 'quote-routes.php';
 
+require __DIR__.'/invoice-routes.php';
+
 /**
  * Configuration routes.
  */
