@@ -873,17 +873,50 @@
                         </div>
 
                         <!-- Payment Date -->
-                        <div>
-                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Payment Date
-                            </label>
+<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <!-- Payment Date -->
+    <div>
+        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Payment Date
+        </label>
 
-                            <input
-                                type="datetime-local"
-                                name="paid_at"
-                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-                            >
-                        </div>
+        <input
+            type="date"
+            name="paid_date"
+            value="{{ old('paid_date', now()->format('Y-m-d')) }}"
+            onclick="if (this.showPicker) this.showPicker()"
+            class="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+        >
+
+        @error('paid_date')
+            <p class="mt-2 text-sm text-red-600">
+                {{ $message }}
+            </p>
+        @enderror
+    </div>
+
+    <!-- Payment Time -->
+    <div>
+        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Payment Time
+        </label>
+
+        <input
+            type="time"
+            name="paid_time"
+            value="{{ old('paid_time', now()->format('H:i')) }}"
+            step="60"
+            onclick="if (this.showPicker) this.showPicker()"
+            class="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+        >
+
+        @error('paid_time')
+            <p class="mt-2 text-sm text-red-600">
+                {{ $message }}
+            </p>
+        @enderror
+    </div>
+</div>
 
                         <!-- Payment Notes -->
                         <div>

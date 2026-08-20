@@ -19,6 +19,102 @@
         </div>
     </div>
 
+    <!-- ========================================================= -->
+<!-- FILTERS -->
+<!-- ========================================================= -->
+
+<div class="mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+    <form
+        method="GET"
+        action="{{ route('admin.invoices.index') }}"
+        class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+    >
+        <!-- From Date -->
+        <div>
+            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                From Date
+            </label>
+
+        <input
+            type="date"
+            name="from_date"
+            value="{{ $fromDate }}"
+            onclick="if (this.showPicker) this.showPicker()"
+            class="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+        >
+        </div>
+
+        <!-- To Date -->
+        <div>
+            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                To Date
+            </label>
+
+        <input
+            type="date"
+            name="to_date"
+            value="{{ $toDate }}"
+            onclick="if (this.showPicker) this.showPicker()"
+            class="w-full cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+        >
+        </div>
+
+        <!-- Status -->
+        <div>
+            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Status
+            </label>
+
+            <select
+                name="status"
+                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+            >
+                <option value="">
+                    All Status
+                </option>
+
+                <option
+                    value="unpaid"
+                    @selected($status === 'unpaid')
+                >
+                    Unpaid
+                </option>
+
+                <option
+                    value="partial"
+                    @selected($status === 'partial')
+                >
+                    Partial
+                </option>
+
+                <option
+                    value="paid"
+                    @selected($status === 'paid')
+                >
+                    Paid
+                </option>
+            </select>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-end gap-2">
+            <button
+                type="submit"
+                class="primary-button flex-1 justify-center"
+            >
+                Filter
+            </button>
+
+            <a
+                href="{{ route('admin.invoices.index') }}"
+                class="secondary-button flex-1 justify-center"
+            >
+                Reset
+            </a>
+        </div>
+    </form>
+</div>
+
 
     <!-- ========================================================= -->
     <!-- FINANCIAL OVERVIEW -->
@@ -248,20 +344,35 @@
                                 </p>
                             </td>
 
-                            <!-- Status -->
+                                                        <!-- Status -->
                             <td class="px-5 py-4 text-center">
                                 @if ($invoice->status === 'paid')
-                                    <span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                    <span
+                                        class="inline-flex items-center rounded-full
+                                            bg-green-100 px-3 py-1
+                                            text-xs font-bold text-green-700
+                                            dark:bg-green-900/40 dark:text-green-300"
+                                    >
                                         PAID
                                     </span>
 
                                 @elseif ($invoice->status === 'partial')
-                                    <span class="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                    <span
+                                        class="inline-flex items-center rounded-full
+                                            bg-yellow-400 px-3 py-1
+                                            text-xs font-bold text-gray-900
+                                            dark:bg-yellow-400 dark:text-gray-900"
+                                    >
                                         PARTIAL
                                     </span>
 
                                 @else
-                                    <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                    <span
+                                        class="inline-flex items-center rounded-full
+                                            bg-red-100 px-3 py-1
+                                            text-xs font-bold text-red-700
+                                            dark:bg-red-900/40 dark:text-red-300"
+                                    >
                                         UNPAID
                                     </span>
                                 @endif

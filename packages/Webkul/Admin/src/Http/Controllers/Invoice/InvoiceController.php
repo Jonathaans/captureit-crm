@@ -2,6 +2,7 @@
 
 namespace Webkul\Admin\Http\Controllers\Invoice;
 
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -22,6 +23,9 @@ class InvoiceController extends Controller
 {
     use PDFHandler;
 
+    /**
+     * Constructor.
+     */
     public function __construct(
         protected InvoiceService $invoiceService,
         protected PaymentService $paymentService,
@@ -30,41 +34,88 @@ class InvoiceController extends Controller
     }
 
     /**
-     * Display invoice list.
+     * Display invoice list + financial overview + filters.
      */
-    public function index(): View
-{
-    $invoices = Invoice::query()
-        ->with([
-            'person',
-            'quote',
-        ])
-        ->withSum('expenses', 'amount')
-        ->latest('id')
-        ->paginate(20);
+    public function index(Request $request): View
+    {
+        $fromDate = $request->input('from_date');
+        $toDate = $request->input('to_date');
+        $status = $request->input('status');
 
-    $financialSummary = [
-        'revenue' => (float) Invoice::sum('grand_total'),
+        /**
+         * Base invoice query.
+         */
+        $baseQuery = Invoice::query()
+            ->when($fromDate, function ($query) use ($fromDate) {
+                $query->whereDate('issued_at', '>=', $fromDate);
+            })
+            ->when($toDate, function ($query) use ($toDate) {
+                $query->whereDate('issued_at', '<=', $toDate);
+            })
+            ->when($status, function ($query) use ($status) {
+                $query->where('status', $status);
+            });
 
-        'paid' => (float) Invoice::sum('paid_amount'),
+        /**
+         * Invoice IDs sesuai filter.
+         *
+         * Digunakan agar expense summary mengikuti
+         * invoice yang sedang difilter.
+         */
+        $filteredInvoiceIds = (clone $baseQuery)
+            ->pluck('id');
 
-        'outstanding' => (float) Invoice::sum('balance_due'),
+        /**
+         * Financial summary.
+         */
+        $financialSummary = [
+            'revenue' => (float) (clone $baseQuery)
+                ->sum('grand_total'),
 
-        'expense' => (float) Expense::sum('amount'),
-    ];
+            'paid' => (float) (clone $baseQuery)
+                ->sum('paid_amount'),
 
-    $financialSummary['profit'] =
-        $financialSummary['revenue']
-        - $financialSummary['expense'];
+            'outstanding' => (float) (clone $baseQuery)
+                ->sum('balance_due'),
 
-    return view(
-        'admin::invoices.index',
-        compact(
-            'invoices',
-            'financialSummary'
-        )
-    );
-}
+            'expense' => (float) Expense::query()
+                ->whereIn('invoice_id', $filteredInvoiceIds)
+                ->sum('amount'),
+        ];
+
+        /**
+         * Estimated Profit:
+         *
+         * Invoice Revenue - Expense
+         */
+        $financialSummary['profit'] =
+            $financialSummary['revenue']
+            - $financialSummary['expense'];
+
+        /**
+         * Invoice table.
+         */
+        $invoices = $baseQuery
+            ->with([
+                'person',
+                'quote',
+            ])
+            ->withSum('expenses', 'amount')
+            ->latest('id')
+            ->paginate(20)
+            ->withQueryString();
+
+        return view(
+            'admin::invoices.index',
+            compact(
+                'invoices',
+                'financialSummary',
+                'fromDate',
+                'toDate',
+                'status'
+            )
+        );
+    }
 
     /**
      * Display invoice detail.
@@ -80,7 +131,10 @@ class InvoiceController extends Controller
             'user',
         ])->findOrFail($id);
 
-        return view('admin::invoices.show', compact('invoice'));
+        return view(
+            'admin::invoices.show',
+            compact('invoice')
+        );
     }
 
     /**
@@ -88,9 +142,11 @@ class InvoiceController extends Controller
      */
     public function generate(int $quoteId): RedirectResponse
     {
-        $quote = Quote::with('items')->findOrFail($quoteId);
+        $quote = Quote::with('items')
+            ->findOrFail($quoteId);
 
-        $invoice = $this->invoiceService->createFromQuote($quote);
+        $invoice = $this->invoiceService
+            ->createFromQuote($quote);
 
         session()->flash(
             'success',
@@ -105,31 +161,88 @@ class InvoiceController extends Controller
 
     /**
      * Add payment to invoice.
+     *
+     * Payment date dan payment time berasal
+     * dari dua input terpisah di show.blade.php.
      */
     public function addPayment(
         Request $request,
         int $id
     ): RedirectResponse {
         $validated = $request->validate([
-            'amount'           => ['required', 'numeric', 'gt:0'],
-            'payment_method'   => ['nullable', 'string', 'max:255'],
-            'reference_number' => ['nullable', 'string', 'max:255'],
-            'notes'            => ['nullable', 'string'],
-            'paid_at'          => ['nullable', 'date'],
+            'amount' => [
+                'required',
+                'numeric',
+                'gt:0',
+            ],
+
+            'payment_method' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'reference_number' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'notes' => [
+                'nullable',
+                'string',
+            ],
+
+            'paid_date' => [
+                'required',
+                'date',
+            ],
+
+            'paid_time' => [
+                'required',
+                'date_format:H:i',
+            ],
         ]);
 
         $invoice = Invoice::findOrFail($id);
 
+        /**
+         * Gabungkan:
+         *
+         * paid_date = 2026-08-20
+         * paid_time = 14:30
+         *
+         * menjadi:
+         *
+         * 2026-08-20 14:30:00
+         */
+        $paidAt = Carbon::createFromFormat(
+            'Y-m-d H:i',
+            $validated['paid_date'].' '.$validated['paid_time']
+        );
+
         try {
-            $this->paymentService->addPayment($invoice, [
-                ...$validated,
+            $this->paymentService->addPayment(
+                $invoice,
+                [
+                    'amount' => $validated['amount'],
 
-                'created_by' => auth()
-                    ->guard('user')
-                    ->id(),
+                    'payment_method' =>
+                        $validated['payment_method'] ?? null,
 
-                'paid_at' => $validated['paid_at'] ?? now(),
-            ]);
+                    'reference_number' =>
+                        $validated['reference_number'] ?? null,
+
+                    'notes' =>
+                        $validated['notes'] ?? null,
+
+                    'created_by' => auth()
+                        ->guard('user')
+                        ->id(),
+
+                    'paid_at' => $paidAt,
+                ]
+            );
         } catch (InvalidArgumentException $exception) {
             return back()
                 ->withInput()
@@ -209,34 +322,45 @@ class InvoiceController extends Controller
 
         $receiptPath = null;
 
+        /**
+         * Upload receipt / bon.
+         */
         if ($request->hasFile('receipt')) {
             $receiptPath = $request
                 ->file('receipt')
-                ->store('expense-receipts', 'public');
+                ->store(
+                    'expense-receipts',
+                    'public'
+                );
         }
 
-        /*
-         * UploadedFile tidak perlu diteruskan ke ExpenseService.
+        /**
+         * UploadedFile tidak perlu dikirim
+         * ke ExpenseService.
          */
         unset($validated['receipt']);
 
         try {
-            $this->expenseService->addExpense($invoice, [
-                ...$validated,
+            $this->expenseService->addExpense(
+                $invoice,
+                [
+                    ...$validated,
 
-                'receipt_path' => $receiptPath,
+                    'receipt_path' => $receiptPath,
 
-                'created_by' => auth()
-                    ->guard('user')
-                    ->id(),
-            ]);
+                    'created_by' => auth()
+                        ->guard('user')
+                        ->id(),
+                ]
+            );
         } catch (InvalidArgumentException $exception) {
-            /*
-             * Kalau database gagal tetapi file sudah ter-upload,
-             * hapus file supaya tidak menjadi file yatim.
+            /**
+             * Kalau insert expense gagal,
+             * hapus file bon yang sudah ter-upload.
              */
             if ($receiptPath) {
-                Storage::disk('public')->delete($receiptPath);
+                Storage::disk('public')
+                    ->delete($receiptPath);
             }
 
             return back()
@@ -265,14 +389,19 @@ class InvoiceController extends Controller
         int $invoiceId,
         int $expenseId
     ): RedirectResponse {
-        $invoice = Invoice::findOrFail($invoiceId);
+        $invoice = Invoice::findOrFail(
+            $invoiceId
+        );
 
-        /*
-         * Penting:
-         * Expense hanya boleh diedit jika memang milik invoice ini.
+        /**
+         * Expense harus benar-benar milik
+         * invoice yang sedang dibuka.
          */
         $expense = Expense::query()
-            ->where('invoice_id', $invoice->id)
+            ->where(
+                'invoice_id',
+                $invoice->id
+            )
             ->findOrFail($expenseId);
 
         $validated = $request->validate([
@@ -328,16 +457,27 @@ class InvoiceController extends Controller
 
         $newReceiptPath = null;
 
+        /**
+         * Upload bon baru jika user memilih file.
+         */
         if ($request->hasFile('receipt')) {
             $newReceiptPath = $request
                 ->file('receipt')
-                ->store('expense-receipts', 'public');
+                ->store(
+                    'expense-receipts',
+                    'public'
+                );
         }
 
         unset($validated['receipt']);
 
+        /**
+         * Jika tidak ada bon baru,
+         * ExpenseService akan mempertahankan bon lama.
+         */
         if ($newReceiptPath) {
-            $validated['receipt_path'] = $newReceiptPath;
+            $validated['receipt_path'] =
+                $newReceiptPath;
         }
 
         try {
@@ -346,11 +486,13 @@ class InvoiceController extends Controller
                 $validated
             );
         } catch (InvalidArgumentException $exception) {
-            /*
-             * Kalau update gagal, hapus bon baru yang tadi di-upload.
+            /**
+             * Update gagal:
+             * hapus bon baru agar tidak orphan.
              */
             if ($newReceiptPath) {
-                Storage::disk('public')->delete($newReceiptPath);
+                Storage::disk('public')
+                    ->delete($newReceiptPath);
             }
 
             return back()
@@ -360,16 +502,19 @@ class InvoiceController extends Controller
                 ]);
         }
 
-        /*
+        /**
          * Update berhasil.
-         * Kalau ada bon baru, bon lama boleh dihapus.
+         *
+         * Kalau user upload bon baru,
+         * hapus bon lama.
          */
         if (
             $newReceiptPath
             && $oldReceiptPath
             && $oldReceiptPath !== $newReceiptPath
         ) {
-            Storage::disk('public')->delete($oldReceiptPath);
+            Storage::disk('public')
+                ->delete($oldReceiptPath);
         }
 
         session()->flash(
@@ -390,25 +535,34 @@ class InvoiceController extends Controller
         int $invoiceId,
         int $expenseId
     ): RedirectResponse {
-        $invoice = Invoice::findOrFail($invoiceId);
+        $invoice = Invoice::findOrFail(
+            $invoiceId
+        );
 
-        /*
-         * Expense harus benar-benar milik invoice ini.
+        /**
+         * Expense harus milik invoice terkait.
          */
         $expense = Expense::query()
-            ->where('invoice_id', $invoice->id)
+            ->where(
+                'invoice_id',
+                $invoice->id
+            )
             ->findOrFail($expenseId);
 
         $receiptPath = $expense->receipt_path;
 
-        $this->expenseService->deleteExpense($expense);
+        /**
+         * Delete database record.
+         */
+        $this->expenseService
+            ->deleteExpense($expense);
 
-        /*
-         * Setelah record berhasil dihapus,
-         * hapus juga file bon dari storage.
+        /**
+         * Delete receipt / bon file.
          */
         if ($receiptPath) {
-            Storage::disk('public')->delete($receiptPath);
+            Storage::disk('public')
+                ->delete($receiptPath);
         }
 
         session()->flash(
@@ -425,8 +579,9 @@ class InvoiceController extends Controller
     /**
      * Print and download invoice PDF.
      */
-    public function print(int $id): Response|StreamedResponse
-    {
+    public function print(
+        int $id
+    ): Response|StreamedResponse {
         $invoice = Invoice::with([
             'items',
             'payments',
@@ -441,6 +596,7 @@ class InvoiceController extends Controller
                 'admin::invoices.pdf',
                 compact('invoice')
             )->render(),
+
             'Invoice_'.$invoice->invoice_number
         );
     }
