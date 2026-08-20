@@ -25,21 +25,30 @@
                     </div>
                 </div>
 
-                <div class="flex items-center gap-x-2.5">
-                    <div class="flex items-center gap-x-2.5">
-                        {!! view_render_event('admin.contacts.quotes.edit.save_button.before', ['quote' => $quote]) !!}
+<div class="flex items-center gap-x-2.5">
+    <div class="flex items-center gap-x-2.5">
+        {!! view_render_event('admin.contacts.quotes.edit.save_button.before', ['quote' => $quote]) !!}
 
-                        <!-- Save button for person -->
-                        <button
-                            type="submit"
-                            class="primary-button"
-                        >
-                            @lang('admin::app.quotes.edit.save-btn')
-                        </button>
+        <!-- Generate Invoice -->
+        <button
+            type="submit"
+            form="generate-invoice-form"
+            class="secondary-button"
+        >
+            Generate Invoice
+        </button>
 
-                        {!! view_render_event('admin.contacts.quotes.edit.save_button.after', ['quote' => $quote]) !!}
-                    </div>
-                </div>
+        <!-- Save Quote -->
+        <button
+            type="submit"
+            class="primary-button"
+        >
+            @lang('admin::app.quotes.edit.save-btn')
+        </button>
+
+        {!! view_render_event('admin.contacts.quotes.edit.save_button.after', ['quote' => $quote]) !!}
+    </div>
+</div>
             </div>
 
             <v-quote :errors="errors">
@@ -47,6 +56,15 @@
             </v-quote>
         </div>
     </x-admin::form>
+
+    <form
+    id="generate-invoice-form"
+    method="POST"
+    action="{{ route('admin.invoices.generate', $quote->id) }}"
+    class="hidden"
+>
+    @csrf
+</form>
 
     {!! view_render_event('admin.contacts.quotes.edit.form_controls.after', ['quote' => $quote]) !!}
 
