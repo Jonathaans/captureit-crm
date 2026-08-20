@@ -48,6 +48,13 @@
                 View Quote
             </a>
         @endif
+
+        <a
+                href="{{ route('admin.invoices.print', $invoice->id) }}"
+                class="primary-button"
+        >
+        Print Invoice
+    </a>
     </div>
 
     <!-- Invoice Information -->

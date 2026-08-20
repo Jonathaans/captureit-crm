@@ -5,6 +5,9 @@ namespace Webkul\Admin\Http\Controllers\Invoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Webkul\Core\Traits\PDFHandler;
 use InvalidArgumentException;
 use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\Invoice\Models\Invoice;
@@ -14,6 +17,7 @@ use Webkul\Quote\Models\Quote;
 
 class InvoiceController extends Controller
 {
+    use PDFHandler;
     public function __construct(
         protected InvoiceService $invoiceService,
         protected PaymentService $paymentService
@@ -110,4 +114,22 @@ class InvoiceController extends Controller
             $invoice->id
         );
     }
+    /**
+ * Print and download invoice PDF.
+ */
+public function print(int $id): Response|StreamedResponse
+{
+    $invoice = Invoice::with([
+        'items',
+        'payments',
+        'quote',
+        'person',
+        'user',
+    ])->findOrFail($id);
+
+    return $this->downloadPDF(
+        view('admin::invoices.pdf', compact('invoice'))->render(),
+        'Invoice_'.$invoice->invoice_number
+    );
+}
 }
