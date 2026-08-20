@@ -65,4 +65,8 @@ class Invoice extends Model implements InvoiceContract
     {
         return $this->hasMany(PaymentProxy::modelClass());
     }
+    public function expenses()
+{
+    return $this->hasMany(ExpenseProxy::modelClass());
+}
 }
