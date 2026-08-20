@@ -3,173 +3,483 @@
         {{ $invoice->invoice_number }}
     </x-slot>
 
-    <div class="flex items-center justify-between gap-4">
+    <!-- Page Header -->
+    <div class="flex items-start justify-between gap-4 max-sm:flex-wrap">
         <div>
-            <p class="text-xl font-bold text-gray-800 dark:text-white">
-                {{ $invoice->invoice_number }}
-            </p>
+            <div class="flex items-center gap-3">
+                <a
+                    href="{{ route('admin.invoices.index') }}"
+                    class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                    ← Back to Invoices
+                </a>
+            </div>
 
-            <p class="text-gray-600 dark:text-gray-300">
+            <div class="mt-3 flex items-center gap-3">
+                <h1 class="text-2xl font-bold text-gray-800 dark:text-white">
+                    {{ $invoice->invoice_number }}
+                </h1>
+
+                @if ($invoice->status === 'paid')
+                    <span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        PAID
+                    </span>
+                @elseif ($invoice->status === 'partial')
+                    <span class="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+                        PARTIAL
+                    </span>
+                @else
+                    <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                        UNPAID
+                    </span>
+                @endif
+            </div>
+
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {{ $invoice->subject }}
             </p>
         </div>
 
-        <span class="font-semibold">
-            {{ strtoupper($invoice->status) }}
-        </span>
+        @if ($invoice->quote)
+            <a
+                href="{{ route('admin.quotes.edit', $invoice->quote->id) }}"
+                class="secondary-button"
+            >
+                View Quote
+            </a>
+        @endif
     </div>
 
-    <div class="mt-6 grid gap-6 lg:grid-cols-2">
-        <div class="rounded-lg bg-white p-5 dark:bg-gray-900">
-            <h2 class="text-lg font-semibold">
-                Invoice Summary
-            </h2>
+    <!-- Invoice Information -->
+    <div class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <!-- Customer -->
+        <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Customer
+            </p>
 
-            <div class="mt-4 space-y-2">
-                <p>
-                    Total:
-                    Rp {{ number_format((float) $invoice->grand_total, 0, ',', '.') }}
-                </p>
+            <p class="mt-2 font-semibold text-gray-800 dark:text-white">
+                {{ $invoice->person?->name ?? '-' }}
+            </p>
+        </div>
 
-                <p>
-                    Paid:
-                    Rp {{ number_format((float) $invoice->paid_amount, 0, ',', '.') }}
-                </p>
+        <!-- Issued Date -->
+        <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Issued Date
+            </p>
 
-                <p>
-                    Balance:
-                    Rp {{ number_format((float) $invoice->balance_due, 0, ',', '.') }}
-                </p>
+            <p class="mt-2 font-semibold text-gray-800 dark:text-white">
+                {{ $invoice->issued_at?->format('d M Y') ?? '-' }}
+            </p>
+        </div>
+
+        <!-- Due Date -->
+        <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Due Date
+            </p>
+
+            <p class="mt-2 font-semibold text-gray-800 dark:text-white">
+                {{ $invoice->due_at?->format('d M Y') ?? '-' }}
+            </p>
+        </div>
+
+        <!-- Quote Reference -->
+        <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Quote Reference
+            </p>
+
+            <p class="mt-2 font-semibold text-gray-800 dark:text-white">
+                @if ($invoice->quote)
+                    Quote #{{ $invoice->quote->id }}
+                @else
+                    -
+                @endif
+            </p>
+        </div>
+    </div>
+
+    <!-- Financial Summary -->
+    <div class="mt-6 grid gap-4 md:grid-cols-3">
+        <!-- Grand Total -->
+        <div class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Grand Total
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-gray-800 dark:text-white">
+                Rp {{ number_format((float) $invoice->grand_total, 0, ',', '.') }}
+            </p>
+        </div>
+
+        <!-- Paid -->
+        <div class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Paid
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-green-600 dark:text-green-400">
+                Rp {{ number_format((float) $invoice->paid_amount, 0, ',', '.') }}
+            </p>
+        </div>
+
+        <!-- Balance -->
+        <div class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Balance Due
+            </p>
+
+            <p
+                class="mt-2 text-2xl font-bold
+                    {{ (float) $invoice->balance_due > 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-gray-800 dark:text-white' }}"
+            >
+                Rp {{ number_format((float) $invoice->balance_due, 0, ',', '.') }}
+            </p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="mt-6 grid gap-6 xl:grid-cols-[2fr_1fr]">
+        <!-- LEFT -->
+        <div class="space-y-6">
+
+            <!-- Invoice Items -->
+            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+                <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white">
+                        Invoice Items
+                    </h2>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950">
+                                <th class="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                                    Item
+                                </th>
+
+                                <th class="px-6 py-3 text-center text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                                    Qty
+                                </th>
+
+                                <th class="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                                    Price
+                                </th>
+
+                                <th class="px-6 py-3 text-right text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">
+                                    Total
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @forelse ($invoice->items as $item)
+                                <tr class="border-b border-gray-100 dark:border-gray-800">
+                                    <td class="px-6 py-4">
+                                        <p class="font-medium text-gray-800 dark:text-white">
+                                            {{ $item->name }}
+                                        </p>
+
+                                        @if ($item->sku)
+                                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                SKU: {{ $item->sku }}
+                                            </p>
+                                        @endif
+                                    </td>
+
+                                    <td class="px-6 py-4 text-center text-gray-700 dark:text-gray-300">
+                                        {{ $item->quantity }}
+                                    </td>
+
+                                    <td class="px-6 py-4 text-right text-gray-700 dark:text-gray-300">
+                                        Rp {{ number_format((float) $item->price, 0, ',', '.') }}
+                                    </td>
+
+                                    <td class="px-6 py-4 text-right font-semibold text-gray-800 dark:text-white">
+                                        Rp {{ number_format((float) $item->total, 0, ',', '.') }}
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td
+                                        colspan="4"
+                                        class="px-6 py-10 text-center text-gray-500 dark:text-gray-400"
+                                    >
+                                        Tidak ada item pada invoice ini.
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Totals -->
+                <div class="flex justify-end border-t border-gray-200 px-6 py-5 dark:border-gray-800">
+                    <div class="w-full max-w-sm space-y-3">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500 dark:text-gray-400">
+                                Subtotal
+                            </span>
+
+                            <span class="font-medium text-gray-800 dark:text-white">
+                                Rp {{ number_format((float) $invoice->sub_total, 0, ',', '.') }}
+                            </span>
+                        </div>
+
+                        @if ((float) $invoice->discount_amount > 0)
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500 dark:text-gray-400">
+                                    Discount
+                                </span>
+
+                                <span class="font-medium text-red-600 dark:text-red-400">
+                                    - Rp {{ number_format((float) $invoice->discount_amount, 0, ',', '.') }}
+                                </span>
+                            </div>
+                        @endif
+
+                        @if ((float) $invoice->tax_amount > 0)
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500 dark:text-gray-400">
+                                    Tax
+                                </span>
+
+                                <span class="font-medium text-gray-800 dark:text-white">
+                                    Rp {{ number_format((float) $invoice->tax_amount, 0, ',', '.') }}
+                                </span>
+                            </div>
+                        @endif
+
+                        @if ((float) $invoice->adjustment_amount != 0)
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500 dark:text-gray-400">
+                                    Adjustment
+                                </span>
+
+                                <span class="font-medium text-gray-800 dark:text-white">
+                                    Rp {{ number_format((float) $invoice->adjustment_amount, 0, ',', '.') }}
+                                </span>
+                            </div>
+                        @endif
+
+                        <div class="flex justify-between border-t border-gray-200 pt-3 dark:border-gray-700">
+                            <span class="font-semibold text-gray-800 dark:text-white">
+                                Grand Total
+                            </span>
+
+                            <span class="text-lg font-bold text-gray-800 dark:text-white">
+                                Rp {{ number_format((float) $invoice->grand_total, 0, ',', '.') }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment History -->
+            <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+                <div class="border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white">
+                        Payment History
+                    </h2>
+                </div>
+
+                <div class="divide-y divide-gray-100 dark:divide-gray-800">
+                    @forelse ($invoice->payments as $payment)
+                        <div class="flex items-start justify-between gap-4 px-6 py-5 max-sm:flex-col">
+                            <div>
+                                <p class="font-semibold text-gray-800 dark:text-white">
+                                    Rp {{ number_format((float) $payment->amount, 0, ',', '.') }}
+                                </p>
+
+                                <div class="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
+                                    <p>
+                                        Method:
+                                        {{ ucwords(str_replace('_', ' ', $payment->payment_method ?? '-')) }}
+                                    </p>
+
+                                    @if ($payment->reference_number)
+                                        <p>
+                                            Reference:
+                                            {{ $payment->reference_number }}
+                                        </p>
+                                    @endif
+
+                                    @if ($payment->notes)
+                                        <p>
+                                            Notes:
+                                            {{ $payment->notes }}
+                                        </p>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <div class="text-right text-sm text-gray-500 dark:text-gray-400 max-sm:text-left">
+                                <p>
+                                    {{ $payment->paid_at?->format('d M Y') ?? '-' }}
+                                </p>
+
+                                <p class="mt-1">
+                                    {{ $payment->paid_at?->format('H:i') ?? '' }}
+                                </p>
+
+                                @if ($payment->creator)
+                                    <p class="mt-2">
+                                        by {{ $payment->creator->name }}
+                                    </p>
+                                @endif
+                            </div>
+                        </div>
+                    @empty
+                        <div class="px-6 py-10 text-center text-gray-500 dark:text-gray-400">
+                            Belum ada pembayaran.
+                        </div>
+                    @endforelse
+                </div>
             </div>
         </div>
 
-        <div class="rounded-lg bg-white p-5 dark:bg-gray-900">
-            <h2 class="text-lg font-semibold">
-                Add Payment
-            </h2>
+        <!-- RIGHT -->
+        <div>
+            <div class="sticky top-6 rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white">
+                    Add Payment
+                </h2>
 
-            @if ($invoice->status !== 'paid')
-                <form
-                    method="POST"
-                    action="{{ route('admin.invoices.payments.store', $invoice->id) }}"
-                    class="mt-4 space-y-4"
-                >
-                    @csrf
+                @if ($invoice->status === 'paid')
+                    <div class="mt-5 rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
+                        <p class="font-medium text-green-700 dark:text-green-400">
+                            Invoice sudah lunas.
+                        </p>
 
-                    <div>
-                        <label>Amount</label>
+                        <p class="mt-1 text-sm text-green-600 dark:text-green-500">
+                            Tidak ada sisa pembayaran.
+                        </p>
+                    </div>
+                @else
+                    <div class="mt-4 rounded-lg bg-gray-50 p-4 dark:bg-gray-950">
+                        <p class="text-xs uppercase text-gray-500 dark:text-gray-400">
+                            Remaining Balance
+                        </p>
 
-                        <input
-                            type="number"
-                            name="amount"
-                            min="1"
-                            max="{{ $invoice->balance_due }}"
-                            class="w-full rounded border p-2"
-                            required
-                        >
-
-                        @error('amount')
-                            <p class="text-red-600">
-                                {{ $message }}
-                            </p>
-                        @enderror
+                        <p class="mt-1 text-xl font-bold text-gray-800 dark:text-white">
+                            Rp {{ number_format((float) $invoice->balance_due, 0, ',', '.') }}
+                        </p>
                     </div>
 
-                    <div>
-                        <label>Payment Method</label>
-
-                        <select
-                            name="payment_method"
-                            class="w-full rounded border p-2"
-                        >
-                            <option value="bank_transfer">Bank Transfer</option>
-                            <option value="cash">Cash</option>
-                            <option value="other">Other</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label>Reference Number</label>
-
-                        <input
-                            type="text"
-                            name="reference_number"
-                            class="w-full rounded border p-2"
-                        >
-                    </div>
-
-                    <div>
-                        <label>Notes</label>
-
-                        <textarea
-                            name="notes"
-                            class="w-full rounded border p-2"
-                        ></textarea>
-                    </div>
-
-                    <button
-                        type="submit"
-                        class="rounded bg-blue-600 px-4 py-2 text-white"
+                    <form
+                        method="POST"
+                        action="{{ route('admin.invoices.payments.store', $invoice->id) }}"
+                        class="mt-6 space-y-5"
                     >
-                        Add Payment
-                    </button>
-                </form>
-            @else
-                <p class="mt-4">
-                    Invoice sudah lunas.
-                </p>
-            @endif
-        </div>
-    </div>
+                        @csrf
 
-    <div class="mt-6 rounded-lg bg-white p-5 dark:bg-gray-900">
-        <h2 class="text-lg font-semibold">
-            Invoice Items
-        </h2>
+                        <!-- Amount -->
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Amount
+                                <span class="text-red-600">*</span>
+                            </label>
 
-        <div class="mt-4 space-y-3">
-            @foreach ($invoice->items as $item)
-                <div class="flex justify-between border-b pb-2">
-                    <div>
-                        {{ $item->name }}
-                        × {{ $item->quantity }}
-                    </div>
+                            <input
+                                type="number"
+                                name="amount"
+                                value="{{ old('amount') }}"
+                                min="1"
+                                max="{{ (float) $invoice->balance_due }}"
+                                step="1"
+                                placeholder="Masukkan nominal pembayaran"
+                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                                required
+                            >
 
-                    <div>
-                        Rp {{ number_format((float) $item->total, 0, ',', '.') }}
-                    </div>
-                </div>
-            @endforeach
-        </div>
-    </div>
+                            @error('amount')
+                                <p class="mt-2 text-sm text-red-600">
+                                    {{ $message }}
+                                </p>
+                            @enderror
+                        </div>
 
-    <div class="mt-6 rounded-lg bg-white p-5 dark:bg-gray-900">
-        <h2 class="text-lg font-semibold">
-            Payment History
-        </h2>
+                        <!-- Payment Method -->
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Payment Method
+                            </label>
 
-        <div class="mt-4 space-y-3">
-            @forelse ($invoice->payments as $payment)
-                <div class="border-b pb-3">
-                    <strong>
-                        Rp {{ number_format((float) $payment->amount, 0, ',', '.') }}
-                    </strong>
+                            <select
+                                name="payment_method"
+                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                            >
+                                <option value="bank_transfer" @selected(old('payment_method') === 'bank_transfer')>
+                                    Bank Transfer
+                                </option>
 
-                    <p>
-                        {{ $payment->payment_method }}
-                    </p>
+                                <option value="cash" @selected(old('payment_method') === 'cash')>
+                                    Cash
+                                </option>
 
-                    <p>
-                        {{ $payment->reference_number }}
-                    </p>
+                                <option value="other" @selected(old('payment_method') === 'other')>
+                                    Other
+                                </option>
+                            </select>
+                        </div>
 
-                    <p>
-                        {{ optional($payment->paid_at)->format('d M Y H:i') }}
-                    </p>
-                </div>
-            @empty
-                <p>Belum ada pembayaran.</p>
-            @endforelse
+                        <!-- Reference Number -->
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Reference Number
+                            </label>
+
+                            <input
+                                type="text"
+                                name="reference_number"
+                                value="{{ old('reference_number') }}"
+                                placeholder="Contoh: BCA-TRX-001"
+                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                            >
+                        </div>
+
+                        <!-- Paid At -->
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Payment Date
+                            </label>
+
+                            <input
+                                type="datetime-local"
+                                name="paid_at"
+                                value="{{ old('paid_at') }}"
+                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                            >
+                        </div>
+
+                        <!-- Notes -->
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Notes
+                            </label>
+
+                            <textarea
+                                name="notes"
+                                rows="3"
+                                placeholder="Catatan pembayaran..."
+                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                            >{{ old('notes') }}</textarea>
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="primary-button w-full justify-center"
+                        >
+                            Add Payment
+                        </button>
+                    </form>
+                @endif
+            </div>
         </div>
     </div>
 </x-admin::layouts>
