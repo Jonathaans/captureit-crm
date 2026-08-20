@@ -14,15 +14,17 @@ use Webkul\Invoice\Models\Invoice;
 use Webkul\Invoice\Services\InvoiceService;
 use Webkul\Invoice\Services\PaymentService;
 use Webkul\Quote\Models\Quote;
+use Webkul\Invoice\Services\ExpenseService;
 
 class InvoiceController extends Controller
 {
     use PDFHandler;
     public function __construct(
-        protected InvoiceService $invoiceService,
-        protected PaymentService $paymentService
+    protected InvoiceService $invoiceService,
+    protected PaymentService $paymentService,
+    protected ExpenseService $expenseService
     ) {
-    }
+}
 
     /**
      * Display invoice list.
@@ -45,6 +47,7 @@ class InvoiceController extends Controller
         $invoice = Invoice::with([
             'items',
             'payments.creator',
+            'expenses.creator',
             'quote',
             'person',
             'user',
@@ -72,6 +75,64 @@ class InvoiceController extends Controller
             $invoice->id
         );
     }
+
+    public function addExpense(Request $request, int $id): RedirectResponse
+{
+    $validated = $request->validate([
+        'category'         => ['required', 'string', 'max:255'],
+        'description'      => ['required', 'string', 'max:255'],
+        'amount'           => ['required', 'numeric', 'gt:0'],
+        'expense_date'     => ['required', 'date'],
+        'vendor_name'      => ['nullable', 'string', 'max:255'],
+        'reference_number' => ['nullable', 'string', 'max:255'],
+        'notes'            => ['nullable', 'string'],
+
+        'receipt' => [
+            'nullable',
+            'file',
+            'mimes:jpg,jpeg,png,pdf',
+            'max:5120',
+        ],
+    ]);
+
+    $invoice = Invoice::findOrFail($id);
+
+    $receiptPath = null;
+
+    if ($request->hasFile('receipt')) {
+        $receiptPath = $request
+            ->file('receipt')
+            ->store('expense-receipts', 'public');
+    }
+
+    try {
+        $this->expenseService->addExpense($invoice, [
+            ...$validated,
+
+            'receipt_path' => $receiptPath,
+
+            'created_by' => auth()
+                ->guard('user')
+                ->id(),
+        ]);
+    } catch (InvalidArgumentException $exception) {
+        return back()
+            ->withInput()
+            ->withErrors([
+                'amount' => $exception->getMessage(),
+            ]);
+    }
+
+    session()->flash(
+        'success',
+        'Pengeluaran berhasil ditambahkan.'
+    );
+
+    return redirect()->route(
+        'admin.invoices.show',
+        $invoice->id
+    );
+}
 
     /**
      * Add payment.

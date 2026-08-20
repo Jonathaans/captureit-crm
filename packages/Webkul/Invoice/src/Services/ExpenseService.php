@@ -1,0 +1,37 @@
+<?php
+
+namespace Webkul\Invoice\Services;
+
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+use Webkul\Invoice\Models\Expense;
+use Webkul\Invoice\Models\Invoice;
+
+class ExpenseService
+{
+    public function addExpense(Invoice $invoice, array $data): Expense
+    {
+        return DB::transaction(function () use ($invoice, $data) {
+            $amount = (float) ($data['amount'] ?? 0);
+
+            if ($amount <= 0) {
+                throw new InvalidArgumentException(
+                    'Expense amount must be greater than zero.'
+                );
+            }
+
+            return Expense::create([
+                'invoice_id'       => $invoice->id,
+                'category'         => $data['category'],
+                'description'      => $data['description'],
+                'amount'           => $amount,
+                'expense_date'     => $data['expense_date'],
+                'vendor_name'      => $data['vendor_name'] ?? null,
+                'reference_number' => $data['reference_number'] ?? null,
+                'receipt_path'     => $data['receipt_path'] ?? null,
+                'notes'            => $data['notes'] ?? null,
+                'created_by'       => $data['created_by'] ?? null,
+            ]);
+        });
+    }
+}

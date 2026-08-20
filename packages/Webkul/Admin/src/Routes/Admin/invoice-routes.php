@@ -23,4 +23,7 @@ Route::controller(InvoiceController::class)
 
         Route::get('{id}', 'show')
             ->name('admin.invoices.show');
+
+        Route::post('{id}/expenses', 'addExpense')
+            ->name('admin.invoices.expenses.store');
     });

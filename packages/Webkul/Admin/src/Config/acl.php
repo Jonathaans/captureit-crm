@@ -90,11 +90,17 @@ return [
     'name' => 'admin::app.acl.add-payment',
     'route' => 'admin.invoices.payments.store',
     'sort' => 3,
+    
+],[
+    'key' => 'invoices.expense',
+    'name' => 'admin::app.acl.add-expense',
+    'route' => 'admin.invoices.expenses.store',
+    'sort' => 4,
 ],[
     'key' => 'invoices.print',
     'name' => 'admin::app.acl.print',
     'route' => 'admin.invoices.print',
-    'sort' => 4,
+    'sort' => 5,
 ],
     [
         'key' => 'mail',
