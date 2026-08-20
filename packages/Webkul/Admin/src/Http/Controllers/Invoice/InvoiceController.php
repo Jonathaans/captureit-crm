@@ -33,17 +33,38 @@ class InvoiceController extends Controller
      * Display invoice list.
      */
     public function index(): View
-    {
-        $invoices = Invoice::query()
-            ->with([
-                'person',
-                'quote',
-            ])
-            ->latest('id')
-            ->paginate(20);
+{
+    $invoices = Invoice::query()
+        ->with([
+            'person',
+            'quote',
+        ])
+        ->withSum('expenses', 'amount')
+        ->latest('id')
+        ->paginate(20);
 
-        return view('admin::invoices.index', compact('invoices'));
-    }
+    $financialSummary = [
+        'revenue' => (float) Invoice::sum('grand_total'),
+
+        'paid' => (float) Invoice::sum('paid_amount'),
+
+        'outstanding' => (float) Invoice::sum('balance_due'),
+
+        'expense' => (float) Expense::sum('amount'),
+    ];
+
+    $financialSummary['profit'] =
+        $financialSummary['revenue']
+        - $financialSummary['expense'];
+
+    return view(
+        'admin::invoices.index',
+        compact(
+            'invoices',
+            'financialSummary'
+        )
+    );
+}
 
     /**
      * Display invoice detail.

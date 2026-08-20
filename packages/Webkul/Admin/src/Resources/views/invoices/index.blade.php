@@ -3,7 +3,10 @@
         Invoices
     </x-slot>
 
-    <!-- Header -->
+    <!-- ========================================================= -->
+    <!-- HEADER -->
+    <!-- ========================================================= -->
+
     <div class="flex items-center justify-between gap-4 max-sm:flex-wrap">
         <div>
             <h1 class="text-xl font-bold text-gray-800 dark:text-white">
@@ -11,42 +14,157 @@
             </h1>
 
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Manage customer invoices and payment status.
+                Manage invoices, payments, expenses, and project profitability.
             </p>
         </div>
     </div>
 
-    <!-- Invoice Table -->
+
+    <!-- ========================================================= -->
+    <!-- FINANCIAL OVERVIEW -->
+    <!-- ========================================================= -->
+
+    <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+
+        <!-- Revenue -->
+        <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Total Revenue
+            </p>
+
+            <p class="mt-2 text-xl font-bold text-gray-800 dark:text-white">
+                Rp {{ number_format((float) $financialSummary['revenue'], 0, ',', '.') }}
+            </p>
+
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Total nilai seluruh invoice.
+            </p>
+        </div>
+
+        <!-- Payment Received -->
+        <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Payment Received
+            </p>
+
+            <p class="mt-2 text-xl font-bold text-green-600 dark:text-green-400">
+                Rp {{ number_format((float) $financialSummary['paid'], 0, ',', '.') }}
+            </p>
+
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Uang yang sudah diterima.
+            </p>
+        </div>
+
+        <!-- Outstanding -->
+        <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Outstanding
+            </p>
+
+            <p
+                class="mt-2 text-xl font-bold
+                    {{ (float) $financialSummary['outstanding'] > 0
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-gray-800 dark:text-white' }}"
+            >
+                Rp {{ number_format((float) $financialSummary['outstanding'], 0, ',', '.') }}
+            </p>
+
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Pembayaran yang belum diterima.
+            </p>
+        </div>
+
+        <!-- Expense -->
+        <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Total Expense
+            </p>
+
+            <p class="mt-2 text-xl font-bold text-orange-600 dark:text-orange-400">
+                Rp {{ number_format((float) $financialSummary['expense'], 0, ',', '.') }}
+            </p>
+
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Total pengeluaran seluruh invoice.
+            </p>
+        </div>
+
+        <!-- Profit -->
+        <div class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Est. Profit
+            </p>
+
+            <p
+                class="mt-2 text-xl font-bold
+                    {{ (float) $financialSummary['profit'] >= 0
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400' }}"
+            >
+                Rp {{ number_format((float) $financialSummary['profit'], 0, ',', '.') }}
+            </p>
+
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Revenue dikurangi expense.
+            </p>
+        </div>
+    </div>
+
+
+    <!-- ========================================================= -->
+    <!-- INVOICE TABLE -->
+    <!-- ========================================================= -->
+
     <div class="mt-6 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+
+        <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-white">
+                    Invoice Performance
+                </h2>
+
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Revenue, expense, and estimated profit per invoice.
+                </p>
+            </div>
+        </div>
+
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950">
-                        <th class="px-5 py-4 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
+
+                        <th class="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                             Invoice
                         </th>
 
-                        <th class="px-5 py-4 text-left text-sm font-semibold text-gray-700 dark:text-gray-300">
-                            Subject
+                        <th class="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            Customer / Subject
                         </th>
 
-                        <th class="px-5 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
-                            Total
+                        <th class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            Revenue
                         </th>
 
-                        <th class="px-5 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        <th class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                             Paid
                         </th>
 
-                        <th class="px-5 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
-                            Balance
+                        <th class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            Expense
                         </th>
 
-                        <th class="px-5 py-4 text-center text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        <th class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            Profit
+                        </th>
+
+                        <th class="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                             Status
                         </th>
 
-                        <th class="px-5 py-4 text-right text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        <th class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                             Action
                         </th>
                     </tr>
@@ -54,7 +172,18 @@
 
                 <tbody>
                     @forelse ($invoices as $invoice)
+
+                        @php
+                            $invoiceExpense = (float) ($invoice->expenses_sum_amount ?? 0);
+
+                            $invoiceProfit =
+                                (float) $invoice->grand_total
+                                - $invoiceExpense;
+                        @endphp
+
                         <tr class="border-b border-gray-100 transition hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800/50">
+
+                            <!-- Invoice -->
                             <td class="px-5 py-4">
                                 <a
                                     href="{{ route('admin.invoices.show', $invoice->id) }}"
@@ -62,33 +191,75 @@
                                 >
                                     {{ $invoice->invoice_number }}
                                 </a>
+
+                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                    {{ $invoice->issued_at?->format('d M Y') ?? '-' }}
+                                </p>
                             </td>
 
-                            <td class="px-5 py-4 text-gray-700 dark:text-gray-300">
-                                {{ $invoice->subject }}
+                            <!-- Customer / Subject -->
+                            <td class="px-5 py-4">
+                                <p class="font-medium text-gray-800 dark:text-white">
+                                    {{ $invoice->person?->name ?? '-' }}
+                                </p>
+
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    {{ $invoice->subject }}
+                                </p>
                             </td>
 
-                            <td class="px-5 py-4 text-right font-semibold text-gray-800 dark:text-gray-100">
-                                Rp {{ number_format((float) $invoice->grand_total, 0, ',', '.') }}
+                            <!-- Revenue -->
+                            <td class="px-5 py-4 text-right">
+                                <p class="font-semibold text-gray-800 dark:text-white">
+                                    Rp {{ number_format((float) $invoice->grand_total, 0, ',', '.') }}
+                                </p>
                             </td>
 
-                            <td class="px-5 py-4 text-right text-gray-700 dark:text-gray-300">
-                                Rp {{ number_format((float) $invoice->paid_amount, 0, ',', '.') }}
+                            <!-- Paid -->
+                            <td class="px-5 py-4 text-right">
+                                <p class="font-medium text-green-600 dark:text-green-400">
+                                    Rp {{ number_format((float) $invoice->paid_amount, 0, ',', '.') }}
+                                </p>
+
+                                @if ((float) $invoice->balance_due > 0)
+                                    <p class="mt-1 text-xs text-red-600 dark:text-red-400">
+                                        Due:
+                                        Rp {{ number_format((float) $invoice->balance_due, 0, ',', '.') }}
+                                    </p>
+                                @endif
                             </td>
 
-                            <td class="px-5 py-4 text-right text-gray-700 dark:text-gray-300">
-                                Rp {{ number_format((float) $invoice->balance_due, 0, ',', '.') }}
+                            <!-- Expense -->
+                            <td class="px-5 py-4 text-right">
+                                <p class="font-medium text-orange-600 dark:text-orange-400">
+                                    Rp {{ number_format($invoiceExpense, 0, ',', '.') }}
+                                </p>
                             </td>
 
+                            <!-- Profit -->
+                            <td class="px-5 py-4 text-right">
+                                <p
+                                    class="font-bold
+                                        {{ $invoiceProfit >= 0
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : 'text-red-600 dark:text-red-400' }}"
+                                >
+                                    Rp {{ number_format($invoiceProfit, 0, ',', '.') }}
+                                </p>
+                            </td>
+
+                            <!-- Status -->
                             <td class="px-5 py-4 text-center">
                                 @if ($invoice->status === 'paid')
                                     <span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
                                         PAID
                                     </span>
+
                                 @elseif ($invoice->status === 'partial')
                                     <span class="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
                                         PARTIAL
                                     </span>
+
                                 @else
                                     <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
                                         UNPAID
@@ -96,22 +267,40 @@
                                 @endif
                             </td>
 
+                            <!-- Actions -->
                             <td class="px-5 py-4 text-right">
-                                <a
-                                    href="{{ route('admin.invoices.show', $invoice->id) }}"
-                                    class="font-medium text-blue-600 hover:underline dark:text-blue-400"
-                                >
-                                    View
-                                </a>
+                                <div class="flex items-center justify-end gap-3">
+
+                                    <a
+                                        href="{{ route('admin.invoices.show', $invoice->id) }}"
+                                        class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                                    >
+                                        View
+                                    </a>
+
+                                    <a
+                                        href="{{ route('admin.invoices.print', $invoice->id) }}"
+                                        class="text-sm font-medium text-gray-600 hover:underline dark:text-gray-300"
+                                    >
+                                        PDF
+                                    </a>
+                                </div>
                             </td>
                         </tr>
+
                     @empty
                         <tr>
                             <td
-                                colspan="7"
-                                class="px-5 py-12 text-center text-gray-500 dark:text-gray-400"
+                                colspan="8"
+                                class="px-5 py-16 text-center"
                             >
-                                Belum ada invoice.
+                                <p class="font-medium text-gray-700 dark:text-gray-300">
+                                    Belum ada invoice.
+                                </p>
+
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    Generate invoice dari Quote untuk mulai melihat laporan.
+                                </p>
                             </td>
                         </tr>
                     @endforelse
@@ -119,6 +308,8 @@
             </table>
         </div>
 
+
+        <!-- Pagination -->
         @if ($invoices->hasPages())
             <div class="border-t border-gray-200 px-5 py-4 dark:border-gray-800">
                 {{ $invoices->links() }}
