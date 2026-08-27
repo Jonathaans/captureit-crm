@@ -232,24 +232,161 @@
                                 />
                             </div>
 
-                            <div class="flex gap-4">
-                                <x-admin::attributes
-                                    :custom-attributes="app('Webkul\Attribute\Repositories\AttributeRepository')->findWhere([
-                                        'entity_type' => 'quotes',
-                                        ['code', 'IN', ['person_id']],
-                                    ])->sortBy('sort_order')"
-                                    :custom-validations="[
-                                        'expired_at' => [
-                                            'required',
-                                            'date_format:yyyy-MM-dd',
-                                            'after:' .  \Carbon\Carbon::yesterday()->format('Y-m-d')
-                                        ],
-                                    ]"
-                                    :entity="$quote"
-                                />
+                            <div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
+                                <!-- Bill To / Client -->
+                                <x-admin::form.control-group class="w-full">
+                                    <x-admin::form.control-group.label class="required">
+                                        Bill To
+                                    </x-admin::form.control-group.label>
 
-                                <x-admin::attributes.edit.lookup />
+                                    <div class="flex items-start gap-2">
+                                        <div class="min-w-0 flex-1">
+                                            <v-lookup-component
+                                                :key="personLookupKey"
+                                                :attribute="{
+                                                    code: 'person_id',
+                                                    name: 'Bill To',
+                                                    lookup_type: 'persons'
+                                                }"
+                                                :value="personEntity"
+                                                @lookup-added="setPersonEntity"
+                                                @lookup-removed="setPersonEntity"
+                                            ></v-lookup-component>
+                                        </div>
 
+                                        <button
+                                            type="button"
+                                            class="secondary-button whitespace-nowrap"
+                                            @click="openNewClientForm"
+                                        >
+                                            + New Client
+                                        </button>
+                                    </div>
+
+                                    <x-admin::form.control-group.error
+                                        control-name="person_id"
+                                    />
+
+                                    <!-- Native Person Quick Add -->
+                                    <div
+                                        v-if="showNewClientForm"
+                                        class="mt-3 rounded-lg border border-gray-300 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950"
+                                    >
+                                        <div class="mb-3">
+                                            <p class="text-sm font-semibold text-gray-800 dark:text-white">
+                                                New Client
+                                            </p>
+
+                                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                                Menggunakan Quick Add bawaan Contacts / Person.
+                                            </p>
+                                        </div>
+
+                                        <div class="flex flex-col gap-3">
+                                            <div>
+                                                <label class="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                                                    Client Name *
+                                                </label>
+
+                                                <input
+                                                    ref="newClientNameInput"
+                                                    type="text"
+                                                    v-model.trim="newClientName"
+                                                    placeholder="Contoh: PT Capture Indonesia"
+                                                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-brandColor dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                                    @keydown.enter.prevent="createNewClient"
+                                                >
+                                            </div>
+
+                                            <div>
+                                                <label class="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                                                    Email
+                                                </label>
+
+                                                <input
+                                                    type="email"
+                                                    v-model.trim="newClientEmail"
+                                                    placeholder="client@example.com"
+                                                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-brandColor dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                                >
+                                            </div>
+
+                                            <div>
+                                                <label class="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                                                    Phone
+                                                </label>
+
+                                                <input
+                                                    type="text"
+                                                    v-model.trim="newClientPhone"
+                                                    placeholder="08123456789"
+                                                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-brandColor dark:border-gray-800 dark:bg-gray-900 dark:text-white"
+                                                >
+                                            </div>
+
+                                            <div>
+                                                <label class="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-300">
+                                                    Organization Name
+                                                    <span class="font-normal text-gray-400">
+                                                        (Optional)
+                                                    </span>
+                                                </label>
+
+                                                <v-lookup-component
+                                                    :key="organizationLookupKey"
+                                                    :attribute="{
+                                                        code: 'organization_id',
+                                                        name: 'Organization',
+                                                        lookup_type: 'organizations'
+                                                    }"
+                                                    :value="newClientOrganization"
+                                                    can-add-new="true"
+                                                    @lookup-added="setNewClientOrganization"
+                                                    @lookup-removed="setNewClientOrganization"
+                                                ></v-lookup-component>
+
+                                                <p class="mt-1 text-[11px] leading-4 text-gray-500 dark:text-gray-400">
+                                                    Pilih organization yang sudah ada. Jika belum ada, ketik nama organization lalu gunakan Add as new.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <p
+                                            v-if="newClientError"
+                                            class="mt-2 text-xs text-red-600"
+                                        >
+                                            @{{ newClientError }}
+                                        </p>
+
+                                        <div class="mt-3 flex justify-end gap-2">
+                                            <button
+                                                type="button"
+                                                class="secondary-button"
+                                                :disabled="isCreatingClient"
+                                                @click="closeNewClientForm"
+                                            >
+                                                Cancel
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                class="primary-button"
+                                                :disabled="isCreatingClient"
+                                                @click="createNewClient"
+                                            >
+                                                <span v-if="isCreatingClient">
+                                                    Creating...
+                                                </span>
+
+                                                <span v-else>
+                                                    Create Client
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </x-admin::form.control-group>
+
+                                <!-- Link To Lead -->
                                 <x-admin::form.control-group class="w-full">
                                     <x-admin::form.control-group.label>
                                         @lang('admin::app.quotes.create.link-to-lead')
@@ -265,6 +402,9 @@
                                     ></v-lookup-component>
                                 </x-admin::form.control-group>
                             </div>
+
+                            <!-- Register original Krayin lookup component once. -->
+                            <x-admin::attributes.edit.lookup />
 
                             <!-- Custom Attributes -->
                             <x-admin::attributes
@@ -729,6 +869,29 @@
 
                         leadEntity: @json($lookUpEntityData ?? []),
 
+                        personEntity: @json($personLookUpEntityData ?? []),
+
+                        personLookupKey: 0,
+
+                        showNewClientForm: false,
+
+                        newClientName: '',
+
+                        newClientEmail: '',
+
+                        newClientPhone: '',
+
+                        newClientOrganization: {
+                            id: '',
+                            name: '',
+                        },
+
+                        organizationLookupKey: 0,
+
+                        newClientError: '',
+
+                        isCreatingClient: false,
+
                     };
                 },
 
@@ -827,6 +990,198 @@
 
                     setLeadEntity($event) {
                         this.leadEntity = $event ?? { id: '', name: '' };
+                    },
+
+                    setPersonEntity($event) {
+                        this.personEntity = $event ?? { id: '', name: '' };
+                    },
+
+                    openNewClientForm() {
+                        this.newClientError = '';
+                        this.showNewClientForm = true;
+
+                        this.$nextTick(() => {
+                            this.$refs.newClientNameInput?.focus();
+                        });
+                    },
+
+                    closeNewClientForm() {
+                        if (this.isCreatingClient) {
+                            return;
+                        }
+
+                        this.showNewClientForm = false;
+                        this.newClientName = '';
+                        this.newClientEmail = '';
+                        this.newClientPhone = '';
+
+                        this.newClientOrganization = {
+                            id: '',
+                            name: '',
+                        };
+
+                        this.organizationLookupKey++;
+
+                        this.newClientError = '';
+                    },
+
+                    /**
+                     * Set organization untuk client baru.
+                     *
+                     * Jika memilih organization existing:
+                     * - id berisi organization_id
+                     *
+                     * Jika memakai "Add as new":
+                     * - id kosong
+                     * - name berisi nama organization baru
+                     */
+                    setNewClientOrganization($event) {
+                        this.newClientOrganization = $event ?? {
+                            id: '',
+                            name: '',
+                        };
+                    },
+
+                    /**
+                     * Native Quick Add:
+                     * POST langsung ke PersonController::store().
+                     */
+                    createNewClient() {
+                        const name = this.newClientName.trim();
+                        const email = this.newClientEmail.trim();
+                        const phone = this.newClientPhone.trim();
+
+                        const organizationId =
+                            this.newClientOrganization?.id || null;
+
+                        const organizationName =
+                            (this.newClientOrganization?.name || '').trim();
+
+                        if (name.length < 2) {
+                            this.newClientError = 'Nama client minimal 2 karakter.';
+
+                            return;
+                        }
+
+                        if (this.isCreatingClient) {
+                            return;
+                        }
+
+                        this.isCreatingClient = true;
+                        this.newClientError = '';
+
+                        /*
+                         * Penting:
+                         * emails dan contact_numbers SELALU dikirim sebagai array.
+                         * Ini menjaga kolom JSON Person tetap valid, termasuk saat
+                         * Email / Phone tidak diisi.
+                         */
+                        const payload = {
+                            quick_add: 1,
+
+                            name: name,
+
+                            emails: email
+                                ? [
+                                    {
+                                        label: 'work',
+                                        value: email,
+                                    }
+                                ]
+                                : [],
+
+                            contact_numbers: phone
+                                ? [
+                                    {
+                                        label: 'work',
+                                        value: phone,
+                                    }
+                                ]
+                                : [],
+
+                            /*
+                             * Organization OPTIONAL.
+                             *
+                             * Existing organization:
+                             * organization_id dikirim.
+                             *
+                             * "Add as new":
+                             * organization_name dikirim dan PersonRepository
+                             * akan fetch/create organization berdasarkan nama.
+                             */
+                            organization_id: organizationId,
+
+                            organization_name:
+                                ! organizationId && organizationName
+                                    ? organizationName
+                                    : null,
+                        };
+
+                        this.$axios
+                            .post(
+                                "{{ route('admin.contacts.persons.store') }}",
+                                payload,
+                                {
+                                    headers: {
+                                        'Accept': 'application/json',
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                    },
+                                }
+                            )
+                            .then((response) => {
+                                const person = response.data?.data;
+
+                                if (! person?.id) {
+                                    throw new Error('Response Quick Add Person tidak valid.');
+                                }
+
+                                /*
+                                 * Client baru langsung menjadi Bill To.
+                                 */
+                                this.personEntity = {
+                                    id: person.id,
+                                    name: person.name,
+                                };
+
+                                /*
+                                 * Remount lookup original Krayin supaya hidden
+                                 * input person_id mengambil ID client yang baru.
+                                 */
+                                this.personLookupKey++;
+
+                                this.showNewClientForm = false;
+                                this.newClientName = '';
+                                this.newClientEmail = '';
+                                this.newClientPhone = '';
+
+                                this.newClientOrganization = {
+                                    id: '',
+                                    name: '',
+                                };
+
+                                this.organizationLookupKey++;
+
+                                this.newClientError = '';
+
+                                this.$emitter.emit('add-flash', {
+                                    type: 'success',
+                                    message: `Client "${person.name}" berhasil dibuat dan dipilih sebagai Bill To.`,
+                                });
+                            })
+                            .catch((error) => {
+                                const errors = error?.response?.data?.errors ?? {};
+
+                                this.newClientError =
+                                    errors?.name?.[0]
+                                    || errors?.['emails.0.value']?.[0]
+                                    || errors?.['contact_numbers.0.value']?.[0]
+                                    || error?.response?.data?.message
+                                    || error?.message
+                                    || 'Gagal membuat client.';
+                            })
+                            .finally(() => {
+                                this.isCreatingClient = false;
+                            });
                     },
                 },
             });

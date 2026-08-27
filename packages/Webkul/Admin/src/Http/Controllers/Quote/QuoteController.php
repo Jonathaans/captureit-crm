@@ -73,7 +73,27 @@ class QuoteController extends Controller
 
         $lookUpEntityData = $this->attributeRepository->getLookUpEntity('leads', $leadId);
 
-        return view('admin::quotes.create', compact('lead', 'quote', 'leadProducts', 'lookUpEntityData'));
+        /*
+         * Initial Bill To / Client.
+         *
+         * Digunakan oleh lookup Bill To di create.blade.php.
+         */
+        $personId = old('person_id') ?: $quote->person_id;
+
+        $personLookUpEntityData = $personId
+            ? $this->attributeRepository->getLookUpEntity('persons', $personId)
+            : [];
+
+        return view(
+            'admin::quotes.create',
+            compact(
+                'lead',
+                'quote',
+                'leadProducts',
+                'lookUpEntityData',
+                'personLookUpEntityData'
+            )
+        );
     }
 
     /**

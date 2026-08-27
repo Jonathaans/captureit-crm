@@ -3,24 +3,40 @@
 use Illuminate\Support\Facades\Route;
 use Webkul\Admin\Http\Controllers\Quote\QuoteController;
 
-Route::controller(QuoteController::class)->prefix('quotes')->group(function () {
-    Route::get('', 'index')->name('admin.quotes.index');
+Route::controller(QuoteController::class)
+    ->prefix('quotes')
+    ->group(function () {
+        Route::get('', 'index')
+            ->name('admin.quotes.index');
 
-    Route::get('create/{lead_id?}', 'create')->name('admin.quotes.create');
+        Route::get('search', 'search')
+            ->name('admin.quotes.search');
 
-    Route::post('create', 'store')->name('admin.quotes.store');
+        Route::get('lead-products/{lead_id}', 'leadProducts')
+            ->name('admin.quotes.lead_products');
 
-    Route::get('edit/{id?}', 'edit')->name('admin.quotes.edit');
+        Route::get('create/{lead_id?}', 'create')
+            ->name('admin.quotes.create');
 
-    Route::put('edit/{id}', 'update')->name('admin.quotes.update');
+        Route::post('create', 'store')
+            ->name('admin.quotes.store');
 
-    Route::get('print/{id?}', 'print')->name('admin.quotes.print');
+        Route::get('edit/{id}', 'edit')
+            ->name('admin.quotes.edit');
 
-    Route::delete('{id}', 'destroy')->name('admin.quotes.delete');
+        Route::put('edit/{id}', 'update')
+            ->name('admin.quotes.update');
 
-    Route::get('search', 'search')->name('admin.quotes.search');
+        Route::get('print/{id}', 'print')
+            ->name('admin.quotes.print');
 
-    Route::get('lead-products/{lead_id}', 'leadProducts')->name('admin.quotes.lead_products');
+        Route::post('mass-destroy', 'massDestroy')
+            ->name('admin.quotes.mass_delete');
 
-    Route::post('mass-destroy', 'massDestroy')->name('admin.quotes.mass_delete');
-});
+        /*
+         * Dynamic ID route diletakkan paling bawah
+         * agar tidak mengganggu route statis di atas.
+         */
+        Route::delete('{id}', 'destroy')
+            ->name('admin.quotes.delete');
+    });
