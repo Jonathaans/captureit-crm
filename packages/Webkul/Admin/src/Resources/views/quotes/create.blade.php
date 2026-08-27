@@ -158,6 +158,39 @@
     </x-admin::form.control-group>
 
 
+    <!-- Business Unit / Project Division -->
+    <x-admin::form.control-group>
+        <x-admin::form.control-group.label class="required">
+            Business Unit
+        </x-admin::form.control-group.label>
+
+        <x-admin::form.control-group.control
+            type="select"
+            name="business_unit"
+            :value="old('business_unit')"
+            rules="required"
+            label="Business Unit"
+        >
+            <option value="">
+                Select Business Unit
+            </option>
+
+            @foreach (\Webkul\Core\Support\BusinessUnit::options() as $value => $label)
+                <option
+                    value="{{ $value }}"
+                    @selected(old('business_unit') === $value)
+                >
+                    {{ $label }}
+                </option>
+            @endforeach
+        </x-admin::form.control-group.control>
+
+        <x-admin::form.control-group.error
+            control-name="business_unit"
+        />
+    </x-admin::form.control-group>
+
+
     <!-- Payment Term -->
     <x-admin::form.control-group>
         <x-admin::form.control-group.label class="required">

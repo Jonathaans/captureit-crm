@@ -20,6 +20,7 @@ class InvoiceDataGrid extends DataGrid
                 'invoices.id',
                 'invoices.invoice_number',
                 'invoices.project_code',
+                'invoices.business_unit',
                 'invoices.subject',
                 'invoices.grand_total',
                 'invoices.status',
@@ -66,6 +67,11 @@ class InvoiceDataGrid extends DataGrid
         $this->addFilter(
             'project_code',
             'invoices.project_code'
+        );
+
+        $this->addFilter(
+            'business_unit',
+            'invoices.business_unit'
         );
 
         $this->addFilter(
@@ -130,6 +136,38 @@ class InvoiceDataGrid extends DataGrid
             'filterable' => true,
             'closure' => fn ($row) => $row->project_code ?: '-',
         ]);
+
+        /**
+ * Business Unit.
+ */
+$this->addColumn([
+    'index' => 'business_unit',
+    'label' => 'Business Unit',
+    'type' => 'string',
+
+    'searchable' => false,
+    'sortable' => false,
+    'filterable' => true,
+
+    'visibility' => false,
+
+    'filterable_type' => 'dropdown',
+
+    'filterable_options' => [
+        [
+            'label' => 'Varbel - EO',
+            'value' => 'varbel',
+        ],
+        [
+            'label' => 'Vartech - Event Tech',
+            'value' => 'vartech',
+        ],
+        [
+            'label' => 'Capture It - Photobooth',
+            'value' => 'capture_it',
+        ],
+    ],
+]);
 
         /**
          * Project Name.

@@ -17,11 +17,11 @@ class DeliveryOrder extends Model implements DeliveryOrderContract
 
         'invoice_id',
         'quote_id',
-
         'invoice_number',
         'quote_number',
 
         'project_code',
+        'business_unit',
         'project_name',
 
         'person_id',
@@ -48,7 +48,6 @@ class DeliveryOrder extends Model implements DeliveryOrderContract
         'status',
 
         'notes',
-
         'issued_at',
         'delivered_at',
         'returned_at',
@@ -57,49 +56,42 @@ class DeliveryOrder extends Model implements DeliveryOrderContract
     ];
 
     protected $casts = [
-        'event_date'   => 'date',
+        'event_date' => 'date',
         'delivery_date' => 'date',
 
-        'issued_at'    => 'datetime',
+        'issued_at' => 'datetime',
         'delivered_at' => 'datetime',
-        'returned_at'  => 'datetime',
+        'returned_at' => 'datetime',
     ];
 
-    /**
-     * Invoice asal Surat Jalan.
-     */
     public function invoice()
     {
-        return $this->belongsTo(InvoiceProxy::modelClass());
+        return $this->belongsTo(
+            InvoiceProxy::modelClass()
+        );
     }
 
-    /**
-     * Quote asal project.
-     */
     public function quote()
     {
-        return $this->belongsTo(QuoteProxy::modelClass());
+        return $this->belongsTo(
+            QuoteProxy::modelClass()
+        );
     }
 
-    /**
-     * Customer / Contact.
-     */
     public function person()
     {
-        return $this->belongsTo(PersonProxy::modelClass());
+        return $this->belongsTo(
+            PersonProxy::modelClass()
+        );
     }
 
-    /**
-     * Sales person.
-     */
     public function user()
     {
-        return $this->belongsTo(UserProxy::modelClass());
+        return $this->belongsTo(
+            UserProxy::modelClass()
+        );
     }
 
-    /**
-     * User yang membuat Surat Jalan.
-     */
     public function creator()
     {
         return $this->belongsTo(
@@ -108,9 +100,6 @@ class DeliveryOrder extends Model implements DeliveryOrderContract
         );
     }
 
-    /**
-     * Equipment / barang pada Surat Jalan.
-     */
     public function items()
     {
         return $this->hasMany(

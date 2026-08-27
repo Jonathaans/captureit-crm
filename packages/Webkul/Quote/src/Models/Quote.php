@@ -22,11 +22,6 @@ class Quote extends Model implements QuoteContract
         'expired_at' => 'datetime',
     ];
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array
-     */
     protected $fillable = [
         'quote_number',
         'subject',
@@ -34,6 +29,7 @@ class Quote extends Model implements QuoteContract
         'location',
         'payment_term',
         'project_code',
+        'business_unit',
         'description',
         'billing_address',
         'shipping_address',
@@ -48,35 +44,26 @@ class Quote extends Model implements QuoteContract
         'person_id',
     ];
 
-    /**
-     * Get the quote items record associated with the quote.
-     */
     public function items()
     {
         return $this->hasMany(QuoteItemProxy::modelClass());
     }
 
-    /**
-     * Get the user that owns the quote.
-     */
     public function user()
     {
         return $this->belongsTo(UserProxy::modelClass());
     }
 
-    /**
-     * Get the person that owns the quote.
-     */
     public function person()
     {
         return $this->belongsTo(PersonProxy::modelClass());
     }
 
-    /**
-     * The leads that belong to the quote.
-     */
     public function leads()
     {
-        return $this->belongsToMany(LeadProxy::modelClass(), 'lead_quotes');
+        return $this->belongsToMany(
+            LeadProxy::modelClass(),
+            'lead_quotes'
+        );
     }
 }

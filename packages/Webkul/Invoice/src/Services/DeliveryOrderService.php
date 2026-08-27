@@ -94,6 +94,7 @@ class DeliveryOrderService
                 'quote_number' => $invoice->quote?->quote_number,
 
                 'project_code' => $invoice->project_code,
+                'business_unit' => $invoice->business_unit,
                 'project_name' => $invoice->subject,
 
                 'person_id' => $invoice->person_id,

@@ -22,6 +22,7 @@ class DeliveryOrderDataGrid extends DataGrid
                 'delivery_orders.quote_id',
                 'delivery_orders.quote_number',
                 'delivery_orders.project_code',
+                'delivery_orders.business_unit',
                 'delivery_orders.project_name',
                 'delivery_orders.customer_name',
                 'delivery_orders.sales_person_name',
@@ -52,6 +53,10 @@ class DeliveryOrderDataGrid extends DataGrid
             'delivery_orders.project_code'
         );
 
+        $this->addFilter(
+            'business_unit',
+            'delivery_orders.business_unit'
+        );
         $this->addFilter(
             'project_name',
             'delivery_orders.project_name'
@@ -135,6 +140,38 @@ class DeliveryOrderDataGrid extends DataGrid
             'closure' => fn ($row) =>
                 $row->project_code ?: '-',
         ]);
+
+        /**
+ * Business Unit.
+ */
+$this->addColumn([
+    'index' => 'business_unit',
+    'label' => 'Business Unit',
+    'type' => 'string',
+
+    'searchable' => false,
+    'sortable' => false,
+    'filterable' => true,
+
+    'visibility' => false,
+
+    'filterable_type' => 'dropdown',
+
+    'filterable_options' => [
+        [
+            'label' => 'Varbel - EO',
+            'value' => 'varbel',
+        ],
+        [
+            'label' => 'Vartech - Event Tech',
+            'value' => 'vartech',
+        ],
+        [
+            'label' => 'Capture It - Photobooth',
+            'value' => 'capture_it',
+        ],
+    ],
+]);
 
         /*
         |--------------------------------------------------------------------------

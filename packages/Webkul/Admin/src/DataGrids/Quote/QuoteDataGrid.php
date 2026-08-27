@@ -22,6 +22,7 @@ class QuoteDataGrid extends DataGrid
                 'quotes.id',
                 'quotes.quote_number',
                 'quotes.project_code',
+                'quotes.business_unit',
                 'quotes.subject',
                 'quotes.expired_at',
                 'quotes.grand_total',
@@ -64,6 +65,11 @@ class QuoteDataGrid extends DataGrid
         $this->addFilter(
             'id',
             'quotes.id'
+        );
+
+        $this->addFilter(
+        'business_unit',
+        'quotes.business_unit'
         );
 
         $this->addFilter(
@@ -162,7 +168,40 @@ class QuoteDataGrid extends DataGrid
                     ?: '#'.$row->id;
             },
         ]);
+/**
+ * Business Unit.
+ *
+ * Digunakan sebagai filter backend.
+ * Tidak perlu ditampilkan sebagai kolom utama.
+ */
+$this->addColumn([
+    'index' => 'business_unit',
+    'label' => 'Business Unit',
+    'type' => 'string',
 
+    'searchable' => false,
+    'sortable' => false,
+    'filterable' => true,
+
+    'visibility' => false,
+
+    'filterable_type' => 'dropdown',
+
+    'filterable_options' => [
+        [
+            'label' => 'Varbel - EO',
+            'value' => 'varbel',
+        ],
+        [
+            'label' => 'Vartech - Event Tech',
+            'value' => 'vartech',
+        ],
+        [
+            'label' => 'Capture It - Photobooth',
+            'value' => 'capture_it',
+        ],
+    ],
+]);
         /**
          * Project Code.
          */
