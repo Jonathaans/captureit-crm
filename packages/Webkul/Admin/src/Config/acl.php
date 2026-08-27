@@ -67,40 +67,101 @@ return [
         'route' => ['admin.quotes.delete', 'admin.quotes.mass_delete'],
         'sort' => 4,
     ], 
-    /**
+/**
  * Invoices.
  */
 [
-    'key' => 'invoices',
-    'name' => 'admin::app.acl.invoices',
+    'key'   => 'invoices',
+    'name'  => 'admin::app.acl.invoices',
     'route' => 'admin.invoices.index',
-    'sort' => 4,
+    'sort'  => 4,
 ], [
-    'key' => 'invoices.view',
-    'name' => 'admin::app.acl.view',
+    /**
+     * View Invoice.
+     */
+    'key'   => 'invoices.view',
+    'name'  => 'admin::app.acl.view',
     'route' => 'admin.invoices.show',
-    'sort' => 1,
+    'sort'  => 1,
 ], [
-    'key' => 'invoices.generate',
-    'name' => 'admin::app.acl.generate-invoice',
+    /**
+     * Generate Invoice from Quote.
+     */
+    'key'   => 'invoices.generate',
+    'name'  => 'admin::app.acl.generate-invoice',
     'route' => 'admin.invoices.generate',
-    'sort' => 2,
+    'sort'  => 2,
 ], [
-    'key' => 'invoices.payment',
-    'name' => 'admin::app.acl.add-payment',
+    /**
+     * Add Payment.
+     */
+    'key'   => 'invoices.payment',
+    'name'  => 'admin::app.acl.add-payment',
     'route' => 'admin.invoices.payments.store',
-    'sort' => 3,
-    
-],[
-    'key' => 'invoices.expense',
-    'name' => 'admin::app.acl.add-expense',
+    'sort'  => 3,
+], [
+    /**
+     * Update Event Status.
+     *
+     * Prospect / Confirm / Cancel
+     */
+    'key'   => 'invoices.event-status',
+    'name'  => 'admin::app.acl.update-event-status',
+    'route' => 'admin.invoices.event-status.update',
+    'sort'  => 4,
+], [
+    /**
+     * Add Expense.
+     */
+    'key'   => 'invoices.expense',
+    'name'  => 'admin::app.acl.add-expense',
     'route' => 'admin.invoices.expenses.store',
-    'sort' => 4,
-],[
-    'key' => 'invoices.print',
-    'name' => 'admin::app.acl.print',
+    'sort'  => 5,
+], [
+    /**
+     * Edit Expense.
+     */
+    'key'   => 'invoices.expense.edit',
+    'name'  => 'admin::app.acl.edit-expense',
+    'route' => 'admin.invoices.expenses.update',
+    'sort'  => 1,
+], [
+    /**
+     * Delete Expense.
+     */
+    'key'   => 'invoices.expense.delete',
+    'name'  => 'admin::app.acl.delete-expense',
+    'route' => 'admin.invoices.expenses.delete',
+    'sort'  => 2,
+], [
+    /**
+     * Print Invoice.
+     */
+    'key'   => 'invoices.print',
+    'name'  => 'admin::app.acl.print',
     'route' => 'admin.invoices.print',
-    'sort' => 5,
+    'sort'  => 6,
+], [
+    /**
+     * Financial Report.
+     *
+     * Permission ini nanti hanya kita aktifkan
+     * untuk Head Finance.
+     */
+    'key'   => 'invoices.financial-report',
+    'name'  => 'admin::app.acl.financial-report',
+    'route' => 'admin.invoices.financial-report',
+    'sort'  => 7,
+], [
+    /**
+     * Export Financial Report.
+     *
+     * Child permission dari Financial Report.
+     */
+    'key'   => 'invoices.financial-report.export',
+    'name'  => 'admin::app.acl.export-financial-report',
+    'route' => 'admin.invoices.financial-report.export',
+    'sort'  => 1,
 ],
     [
         'key' => 'mail',

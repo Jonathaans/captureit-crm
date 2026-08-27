@@ -17,6 +17,8 @@ class QuoteItem extends Model implements QuoteItemContract
     protected $fillable = [
         'sku',
         'name',
+        'description',
+        'day',
         'quantity',
         'price',
         'coupon_code',

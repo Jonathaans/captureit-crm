@@ -11,20 +11,29 @@ class PaymentService
 {
     /**
      * Add payment to an invoice and recalculate
-     * paid amount, balance, and payment status.
+     * paid amount, balance due, and payment status.
      */
-    public function addPayment(Invoice $invoice, array $data): Payment
-    {
+    public function addPayment(
+        Invoice $invoice,
+        array $data
+    ): Payment {
         return DB::transaction(function () use ($invoice, $data) {
             /**
-             * Reload and lock invoice so two payments
-             * cannot update the balance simultaneously.
+             * Reload invoice and lock the row.
+             *
+             * Tujuannya supaya dua pembayaran yang masuk
+             * bersamaan tidak merusak perhitungan balance.
              */
             $invoice = Invoice::query()
                 ->lockForUpdate()
                 ->findOrFail($invoice->id);
 
-            $amount = (float) ($data['amount'] ?? 0);
+            /**
+             * Validate payment amount.
+             */
+            $amount = (float) (
+                $data['amount'] ?? 0
+            );
 
             if ($amount <= 0) {
                 throw new InvalidArgumentException(
@@ -32,6 +41,10 @@ class PaymentService
                 );
             }
 
+            /**
+             * Payment tidak boleh lebih besar
+             * dari sisa tagihan.
+             */
             if ($amount > (float) $invoice->balance_due) {
                 throw new InvalidArgumentException(
                     'Payment amount cannot exceed invoice balance.'
@@ -39,50 +52,105 @@ class PaymentService
             }
 
             /**
-             * Create payment history.
+             * =====================================================
+             * CREATE PAYMENT HISTORY
+             * =====================================================
              */
             $payment = Payment::create([
-                'invoice_id'       => $invoice->id,
-                'amount'           => $amount,
-                'payment_method'   => $data['payment_method'] ?? null,
-                'reference_number' => $data['reference_number'] ?? null,
-                'notes'            => $data['notes'] ?? null,
-                'paid_at'          => $data['paid_at'] ?? now(),
-                'created_by'       => $data['created_by'] ?? null,
+                'invoice_id' => $invoice->id,
+
+                'amount' => $amount,
+
+                'payment_method' =>
+                    $data['payment_method'] ?? null,
+
+                'reference_number' =>
+                    $data['reference_number'] ?? null,
+
+                'notes' =>
+                    $data['notes'] ?? null,
+
+                'paid_at' =>
+                    $data['paid_at'] ?? now(),
+
+                'created_by' =>
+                    $data['created_by'] ?? null,
             ]);
 
             /**
-             * Calculate total payments from history.
+             * =====================================================
+             * RECALCULATE TOTAL PAYMENT
+             * =====================================================
+             *
+             * Kita hitung berdasarkan payment history,
+             * bukan sekadar:
+             *
+             * old paid_amount + payment baru
+             *
+             * supaya data tetap konsisten.
              */
-            $paidAmount = (float) Payment::where(
-                'invoice_id',
-                $invoice->id
-            )->sum('amount');
+            $paidAmount = (float) Payment::query()
+                ->where(
+                    'invoice_id',
+                    $invoice->id
+                )
+                ->sum('amount');
 
-            $grandTotal = (float) $invoice->grand_total;
+            /**
+             * Grand total invoice.
+             */
+            $grandTotal =
+                (float) $invoice->grand_total;
 
+            /**
+             * Remaining balance.
+             */
             $balanceDue = max(
                 0,
                 $grandTotal - $paidAmount
             );
 
             /**
-             * Automatic payment status.
+             * =====================================================
+             * PAYMENT STATUS
+             * =====================================================
+             *
+             * Kolom:
+             *
+             * invoices.status
+             *
+             * digunakan khusus untuk PAYMENT STATUS.
              */
             if ($paidAmount <= 0) {
-                $status = 'unpaid';
+                $paymentStatus = 'unpaid';
+
             } elseif ($paidAmount < $grandTotal) {
-                $status = 'partial';
+                $paymentStatus = 'partial';
+
             } else {
-                $status = 'paid';
+                $paymentStatus = 'paid';
             }
 
+            /**
+             * =====================================================
+             * UPDATE INVOICE
+             * =====================================================
+             *
+             * PENTING:
+             *
+             * event_status TIDAK diubah di PaymentService.
+             */
             $invoice->update([
                 'paid_amount' => $paidAmount,
+
                 'balance_due' => $balanceDue,
-                'status'      => $status,
+
+                'status' => $paymentStatus,
             ]);
 
+            /**
+             * Return payment with relationships.
+             */
             return $payment->fresh([
                 'invoice',
                 'creator',

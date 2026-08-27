@@ -3,26 +3,85 @@
 use Illuminate\Support\Facades\Route;
 use Webkul\Admin\Http\Controllers\Invoice\InvoiceController;
 
+
 Route::controller(InvoiceController::class)
     ->prefix('invoices')
     ->group(function () {
-        Route::get('', 'index')
-            ->name('admin.invoices.index');
 
         /*
-         * Harus sebelum /{id}.
-         */
-        Route::get('print/{id}', 'print')
-            ->name('admin.invoices.print');
+        |--------------------------------------------------------------------------
+        | Listing
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('/', 'index')
+            ->name('admin.invoices.index');
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Generate Invoice
+        |--------------------------------------------------------------------------
+        */
 
         Route::post('generate/{quoteId}', 'generate')
             ->name('admin.invoices.generate');
 
-        Route::post('{id}/payments', 'addPayment')
-            ->name('admin.invoices.payments.store');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Edit Invoice
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('{id}/edit', 'edit')
+            ->name('admin.invoices.edit');
+
+        Route::put('{id}', 'update')
+            ->name('admin.invoices.update');
+
+                    Route::get('financial-report', 'financialReport')
+            ->name('admin.invoices.financial-report');
+
+        Route::get('financial-report/export', 'exportFinancialReport')
+            ->name('admin.invoices.financial-report.export');
+        
+
+        /*
+        |--------------------------------------------------------------------------
+        | Detail
+        |--------------------------------------------------------------------------
+        */
 
         Route::get('{id}', 'show')
             ->name('admin.invoices.show');
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Print
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('{id}/print', 'print')
+            ->name('admin.invoices.print');
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Payment
+        |--------------------------------------------------------------------------
+        */
+
+        Route::post('{id}/payments', 'addPayment')
+            ->name('admin.invoices.payments.store');
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Expenses
+        |--------------------------------------------------------------------------
+        */
 
         Route::post('{id}/expenses', 'addExpense')
             ->name('admin.invoices.expenses.store');
@@ -32,4 +91,22 @@ Route::controller(InvoiceController::class)
 
         Route::delete('{invoiceId}/expenses/{expenseId}', 'deleteExpense')
             ->name('admin.invoices.expenses.delete');
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Event Status
+        |--------------------------------------------------------------------------
+        */
+
+        Route::put('{id}/event-status', 'updateEventStatus')
+            ->name('admin.invoices.event-status.update');
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Report
+        |--------------------------------------------------------------------------
+        */
+
     });

@@ -95,6 +95,8 @@
                             </p>
                         </div>
 
+                        
+
                         {!! view_render_event('admin.contacts.quotes.create.attribute.form_controls.before') !!}
 
                         <div class="w-1/2 max-md:w-full">
@@ -112,6 +114,92 @@
                                     ],
                                 ]"
                             />
+                            <!-- Project Details -->
+<div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
+
+    <!-- Event Date -->
+    <x-admin::form.control-group>
+        <x-admin::form.control-group.label class="required">
+            Event Date
+        </x-admin::form.control-group.label>
+
+        <x-admin::form.control-group.control
+            type="date"
+            name="event_date"
+            :value="old('event_date')"
+            rules="required"
+            label="Event Date"
+        />
+
+        <x-admin::form.control-group.error
+            control-name="event_date"
+        />
+    </x-admin::form.control-group>
+
+
+    <!-- Location -->
+    <x-admin::form.control-group>
+        <x-admin::form.control-group.label class="required">
+            Location
+        </x-admin::form.control-group.label>
+
+        <x-admin::form.control-group.control
+            type="text"
+            name="location"
+            :value="old('location')"
+            rules="required"
+            label="Location"
+            placeholder="Contoh: Hotel Mulia Jakarta"
+        />
+
+        <x-admin::form.control-group.error
+            control-name="location"
+        />
+    </x-admin::form.control-group>
+
+
+    <!-- Payment Term -->
+    <x-admin::form.control-group>
+        <x-admin::form.control-group.label class="required">
+            Payment Term
+        </x-admin::form.control-group.label>
+
+        <x-admin::form.control-group.control
+            type="select"
+            name="payment_term"
+            :value="old('payment_term')"
+            rules="required"
+            label="Payment Term"
+        >
+            <option value="">
+                Select Payment Term
+            </option>
+
+            <option value="7 Days">
+                7 Days
+            </option>
+
+            <option value="14 Days">
+                14 Days
+            </option>
+
+            <option value="30 Days">
+                30 Days
+            </option>
+
+            <option value="Full Payment Before Event">
+                Full Payment Before Event
+            </option>
+        </x-admin::form.control-group.control>
+
+        <x-admin::form.control-group.error
+            control-name="payment_term"
+        />
+    </x-admin::form.control-group>
+
+</div>
+
+                            
 
                             <x-admin::attributes
                                 :custom-attributes="app('Webkul\Attribute\Repositories\AttributeRepository')->findWhere([
@@ -218,12 +306,24 @@
                         <div class="w-1/2 max-md:w-full">
                             {!! view_render_event('admin.contacts.quotes.create.address_information.attributes.before') !!}
 
-                            <!-- Billing Address -->
-                            <x-admin::attributes
-                                :custom-attributes="app('Webkul\Attribute\Repositories\AttributeRepository')->findWhere([
+                            @php
+                                $billingAddressAttributes = app(
+                                    'Webkul\Attribute\Repositories\AttributeRepository'
+                                )->findWhere([
                                     'entity_type' => 'quotes',
                                     ['code', 'IN', ['billing_address']],
-                                ])"
+                                ]);
+
+                                $billingAddressAttributes->each(function ($attribute) {
+                                    if ($attribute->code === 'billing_address') {
+                                        $attribute->name = 'Address';
+                                    }
+                                });
+                            @endphp
+
+                            <!-- Address -->
+                            <x-admin::attributes
+                                :custom-attributes="$billingAddressAttributes"
                                 :custom-validations="[
                                     'billing_address' => [
                                         'max:100',
@@ -232,43 +332,12 @@
                                 :entity="$quote"
                             />
 
-                            <!-- Shipping Address Same As Billing Address -->
-                            <x-admin::form.control-group class="!mb-4">
-                                <x-admin::form.control-group.label class="!text-sm">
-                                    @lang('admin::app.quotes.create.same-as-billing')
-                                </x-admin::form.control-group.label>
-
-                                <input
-                                    type="hidden"
-                                    name="shipping_address_same_as_billing"
-                                    :value="0"
-                                />
-
-                                <x-admin::form.control-group.control
-                                    type="switch"
-                                    name="shipping_address_same_as_billing"
-                                    value="1"
-                                    :label="trans('admin::app.quotes.create.same-as-billing')"
-                                    :checked="(bool) old('shipping_address_same_as_billing')"
-                                    @change="sameAsBilling = $event.target.checked"
-                                />
-                            </x-admin::form.control-group>
-
-                            <!-- Shipping Address -->
-                            <template v-if="! sameAsBilling">
-                                <x-admin::attributes
-                                    :custom-attributes="app('Webkul\Attribute\Repositories\AttributeRepository')->findWhere([
-                                        'entity_type' => 'quotes',
-                                        ['code', 'IN', ['shipping_address']],
-                                    ])"
-                                    :custom-validations="[
-                                        'shipping_address' => [
-                                            'max:100',
-                                        ],
-                                    ]"
-                                    :entity="$quote"
-                                />
-                            </template>
+                            <!-- Backend: shipping address otomatis mengikuti billing address -->
+                            <input
+                                type="hidden"
+                                name="shipping_address_same_as_billing"
+                                value="1"
+                            />
 
                             {!! view_render_event('admin.contacts.quotes.create.address_information.attributes.after') !!}
                         </div>
@@ -318,12 +387,20 @@
                         <!-- Table Head -->
                         <x-admin::table.thead>
                             <x-admin::table.thead.tr>
-                                <x-admin::table.th >
-                                    @lang('admin::app.quotes.create.product-name')
+                                <x-admin::table.th>
+                                    Package
+                                </x-admin::table.th>
+
+                                <x-admin::table.th>
+                                    Description
                                 </x-admin::table.th>
 
                                 <x-admin::table.th class="text-center">
-                                    @lang('admin::app.quotes.create.quantity')
+                                    Day
+                                </x-admin::table.th>
+
+                                <x-admin::table.th class="text-center">
+                                    Qty
                                 </x-admin::table.th>
 
                                 <x-admin::table.th class="text-center">
@@ -470,12 +547,41 @@
                             :placeholder="trans('admin::app.quotes.create.search-products')"
                             @on-selected="(product) => addProduct(product)"
                             rules="required"
-                            :label="trans('admin::app.quotes.create.product-name')"
+                            :label="'Package'"
                             ::class="errors[`${inputName}[product_id]`] ? 'border !border-red-600 hover:border-red-600' : ''"
                         />
 
                         <x-admin::form.control-group.error name="items.item_0.product_id"/>
                         <x-admin::form.control-group.error name="items[item_0][product_id]"/>
+                    </x-admin::form.control-group>
+                </x-admin::table.td>
+
+                <!-- Description -->
+                <x-admin::table.td>
+                    <x-admin::form.control-group class="!mb-0">
+                        <x-admin::form.control-group.control
+                            type="text"
+                            ::name="`${inputName}[description]`"
+                            ::value="product.description"
+                            :label="'Description'"
+                            :placeholder="'Description'"
+                            @on-change="(event) => product.description = event.value"
+                        />
+                    </x-admin::form.control-group>
+                </x-admin::table.td>
+
+                <!-- Day -->
+                <x-admin::table.td class="!px-2 text-center">
+                    <x-admin::form.control-group class="!mb-0">
+                        <x-admin::form.control-group.control
+                            type="inline"
+                            ::name="`${inputName}[day]`"
+                            ::value="product.day"
+                            rules="required|numeric|min:1"
+                            :label="'Day'"
+                            :placeholder="'Day'"
+                            @on-change="(event) => product.day = event.value"
+                        />
                     </x-admin::form.control-group>
                 </x-admin::table.td>
 
@@ -523,14 +629,14 @@
                         <x-admin::form.control-group.control
                             type="inline"
                             ::name="`${inputName}[total]`"
-                            ::value="product.price * product.quantity"
+                            ::value="product.price * product.quantity * product.day"
                             rules="required|decimal:4"
                             ::errors="errors"
                             :label="trans('admin::app.quotes.create.total')"
                             :placeholder="trans('admin::app.quotes.create.total')"
                             :allowEdit="false"
                             position="center"
-                            ::value-label="$admin.formatPrice(product.price * product.quantity)"
+                            ::value-label="$admin.formatPrice(product.price * product.quantity * product.day)"
                         />
                         <x-admin::form.control-group.error name="items.item_0.total"/>
                     </x-admin::form.control-group>
@@ -581,10 +687,10 @@
                             type="inline"
                             ::name="`${inputName}[final_total]`"
                             ::errors="errors"
-                            ::value="parseFloat(product.price * product.quantity) + parseFloat(product.tax_amount) - parseFloat(product.discount_amount)"
+                            ::value="parseFloat(product.price * product.quantity * product.day) + parseFloat(product.tax_amount) - parseFloat(product.discount_amount)"
                             :allowEdit="false"
                             position="center"
-                            ::value-label="$admin.formatPrice(parseFloat(product.price * product.quantity) + parseFloat(product.tax_amount) - parseFloat(product.discount_amount))"
+                            ::value-label="$admin.formatPrice(parseFloat(product.price * product.quantity * product.day) + parseFloat(product.tax_amount) - parseFloat(product.discount_amount))"
                         />
                         <x-admin::form.control-group.error name="items.item_0.final_total"/>
                     </x-admin::form.control-group>
@@ -623,11 +729,87 @@
 
                         leadEntity: @json($lookUpEntityData ?? []),
 
-                        sameAsBilling: {{ old('shipping_address_same_as_billing') ? 'true' : 'false' }},
                     };
                 },
 
+                mounted() {
+                    this.$nextTick(() => {
+                        this.applyQuoteLabelOverrides();
+
+                        if (! this.$el) {
+                            return;
+                        }
+
+                        this._quoteLabelObserver = new MutationObserver(() => {
+                            this.applyQuoteLabelOverrides();
+                        });
+
+                        this._quoteLabelObserver.observe(this.$el, {
+                            childList: true,
+                            subtree: true,
+                        });
+                    });
+                },
+
+                beforeUnmount() {
+                    if (this._quoteLabelObserver) {
+                        this._quoteLabelObserver.disconnect();
+                    }
+                },
+
                 methods: {
+                    /**
+                     * Override labels of Krayin's default Quote attributes.
+                     *
+                     * We intentionally keep the database attribute codes unchanged:
+                     * subject, expired_at, and person_id. Only the visible labels change.
+                     */
+                    applyQuoteLabelOverrides() {
+                        const sections = [
+                            document.getElementById('quote-info'),
+                            document.getElementById('address-info'),
+                        ].filter(Boolean);
+
+                        const replacements = {
+                            'Subject': 'Project Name',
+                            'Expired At': 'Valid Until',
+                            'Person': 'Bill To',
+                            'Billing Address': 'Address',
+                        };
+
+                        sections.forEach((section) => {
+                            section.querySelectorAll('label').forEach((label) => {
+                                const currentLabel = label.textContent
+                                    .replace(/\s+/g, ' ')
+                                    .trim();
+
+                                Object.entries(replacements).forEach(([from, to]) => {
+                                    if (
+                                        currentLabel !== from
+                                        && currentLabel !== `${from} *`
+                                    ) {
+                                        return;
+                                    }
+
+                                    const walker = document.createTreeWalker(
+                                        label,
+                                        NodeFilter.SHOW_TEXT
+                                    );
+
+                                    let textNode;
+
+                                    while ((textNode = walker.nextNode())) {
+                                        if (textNode.nodeValue.includes(from)) {
+                                            textNode.nodeValue = textNode.nodeValue.replace(from, to);
+
+                                            break;
+                                        }
+                                    }
+                                });
+                            });
+                        });
+                    },
+
                     /**
                      * Scroll to the section.
                      *
@@ -774,7 +956,7 @@
                      * @returns {Number}
                      */
                     getProductBaseTotal(product) {
-                        return this.parseDecimal(product.price) * this.parseDecimal(product.quantity);
+                        return this.parseDecimal(product.price) * this.parseDecimal(product.quantity) * this.parseDecimal(product.day ?? 1);
                     },
 
                     /**
@@ -828,7 +1010,9 @@
                             id: null,
                             product_id: null,
                             name: '',
-                            quantity: 0,
+                            description: '',
+                            day: 1,
+                            quantity: 1,
                             total: '0.0000',
                             price: '0.0000',
                             discount_amount: '0.0000',
@@ -914,6 +1098,8 @@
                     addProduct(result) {
                         this.product.product_id = result.id ?? null;
                         this.product.name = result.name ?? '';
+                        this.product.description = result.description ?? '';
+                        this.product.day = 1;
                         this.product.price = result.price ?? 0;
                         this.product.quantity = result.quantity ?? 1;
                         this.product.discount_amount = 0;

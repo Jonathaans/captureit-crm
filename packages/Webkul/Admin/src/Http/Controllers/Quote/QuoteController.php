@@ -85,13 +85,42 @@ class QuoteController extends Controller
             $this->additionalValidation();
         }
 
-        $this->syncShippingAddressWithBilling($request);
+$this->syncShippingAddressWithBilling($request);
 
-        Event::dispatch('quote.create.before');
+Event::dispatch('quote.create.before');
 
-        $quote = $this->quoteRepository->create($request->all());
+/*
+ * Generate Project Code otomatis.
+ *
+ * Contoh:
+ * PRJ-2026-00001
+ * PRJ-2026-00002
+ */
+$data = $request->all();
 
-        $leadId = request('lead_id');
+/*
+ * Generate Project Code.
+ *
+ * Example:
+ * PRJ-2026-00001
+ */
+$data['project_code'] = app(
+    \Webkul\Quote\Services\ProjectCodeService::class
+)->generate();
+
+/*
+ * Generate Quotation Number.
+ *
+ * Example:
+ * QT 2608-0001
+ */
+$data['quote_number'] = app(
+    \Webkul\Quote\Services\QuoteNumberService::class
+)->generate();
+
+$quote = $this->quoteRepository->create($data);
+
+$leadId = request('lead_id');
 
         if ($leadId) {
             $lead = $this->leadRepository->find($leadId);

@@ -129,6 +129,106 @@
                                 :entity="$quote"
                             />
 
+                            <!-- Project Details -->
+                            <div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
+                                <!-- Event Date -->
+                                <x-admin::form.control-group>
+                                    <x-admin::form.control-group.label class="required">
+                                        Event Date
+                                    </x-admin::form.control-group.label>
+
+                                    <x-admin::form.control-group.control
+                                        type="date"
+                                        name="event_date"
+                                        :value="old(
+                                            'event_date',
+                                            $quote->event_date
+                                                ? \Carbon\Carbon::parse($quote->event_date)->format('Y-m-d')
+                                                : ''
+                                        )"
+                                        rules="required"
+                                        label="Event Date"
+                                    />
+
+                                    <x-admin::form.control-group.error
+                                        control-name="event_date"
+                                    />
+                                </x-admin::form.control-group>
+
+                                <!-- Location -->
+                                <x-admin::form.control-group>
+                                    <x-admin::form.control-group.label class="required">
+                                        Location
+                                    </x-admin::form.control-group.label>
+
+                                    <x-admin::form.control-group.control
+                                        type="text"
+                                        name="location"
+                                        :value="old('location', $quote->location)"
+                                        rules="required"
+                                        label="Location"
+                                        placeholder="Contoh: Hotel Mulia Jakarta"
+                                    />
+
+                                    <x-admin::form.control-group.error
+                                        control-name="location"
+                                    />
+                                </x-admin::form.control-group>
+
+                                <!-- Payment Term -->
+                                <x-admin::form.control-group>
+                                    <x-admin::form.control-group.label class="required">
+                                        Payment Term
+                                    </x-admin::form.control-group.label>
+
+                                    <x-admin::form.control-group.control
+                                        type="select"
+                                        name="payment_term"
+                                        :value="old('payment_term', $quote->payment_term)"
+                                        rules="required"
+                                        label="Payment Term"
+                                    >
+                                        <option value="">
+                                            Select Payment Term
+                                        </option>
+
+                                        <option
+                                            value="7 Days"
+                                            @selected(old('payment_term', $quote->payment_term) === '7 Days')
+                                        >
+                                            7 Days
+                                        </option>
+
+                                        <option
+                                            value="14 Days"
+                                            @selected(old('payment_term', $quote->payment_term) === '14 Days')
+                                        >
+                                            14 Days
+                                        </option>
+
+                                        <option
+                                            value="30 Days"
+                                            @selected(old('payment_term', $quote->payment_term) === '30 Days')
+                                        >
+                                            30 Days
+                                        </option>
+
+                                        <option
+                                            value="Full Payment Before Event"
+                                            @selected(old('payment_term', $quote->payment_term) === 'Full Payment Before Event')
+                                        >
+                                            Full Payment Before Event
+                                        </option>
+                                    </x-admin::form.control-group.control>
+
+                                    <x-admin::form.control-group.error
+                                        control-name="payment_term"
+                                    />
+                                </x-admin::form.control-group>
+                            </div>
+
+                            
+
                             <x-admin::attributes
                                 :custom-attributes="app('Webkul\Attribute\Repositories\AttributeRepository')->findWhere([
                                         'entity_type' => 'quotes',
@@ -233,12 +333,24 @@
                         </div>
 
                         <div class="w-1/2 max-md:w-full">
-                            <!-- Billing Address -->
-                            <x-admin::attributes
-                                :custom-attributes="app('Webkul\Attribute\Repositories\AttributeRepository')->findWhere([
+                            @php
+                                $billingAddressAttributes = app(
+                                    'Webkul\Attribute\Repositories\AttributeRepository'
+                                )->findWhere([
                                     'entity_type' => 'quotes',
                                     ['code', 'IN', ['billing_address']],
-                                ])"
+                                ]);
+
+                                $billingAddressAttributes->each(function ($attribute) {
+                                    if ($attribute->code === 'billing_address') {
+                                        $attribute->name = 'Address';
+                                    }
+                                });
+                            @endphp
+
+                            <!-- Address -->
+                            <x-admin::attributes
+                                :custom-attributes="$billingAddressAttributes"
                                 :custom-validations="[
                                     'billing_address' => [
                                         'max:100',
@@ -247,43 +359,12 @@
                                 :entity="$quote"
                             />
 
-                            <!-- Shipping Address Same As Billing Address -->
-                            <x-admin::form.control-group class="!mb-4">
-                                <x-admin::form.control-group.label class="!text-sm">
-                                    @lang('admin::app.quotes.create.same-as-billing')
-                                </x-admin::form.control-group.label>
-
-                                <input
-                                    type="hidden"
-                                    name="shipping_address_same_as_billing"
-                                    :value="0"
-                                />
-
-                                <x-admin::form.control-group.control
-                                    type="switch"
-                                    name="shipping_address_same_as_billing"
-                                    value="1"
-                                    :label="trans('admin::app.quotes.create.same-as-billing')"
-                                    :checked="(bool) (old('shipping_address_same_as_billing') ?? (! empty($quote->shipping_address) && $quote->shipping_address == $quote->billing_address))"
-                                    @change="sameAsBilling = $event.target.checked"
-                                />
-                            </x-admin::form.control-group>
-
-                            <!-- Shipping Address -->
-                            <template v-if="! sameAsBilling">
-                                <x-admin::attributes
-                                    :custom-attributes="app('Webkul\Attribute\Repositories\AttributeRepository')->findWhere([
-                                        'entity_type' => 'quotes',
-                                        ['code', 'IN', ['shipping_address']],
-                                    ])"
-                                    :custom-validations="[
-                                        'shipping_address' => [
-                                            'max:100',
-                                        ],
-                                    ]"
-                                    :entity="$quote"
-                                />
-                            </template>
+                            <!-- Backend: shipping address otomatis mengikuti billing address -->
+                            <input
+                                type="hidden"
+                                name="shipping_address_same_as_billing"
+                                value="1"
+                            />
                         </div>
                     </div>
 
@@ -634,11 +715,87 @@
 
                         leadEntity: @json($lookUpEntityData ?? []),
 
-                        sameAsBilling: {{ (old('shipping_address_same_as_billing') ?? (! empty($quote->shipping_address) && $quote->shipping_address == $quote->billing_address)) ? 'true' : 'false' }},
                     };
                 },
 
+                mounted() {
+                    this.$nextTick(() => {
+                        this.applyQuoteLabelOverrides();
+
+                        if (! this.$el) {
+                            return;
+                        }
+
+                        // Keep custom labels after lookup/attribute components re-render.
+                        this._quoteLabelObserver = new MutationObserver(() => {
+                            this.applyQuoteLabelOverrides();
+                        });
+
+                        this._quoteLabelObserver.observe(this.$el, {
+                            childList: true,
+                            subtree: true,
+                        });
+                    });
+                },
+
+                beforeUnmount() {
+                    if (this._quoteLabelObserver) {
+                        this._quoteLabelObserver.disconnect();
+                    }
+                },
+
                 methods: {
+                    /**
+                     * Override only the visible labels of default Quote attributes.
+                     * Database codes remain subject, expired_at, and person_id.
+                     */
+                    applyQuoteLabelOverrides() {
+                        const sections = [
+                            document.getElementById('quote-info'),
+                            document.getElementById('address-info'),
+                        ].filter(Boolean);
+
+                        const replacements = {
+                            'Subject': 'Project Name',
+                            'Expired At': 'Valid Until',
+                            'Person': 'Bill To',
+                            'Billing Address': 'Address',
+                        };
+
+                        sections.forEach((section) => {
+                            section.querySelectorAll('label').forEach((label) => {
+                                const currentLabel = label.textContent
+                                    .replace(/\s+/g, ' ')
+                                    .trim();
+
+                                Object.entries(replacements).forEach(([from, to]) => {
+                                    if (
+                                        currentLabel !== from
+                                        && currentLabel !== `${from} *`
+                                    ) {
+                                        return;
+                                    }
+
+                                    const walker = document.createTreeWalker(
+                                        label,
+                                        NodeFilter.SHOW_TEXT
+                                    );
+
+                                    let textNode;
+
+                                    while ((textNode = walker.nextNode())) {
+                                        if (textNode.nodeValue.includes(from)) {
+                                            textNode.nodeValue =
+                                                textNode.nodeValue.replace(from, to);
+
+                                            break;
+                                        }
+                                    }
+                                });
+                            });
+                        });
+                    },
+
                     /**
                      * Scroll to the section.
                      *

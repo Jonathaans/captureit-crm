@@ -20,38 +20,117 @@ class QuoteDataGrid extends DataGrid
         $queryBuilder = DB::table('quotes')
             ->addSelect(
                 'quotes.id',
+                'quotes.quote_number',
+                'quotes.project_code',
                 'quotes.subject',
                 'quotes.expired_at',
-                'quotes.sub_total',
-                'quotes.discount_amount',
-                'quotes.tax_amount',
-                'quotes.adjustment_amount',
                 'quotes.grand_total',
                 'quotes.created_at',
+
                 'users.id as user_id',
                 'users.name as sales_person',
+
                 'persons.id as person_id',
                 'persons.name as person_name',
+
                 'quotes.expired_at as expired_quotes'
             )
-            ->leftJoin('users', 'quotes.user_id', '=', 'users.id')
-            ->leftJoin('persons', 'quotes.person_id', '=', 'persons.id');
+            ->leftJoin(
+                'users',
+                'quotes.user_id',
+                '=',
+                'users.id'
+            )
+            ->leftJoin(
+                'persons',
+                'quotes.person_id',
+                '=',
+                'persons.id'
+            );
 
+        /**
+         * User authorization filter.
+         */
         if ($userIds = bouncer()->getAuthorizedUserIds()) {
-            $queryBuilder->whereIn('quotes.user_id', $userIds);
+            $queryBuilder->whereIn(
+                'quotes.user_id',
+                $userIds
+            );
         }
 
-        $this->addFilter('id', 'quotes.id');
-        $this->addFilter('user', 'quotes.user_id');
-        $this->addFilter('sales_person', 'users.name');
-        $this->addFilter('person_name', 'persons.name');
-        $this->addFilter('expired_at', 'quotes.expired_at');
-        $this->addFilter('created_at', 'quotes.created_at');
+        /**
+         * Filters.
+         */
+        $this->addFilter(
+            'id',
+            'quotes.id'
+        );
 
+        $this->addFilter(
+            'quote_number',
+            'quotes.quote_number'
+        );
+
+        $this->addFilter(
+            'project_code',
+            'quotes.project_code'
+        );
+
+        $this->addFilter(
+            'subject',
+            'quotes.subject'
+        );
+
+        $this->addFilter(
+            'user',
+            'quotes.user_id'
+        );
+
+        $this->addFilter(
+            'sales_person',
+            'users.name'
+        );
+
+        $this->addFilter(
+            'person_name',
+            'persons.name'
+        );
+
+        $this->addFilter(
+            'expired_at',
+            'quotes.expired_at'
+        );
+
+        $this->addFilter(
+            'created_at',
+            'quotes.created_at'
+        );
+
+        /**
+         * Expired quote filter.
+         */
         if (request()->input('expired_quotes.in') == 1) {
-            $this->addFilter('expired_quotes', DB::raw('DATEDIFF(NOW(), '.$tablePrefix.'quotes.expired_at) >= '.$tablePrefix.'NOW()'));
+            $this->addFilter(
+                'expired_quotes',
+                DB::raw(
+                    'DATEDIFF(NOW(), '
+                    .$tablePrefix
+                    .'quotes.expired_at) >= '
+                    .$tablePrefix
+                    .'NOW()'
+                )
+            );
         } else {
-            $this->addFilter('expired_quotes', DB::raw('DATEDIFF(NOW(), '.$tablePrefix.'quotes.expired_at) < '.$tablePrefix.'NOW()'));
+            $this->addFilter(
+                'expired_quotes',
+                DB::raw(
+                    'DATEDIFF(NOW(), '
+                    .$tablePrefix
+                    .'quotes.expired_at) < '
+                    .$tablePrefix
+                    .'NOW()'
+                )
+            );
         }
 
         return $queryBuilder;
@@ -62,117 +141,199 @@ class QuoteDataGrid extends DataGrid
      */
     public function prepareColumns(): void
     {
+        /**
+         * Quote Number.
+         */
         $this->addColumn([
-            'index' => 'subject',
-            'label' => trans('admin::app.quotes.index.datagrid.subject'),
+            'index' => 'quote_number',
+            'label' => 'Quote Number',
             'type' => 'string',
-            'filterable' => true,
-            'searchable' => true,
-            'sortable' => true,
-        ]);
 
-        $this->addColumn([
-            'index' => 'sales_person',
-            'label' => trans('admin::app.quotes.index.datagrid.sales-person'),
-            'type' => 'string',
             'sortable' => true,
             'searchable' => true,
             'filterable' => true,
-            'filterable_type' => 'searchable_dropdown',
-            'filterable_options' => [
-                'repository' => UserRepository::class,
-                'column' => [
-                    'label' => 'name',
-                    'value' => 'name',
-                ],
-            ],
-        ]);
 
-        $this->addColumn([
-            'index' => 'person_name',
-            'label' => trans('admin::app.quotes.index.datagrid.person'),
-            'type' => 'string',
-            'sortable' => true,
-            'searchable' => true,
-            'filterable' => true,
-            'filterable_type' => 'searchable_dropdown',
-            'filterable_options' => [
-                'repository' => PersonRepository::class,
-                'column' => [
-                    'label' => 'name',
-                    'value' => 'name',
-                ],
-            ],
+            /**
+             * Legacy Quote yang belum punya quote_number
+             * tetap bisa ditampilkan.
+             */
             'closure' => function ($row) {
-                $route = route('admin.contacts.persons.view', $row->person_id);
-
-                return "<a class=\"text-brandColor transition-all hover:underline\" href='".$route."'>".$row->person_name.'</a>';
+                return $row->quote_number
+                    ?: '#'.$row->id;
             },
         ]);
 
+        /**
+         * Project Code.
+         */
         $this->addColumn([
-            'index' => 'sub_total',
-            'label' => trans('admin::app.quotes.index.datagrid.subtotal'),
+            'index' => 'project_code',
+            'label' => 'Project Code',
             'type' => 'string',
+
             'sortable' => true,
+            'searchable' => true,
             'filterable' => true,
-            'closure' => fn ($row) => core()->formatBasePrice($row->sub_total, 2),
+
+            'closure' => function ($row) {
+                return $row->project_code ?: '-';
+            },
         ]);
 
+        /**
+         * Project Name.
+         */
         $this->addColumn([
-            'index' => 'discount_amount',
-            'label' => trans('admin::app.quotes.index.datagrid.discount'),
+            'index' => 'subject',
+            'label' => trans(
+                'admin::app.quotes.index.datagrid.subject'
+            ),
             'type' => 'string',
-            'sortable' => true,
+
             'filterable' => true,
-            'closure' => fn ($row) => core()->formatBasePrice($row->discount_amount, 2),
+            'searchable' => true,
+            'sortable' => true,
         ]);
 
+        /**
+         * Bill To.
+         */
         $this->addColumn([
-            'index' => 'tax_amount',
-            'label' => trans('admin::app.quotes.index.datagrid.tax'),
+            'index' => 'person_name',
+            'label' => trans(
+                'admin::app.quotes.index.datagrid.person'
+            ),
             'type' => 'string',
+
+            'sortable' => true,
+            'searchable' => true,
             'filterable' => true,
-            'sortable' => true,
-            'closure' => fn ($row) => core()->formatBasePrice($row->tax_amount, 2),
+
+            'filterable_type' => 'searchable_dropdown',
+
+            'filterable_options' => [
+                'repository' => PersonRepository::class,
+
+                'column' => [
+                    'label' => 'name',
+                    'value' => 'name',
+                ],
+            ],
+
+            'closure' => function ($row) {
+                if (! $row->person_id) {
+                    return '-';
+                }
+
+                $route = route(
+                    'admin.contacts.persons.view',
+                    $row->person_id
+                );
+
+                return
+                    '<a class="text-brandColor transition-all hover:underline"'
+                    .' href="'.$route.'">'
+                    .e($row->person_name)
+                    .'</a>';
+            },
         ]);
 
+        /**
+         * Sales Person.
+         */
         $this->addColumn([
-            'index' => 'adjustment_amount',
-            'label' => trans('admin::app.quotes.index.datagrid.adjustment'),
+            'index' => 'sales_person',
+            'label' => trans(
+                'admin::app.quotes.index.datagrid.sales-person'
+            ),
             'type' => 'string',
+
             'sortable' => true,
-            'filterable' => false,
-            'closure' => fn ($row) => core()->formatBasePrice($row->adjustment_amount, 2),
+            'searchable' => true,
+            'filterable' => true,
+
+            'filterable_type' => 'searchable_dropdown',
+
+            'filterable_options' => [
+                'repository' => UserRepository::class,
+
+                'column' => [
+                    'label' => 'name',
+                    'value' => 'name',
+                ],
+            ],
+
+            'closure' => function ($row) {
+                return $row->sales_person ?: '-';
+            },
         ]);
 
+        /**
+         * Grand Total.
+         */
         $this->addColumn([
             'index' => 'grand_total',
-            'label' => trans('admin::app.quotes.index.datagrid.grand-total'),
+            'label' => trans(
+                'admin::app.quotes.index.datagrid.grand-total'
+            ),
             'type' => 'string',
+
             'sortable' => true,
             'filterable' => true,
-            'closure' => fn ($row) => core()->formatBasePrice($row->grand_total, 2),
+
+            'closure' => function ($row) {
+                return 'Rp '.number_format(
+                    (float) $row->grand_total,
+                    0,
+                    ',',
+                    '.'
+                );
+            },
         ]);
 
+        /**
+         * Valid Until.
+         */
         $this->addColumn([
             'index' => 'expired_at',
-            'label' => trans('admin::app.quotes.index.datagrid.expired-at'),
+            'label' => trans(
+                'admin::app.quotes.index.datagrid.expired-at'
+            ),
             'type' => 'date',
+
             'searchable' => false,
             'sortable' => true,
             'filterable' => true,
-            'closure' => fn ($row) => core()->formatDate($row->expired_at, 'd M Y'),
+
+            'closure' => function ($row) {
+                return $row->expired_at
+                    ? core()->formatDate(
+                        $row->expired_at,
+                        'd M Y'
+                    )
+                    : '-';
+            },
         ]);
 
+        /**
+         * Created At.
+         */
         $this->addColumn([
             'index' => 'created_at',
-            'label' => trans('admin::app.quotes.index.datagrid.created-at'),
+            'label' => trans(
+                'admin::app.quotes.index.datagrid.created-at'
+            ),
             'type' => 'date',
+
             'searchable' => false,
             'sortable' => true,
             'filterable' => true,
-            'closure' => fn ($row) => core()->formatDate($row->created_at),
+
+            'closure' => function ($row) {
+                return core()->formatDate(
+                    $row->created_at
+                );
+            },
         ]);
     }
 
@@ -181,43 +342,89 @@ class QuoteDataGrid extends DataGrid
      */
     public function prepareActions(): void
     {
+        /**
+         * Edit Quote.
+         */
         if (bouncer()->hasPermission('quotes.edit')) {
             $this->addAction([
                 'index' => 'edit',
                 'icon' => 'icon-edit',
-                'title' => trans('admin::app.quotes.index.datagrid.edit'),
+
+                'title' => trans(
+                    'admin::app.quotes.index.datagrid.edit'
+                ),
+
                 'method' => 'GET',
-                'url' => fn ($row) => route('admin.quotes.edit', $row->id),
+
+                'url' => fn ($row) => route(
+                    'admin.quotes.edit',
+                    $row->id
+                ),
             ]);
         }
 
+        /**
+         * Print Quote.
+         */
         if (bouncer()->hasPermission('quotes.print')) {
             $this->addAction([
                 'index' => 'print',
                 'icon' => 'icon-print',
-                'title' => trans('admin::app.quotes.index.datagrid.print'),
+
+                'title' => trans(
+                    'admin::app.quotes.index.datagrid.print'
+                ),
+
                 'method' => 'GET',
-                'url' => fn ($row) => route('admin.quotes.print', $row->id),
+
+                'url' => fn ($row) => route(
+                    'admin.quotes.print',
+                    $row->id
+                ),
             ]);
         }
 
+        /**
+         * Send Quote Email.
+         */
         if (bouncer()->hasPermission('quotes.mail')) {
             $this->addAction([
                 'index' => 'mail',
                 'icon' => 'icon-mail',
-                'title' => trans('admin::app.quotes.index.datagrid.mail'),
+
+                'title' => trans(
+                    'admin::app.quotes.index.datagrid.mail'
+                ),
+
                 'method' => 'POST',
-                'url' => fn ($row) => route('admin.leads.quotes.mail', ['quote_id' => $row->id]),
+
+                'url' => fn ($row) => route(
+                    'admin.leads.quotes.mail',
+                    [
+                        'quote_id' => $row->id,
+                    ]
+                ),
             ]);
         }
 
+        /**
+         * Delete Quote.
+         */
         if (bouncer()->hasPermission('quotes.delete')) {
             $this->addAction([
                 'index' => 'delete',
                 'icon' => 'icon-delete',
-                'title' => trans('admin::app.quotes.index.datagrid.delete'),
+
+                'title' => trans(
+                    'admin::app.quotes.index.datagrid.delete'
+                ),
+
                 'method' => 'DELETE',
-                'url' => fn ($row) => route('admin.quotes.delete', $row->id),
+
+                'url' => fn ($row) => route(
+                    'admin.quotes.delete',
+                    $row->id
+                ),
             ]);
         }
     }
@@ -227,18 +434,20 @@ class QuoteDataGrid extends DataGrid
      */
     public function prepareMassActions(): void
     {
-        $this->addMassAction([
-            'icon' => 'icon-delete',
-            'title' => trans('admin::app.quotes.index.datagrid.delete'),
-            'method' => 'POST',
-            'url' => route('admin.quotes.mass_delete'),
-        ]);
+        if (bouncer()->hasPermission('quotes.delete')) {
+            $this->addMassAction([
+                'icon' => 'icon-delete',
 
-        $this->addMassAction([
-            'icon' => 'icon-delete',
-            'title' => trans('admin::app.quotes.index.datagrid.delete'),
-            'method' => 'POST',
-            'url' => route('admin.quotes.mass_delete'),
-        ]);
+                'title' => trans(
+                    'admin::app.quotes.index.datagrid.delete'
+                ),
+
+                'method' => 'POST',
+
+                'url' => route(
+                    'admin.quotes.mass_delete'
+                ),
+            ]);
+        }
     }
 }

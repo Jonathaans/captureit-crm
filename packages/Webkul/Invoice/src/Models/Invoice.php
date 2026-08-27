@@ -12,29 +12,46 @@ class Invoice extends Model implements InvoiceContract
 {
     protected $table = 'invoices';
 
-    protected $fillable = [
-        'invoice_number',
-        'quote_id',
-        'person_id',
-        'user_id',
-        'subject',
-        'description',
-        'billing_address',
-        'shipping_address',
-        'discount_percent',
-        'discount_amount',
-        'tax_amount',
-        'adjustment_amount',
-        'sub_total',
-        'grand_total',
-        'paid_amount',
-        'balance_due',
-        'status',
-        'issued_at',
-        'due_at',
-    ];
+protected $fillable = [
+    'invoice_number',
+    'project_code',
+    'quote_id',
+    'event_date',
+    'location',
+    'payment_term',
+    'person_id',
+    'user_id',
+    'subject',
+    'description',
+    'billing_address',
+    'shipping_address',
+    'discount_percent',
+    'discount_amount',
+    'tax_amount',
+    'adjustment_amount',
+    'sub_total',
+    'grand_total',
+    'paid_amount',
+    'balance_due',
+
+    /**
+     * Payment status:
+     * unpaid / partial / paid
+     */
+    'status',
+
+    /**
+     * Event status:
+     * prospect / confirm / cancel
+     */
+    'event_status',
+
+    'issued_at',
+    'due_at',
+];
 
     protected $casts = [
+        'event_date' => 'date',
         'billing_address'  => 'array',
         'shipping_address' => 'array',
         'issued_at'        => 'datetime',

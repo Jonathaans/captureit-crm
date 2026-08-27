@@ -16,6 +16,7 @@ class Quote extends Model implements QuoteContract
     protected $table = 'quotes';
 
     protected $casts = [
+        'event_date' => 'date',
         'billing_address' => 'array',
         'shipping_address' => 'array',
         'expired_at' => 'datetime',
@@ -27,7 +28,12 @@ class Quote extends Model implements QuoteContract
      * @var array
      */
     protected $fillable = [
+        'quote_number',
         'subject',
+        'event_date',
+        'location',
+        'payment_term',
+        'project_code',
         'description',
         'billing_address',
         'shipping_address',
