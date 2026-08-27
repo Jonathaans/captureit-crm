@@ -91,43 +91,55 @@
                 Print Invoice
                     </a>
 @if ($deliveryOrder)
-    <a
-        href="{{ route(
-            'admin.delivery-orders.show',
-            $deliveryOrder->id
-        ) }}"
-        class="secondary-button"
-    >
-        View Surat Jalan
-    </a>
-
-    <a
-        href="{{ route(
-            'admin.delivery-orders.print',
-            $deliveryOrder->id
-        ) }}"
-        class="secondary-button"
-    >
-        Print Surat Jalan
-    </a>
-@else
-    <form
-        method="POST"
-        action="{{ route(
-            'admin.invoices.delivery-order.generate',
-            $invoice->id
-        ) }}"
-        style="margin:0;"
-    >
-        @csrf
-
-        <button
-            type="submit"
+    @if (
+        bouncer()->hasPermission('delivery-orders.view')
+    )
+        <a
+            href="{{ route(
+                'admin.delivery-orders.show',
+                $deliveryOrder->id
+            ) }}"
             class="secondary-button"
         >
-            Generate Surat Jalan
-        </button>
-    </form>
+            View Surat Jalan
+        </a>
+    @endif
+
+    @if (
+        bouncer()->hasPermission('delivery-orders.print')
+    )
+        <a
+            href="{{ route(
+                'admin.delivery-orders.print',
+                $deliveryOrder->id
+            ) }}"
+            class="secondary-button"
+        >
+            Print Surat Jalan
+        </a>
+    @endif
+@else
+    @if (
+        bouncer()->hasPermission('delivery-orders.generate')
+    )
+        <form
+            method="POST"
+            action="{{ route(
+                'admin.invoices.delivery-order.generate',
+                $invoice->id
+            ) }}"
+            style="margin: 0;"
+        >
+            @csrf
+
+            <button
+                type="submit"
+                class="secondary-button"
+            >
+                Generate Surat Jalan
+            </button>
+        </form>
+    @endif
 @endif
         </div>
     </div>

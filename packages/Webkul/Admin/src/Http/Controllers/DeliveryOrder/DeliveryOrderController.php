@@ -6,7 +6,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Webkul\Admin\DataGrids\DeliveryOrder\DeliveryOrderDataGrid;
@@ -89,70 +88,95 @@ class DeliveryOrderController extends Controller
     }
 
     /**
-     * Update Delivery Order status.
+     * Issue Surat Jalan.
      *
-     * Flow:
-     * draft -> issued -> delivered -> returned
+     * Allowed transition:
+     * draft -> issued
+     */
+    public function issue(int $id): RedirectResponse
+    {
+        return $this->transitionStatus(
+            $id,
+            'issued',
+            ['draft'],
+            'Surat Jalan berhasil di-issue.'
+        );
+    }
+
+    /**
+     * Mark Surat Jalan as delivered.
      *
-     * Cancel:
+     * Allowed transition:
+     * issued -> delivered
+     */
+    public function markDelivered(int $id): RedirectResponse
+    {
+        return $this->transitionStatus(
+            $id,
+            'delivered',
+            ['issued'],
+            'Surat Jalan ditandai sebagai delivered.'
+        );
+    }
+
+    /**
+     * Mark all equipment as returned.
+     *
+     * Allowed transition:
+     * delivered -> returned
+     */
+    public function markReturned(int $id): RedirectResponse
+    {
+        return $this->transitionStatus(
+            $id,
+            'returned',
+            ['delivered'],
+            'Barang ditandai sudah returned.'
+        );
+    }
+
+    /**
+     * Cancel Surat Jalan.
+     *
+     * Allowed transition:
      * draft / issued -> cancelled
      */
-    public function updateStatus(
-        Request $request,
-        int $id
-    ): RedirectResponse {
-        $validated = $request->validate([
-            'status' => [
-                'required',
-                Rule::in([
-                    'issued',
-                    'delivered',
-                    'returned',
-                    'cancelled',
-                ]),
+    public function cancel(int $id): RedirectResponse
+    {
+        return $this->transitionStatus(
+            $id,
+            'cancelled',
+            [
+                'draft',
+                'issued',
             ],
-        ]);
+            'Surat Jalan dibatalkan.'
+        );
+    }
 
+    /**
+     * Shared Delivery Order status transition.
+     *
+     * Permission enforcement is handled by the route ACL.
+     * Each transition has its own route name, so roles can be
+     * configured independently from Settings -> Roles.
+     */
+    protected function transitionStatus(
+        int $id,
+        string $nextStatus,
+        array $allowedCurrentStatuses,
+        string $successMessage
+    ): RedirectResponse {
         $deliveryOrder = DeliveryOrder::findOrFail($id);
 
         $currentStatus = strtolower(
             $deliveryOrder->status ?: 'draft'
         );
 
-        $nextStatus = strtolower(
-            $validated['status']
-        );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Allowed Status Transitions
-        |--------------------------------------------------------------------------
-        */
-
-        $allowedTransitions = [
-            'draft' => [
-                'issued',
-                'cancelled',
-            ],
-
-            'issued' => [
-                'delivered',
-                'cancelled',
-            ],
-
-            'delivered' => [
-                'returned',
-            ],
-
-            'returned' => [],
-
-            'cancelled' => [],
-        ];
-
         if (
             ! in_array(
-                $nextStatus,
-                $allowedTransitions[$currentStatus] ?? [],
+                $currentStatus,
+                $allowedCurrentStatuses,
                 true
             )
         ) {
@@ -175,12 +199,6 @@ class DeliveryOrderController extends Controller
                 $data = [
                     'status' => $nextStatus,
                 ];
-
-                /*
-                |--------------------------------------------------------------------------
-                | Automatic Timestamps
-                |--------------------------------------------------------------------------
-                */
 
                 if (
                     $nextStatus === 'issued'
@@ -209,22 +227,7 @@ class DeliveryOrderController extends Controller
 
         session()->flash(
             'success',
-            match ($nextStatus) {
-                'issued' =>
-                    'Surat Jalan berhasil di-issue.',
-
-                'delivered' =>
-                    'Surat Jalan ditandai sebagai delivered.',
-
-                'returned' =>
-                    'Barang ditandai sudah returned.',
-
-                'cancelled' =>
-                    'Surat Jalan dibatalkan.',
-
-                default =>
-                    'Status Surat Jalan berhasil diperbarui.',
-            }
+            $successMessage
         );
 
         return redirect()->route(

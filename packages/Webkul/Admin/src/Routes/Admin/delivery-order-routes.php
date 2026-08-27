@@ -6,6 +6,12 @@ use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderController;
 Route::controller(DeliveryOrderController::class)
     ->prefix('delivery-orders')
     ->group(function () {
+        /*
+        |--------------------------------------------------------------------------
+        | Listing / View
+        |--------------------------------------------------------------------------
+        */
+
         Route::get('/', 'index')
             ->name('admin.delivery-orders.index');
 
@@ -22,10 +28,24 @@ Route::controller(DeliveryOrderController::class)
         |--------------------------------------------------------------------------
         | Status Workflow
         |--------------------------------------------------------------------------
+        |
+        | IMPORTANT:
+        | Setiap aksi mempunyai route name sendiri supaya ACL Roles
+        | bisa membedakan Head Warehouse, Operations, Staff Warehouse, dll.
+        |
         */
 
-        Route::put('{id}/status', 'updateStatus')
-            ->name('admin.delivery-orders.status.update');
+        Route::put('{id}/issue', 'issue')
+            ->name('admin.delivery-orders.issue');
+
+        Route::put('{id}/delivered', 'markDelivered')
+            ->name('admin.delivery-orders.delivered');
+
+        Route::put('{id}/returned', 'markReturned')
+            ->name('admin.delivery-orders.returned');
+
+        Route::put('{id}/cancel', 'cancel')
+            ->name('admin.delivery-orders.cancel');
 
         /*
         |--------------------------------------------------------------------------

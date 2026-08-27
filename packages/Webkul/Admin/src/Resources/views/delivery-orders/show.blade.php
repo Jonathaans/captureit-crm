@@ -77,7 +77,10 @@
                 </a>
             @endif
 
-            @if ($status === 'draft')
+            @if (
+                $status === 'draft'
+                && bouncer()->hasPermission('delivery-orders.edit')
+            )
                 <a
                     href="{{ route(
                         'admin.delivery-orders.edit',
@@ -89,15 +92,19 @@
                 </a>
             @endif
 
-            <a
-                href="{{ route(
-                    'admin.delivery-orders.print',
-                    $deliveryOrder->id
-                ) }}"
-                class="primary-button"
-            >
-                Print Surat Jalan
-            </a>
+            @if (
+                bouncer()->hasPermission('delivery-orders.print')
+            )
+                <a
+                    href="{{ route(
+                        'admin.delivery-orders.print',
+                        $deliveryOrder->id
+                    ) }}"
+                    class="primary-button"
+                >
+                    Print Surat Jalan
+                </a>
+            @endif
         </div>
     </div>
 
@@ -121,130 +128,120 @@
 
             <div class="flex flex-wrap gap-2">
                 @if ($status === 'draft')
-                    <form
-                        method="POST"
-                        action="{{ route(
-                            'admin.delivery-orders.status.update',
-                            $deliveryOrder->id
-                        ) }}"
-                    >
-                        @csrf
-                        @method('PUT')
-
-                        <input
-                            type="hidden"
-                            name="status"
-                            value="issued"
+                    @if (
+                        bouncer()->hasPermission('delivery-orders.issue')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.issue',
+                                $deliveryOrder->id
+                            ) }}"
                         >
+                            @csrf
+                            @method('PUT')
 
-                        <button
-                            type="submit"
-                            class="primary-button"
-                            onclick="return confirm('Issue Surat Jalan ini? Setelah di-issue, dokumen dianggap resmi.')"
+                            <button
+                                type="submit"
+                                class="primary-button"
+                                onclick="return confirm('Issue Surat Jalan ini? Setelah di-issue, dokumen dianggap resmi.')"
+                            >
+                                Issue Surat Jalan
+                            </button>
+                        </form>
+                    @endif
+
+                    @if (
+                        bouncer()->hasPermission('delivery-orders.cancel')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.cancel',
+                                $deliveryOrder->id
+                            ) }}"
                         >
-                            Issue Surat Jalan
-                        </button>
-                    </form>
+                            @csrf
+                            @method('PUT')
 
-                    <form
-                        method="POST"
-                        action="{{ route(
-                            'admin.delivery-orders.status.update',
-                            $deliveryOrder->id
-                        ) }}"
-                    >
-                        @csrf
-                        @method('PUT')
-
-                        <input
-                            type="hidden"
-                            name="status"
-                            value="cancelled"
-                        >
-
-                        <button
-                            type="submit"
-                            class="secondary-button"
-                            onclick="return confirm('Batalkan Surat Jalan ini?')"
-                        >
-                            Cancel
-                        </button>
-                    </form>
+                            <button
+                                type="submit"
+                                class="secondary-button"
+                                onclick="return confirm('Batalkan Surat Jalan ini?')"
+                            >
+                                Cancel
+                            </button>
+                        </form>
+                    @endif
                 @elseif ($status === 'issued')
-                    <form
-                        method="POST"
-                        action="{{ route(
-                            'admin.delivery-orders.status.update',
-                            $deliveryOrder->id
-                        ) }}"
-                    >
-                        @csrf
-                        @method('PUT')
-
-                        <input
-                            type="hidden"
-                            name="status"
-                            value="delivered"
+                    @if (
+                        bouncer()->hasPermission('delivery-orders.delivered')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.delivered',
+                                $deliveryOrder->id
+                            ) }}"
                         >
+                            @csrf
+                            @method('PUT')
 
-                        <button
-                            type="submit"
-                            class="primary-button"
-                            onclick="return confirm('Tandai barang sudah delivered ke PIC?')"
+                            <button
+                                type="submit"
+                                class="primary-button"
+                                onclick="return confirm('Tandai barang sudah delivered ke PIC?')"
+                            >
+                                Mark as Delivered
+                            </button>
+                        </form>
+                    @endif
+
+                    @if (
+                        bouncer()->hasPermission('delivery-orders.cancel')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.cancel',
+                                $deliveryOrder->id
+                            ) }}"
                         >
-                            Mark as Delivered
-                        </button>
-                    </form>
+                            @csrf
+                            @method('PUT')
 
-                    <form
-                        method="POST"
-                        action="{{ route(
-                            'admin.delivery-orders.status.update',
-                            $deliveryOrder->id
-                        ) }}"
-                    >
-                        @csrf
-                        @method('PUT')
-
-                        <input
-                            type="hidden"
-                            name="status"
-                            value="cancelled"
-                        >
-
-                        <button
-                            type="submit"
-                            class="secondary-button"
-                            onclick="return confirm('Batalkan Surat Jalan ini?')"
-                        >
-                            Cancel
-                        </button>
-                    </form>
+                            <button
+                                type="submit"
+                                class="secondary-button"
+                                onclick="return confirm('Batalkan Surat Jalan ini?')"
+                            >
+                                Cancel
+                            </button>
+                        </form>
+                    @endif
                 @elseif ($status === 'delivered')
-                    <form
-                        method="POST"
-                        action="{{ route(
-                            'admin.delivery-orders.status.update',
-                            $deliveryOrder->id
-                        ) }}"
-                    >
-                        @csrf
-                        @method('PUT')
-
-                        <input
-                            type="hidden"
-                            name="status"
-                            value="returned"
+                    @if (
+                        bouncer()->hasPermission('delivery-orders.returned')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.returned',
+                                $deliveryOrder->id
+                            ) }}"
                         >
+                            @csrf
+                            @method('PUT')
 
-                        <button
-                            type="submit"
-                            class="primary-button"
-                            onclick="return confirm('Tandai seluruh barang sudah kembali ke warehouse?')"
-                        >
-                            Mark as Returned
-                        </button>
-                    </form>
+                            <button
+                                type="submit"
+                                class="primary-button"
+                                onclick="return confirm('Tandai seluruh barang sudah kembali ke warehouse?')"
+                            >
+                                Mark as Returned
+                            </button>
+                        </form>
+                    @endif
                 @elseif ($status === 'returned')
                     <span
                         class="rounded-lg bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300"

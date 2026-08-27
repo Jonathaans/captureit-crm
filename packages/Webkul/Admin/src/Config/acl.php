@@ -55,17 +55,17 @@ return [
         'key' => 'quotes.edit',
         'name' => 'admin::app.acl.edit',
         'route' => ['admin.quotes.edit', 'admin.quotes.update'],
-        'sort' => 2,
+        'sort' => 3,
     ], [
         'key' => 'quotes.print',
         'name' => 'admin::app.acl.print',
         'route' => 'admin.quotes.print',
-        'sort' => 3,
+        'sort' => 4,
     ], [
         'key' => 'quotes.delete',
         'name' => 'admin::app.acl.delete',
         'route' => ['admin.quotes.delete', 'admin.quotes.mass_delete'],
-        'sort' => 4,
+        'sort' => 5,
     ], 
 /**
  * Invoices.
@@ -168,24 +168,89 @@ return [
 |--------------------------------------------------------------------------
 | Delivery Orders
 |--------------------------------------------------------------------------
+|
+| Hak akses Delivery Order dipisah per aksi agar setiap role
+| dapat memiliki kewenangan yang berbeda.
+|
 */
-
 [
     'key'   => 'delivery-orders',
     'name'  => 'admin::app.acl.delivery-orders',
     'route' => 'admin.delivery-orders.index',
     'sort'  => 5,
 ], [
+    /*
+     * View Delivery Order.
+     */
     'key'   => 'delivery-orders.view',
     'name'  => 'admin::app.acl.view',
     'route' => 'admin.delivery-orders.show',
     'sort'  => 1,
+], [
+    /*
+     * Generate Surat Jalan from Invoice.
+     */
+    'key'   => 'delivery-orders.generate',
+    'name'  => 'admin::app.acl.generate-delivery-order',
+    'route' => 'admin.invoices.delivery-order.generate',
+    'sort'  => 2,
+], [
+    /*
+     * Edit Draft Surat Jalan.
+     */
+    'key'   => 'delivery-orders.edit',
+    'name'  => 'admin::app.acl.edit',
+    'route' => [
+        'admin.delivery-orders.edit',
+        'admin.delivery-orders.update',
+    ],
+    'sort'  => 3,
+], [
+    /*
+     * Print Surat Jalan.
+     */
+    'key'   => 'delivery-orders.print',
+    'name'  => 'admin::app.acl.print',
+    'route' => 'admin.delivery-orders.print',
+    'sort'  => 4,
+], [
+    /*
+     * Draft -> Issued.
+     */
+    'key'   => 'delivery-orders.issue',
+    'name'  => 'admin::app.acl.issue-delivery-order',
+    'route' => 'admin.delivery-orders.issue',
+    'sort'  => 5,
+], [
+    /*
+     * Issued -> Delivered.
+     */
+    'key'   => 'delivery-orders.delivered',
+    'name'  => 'admin::app.acl.mark-delivered',
+    'route' => 'admin.delivery-orders.delivered',
+    'sort'  => 6,
+], [
+    /*
+     * Delivered -> Returned.
+     */
+    'key'   => 'delivery-orders.returned',
+    'name'  => 'admin::app.acl.mark-returned',
+    'route' => 'admin.delivery-orders.returned',
+    'sort'  => 7,
+], [
+    /*
+     * Draft / Issued -> Cancelled.
+     */
+    'key'   => 'delivery-orders.cancel',
+    'name'  => 'admin::app.acl.cancel-delivery-order',
+    'route' => 'admin.delivery-orders.cancel',
+    'sort'  => 8,
 ],
     [
         'key' => 'mail',
         'name' => 'admin::app.acl.mail',
         'route' => 'admin.mail.index',
-        'sort' => 4,
+        'sort' => 6,
 ], [
         'key' => 'mail.inbox',
         'name' => 'admin::app.acl.inbox',
@@ -240,7 +305,7 @@ return [
         'key' => 'activities',
         'name' => 'admin::app.acl.activities',
         'route' => 'admin.activities.index',
-        'sort' => 5,
+        'sort' => 7,
     ], [
         'key' => 'activities.create',
         'name' => 'admin::app.acl.create',
@@ -260,7 +325,7 @@ return [
         'key' => 'contacts',
         'name' => 'admin::app.acl.contacts',
         'route' => 'admin.contacts.users.index',
-        'sort' => 6,
+        'sort' => 8,
     ], [
         'key' => 'contacts.persons',
         'name' => 'admin::app.acl.persons',
@@ -320,7 +385,7 @@ return [
         'key' => 'products',
         'name' => 'admin::app.acl.products',
         'route' => 'admin.products.index',
-        'sort' => 7,
+        'sort' => 9,
     ], [
         'key' => 'products.create',
         'name' => 'admin::app.acl.create',
@@ -345,12 +410,12 @@ return [
         'key' => 'products.view',
         'name' => 'admin::app.acl.view',
         'route' => 'admin.products.view',
-        'sort' => 3,
+        'sort' => 4,
     ], [
         'key' => 'settings',
         'name' => 'admin::app.acl.settings',
         'route' => 'admin.settings.index',
-        'sort' => 8,
+        'sort' => 10,
     ], [
         'key' => 'settings.user',
         'name' => 'admin::app.acl.user',
@@ -680,21 +745,21 @@ return [
         'key' => 'settings.other_settings.tags.edit',
         'name' => 'admin::app.acl.edit',
         'route' => ['admin.settings.tags.edit', 'admin.settings.tags.update'],
-        'sort' => 1,
+        'sort' => 2,
     ], [
         'key' => 'settings.other_settings.tags.delete',
         'name' => 'admin::app.acl.delete',
         'route' => ['admin.settings.tags.delete', 'admin.settings.tags.mass_delete', 'admin.leads.tags.detach'],
-        'sort' => 2,
+        'sort' => 3,
     ], [
         'key' => 'configuration',
         'name' => 'admin::app.acl.configuration',
         'route' => 'admin.configuration.index',
-        'sort' => 9,
+        'sort' => 11,
     ], [
         'key' => 'help',
         'name' => 'admin::app.acl.help',
         'route' => 'admin.help.index',
-        'sort' => 10,
+        'sort' => 12,
     ],
 ];
