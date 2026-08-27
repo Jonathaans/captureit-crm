@@ -4,15 +4,21 @@ namespace Webkul\Admin\Http\Controllers\DeliveryOrder;
 
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Webkul\Admin\DataGrids\DeliveryOrder\DeliveryOrderDataGrid;
 use Webkul\Admin\Http\Controllers\Controller;
+use Webkul\Core\Traits\PDFHandler;
 use Webkul\Invoice\Models\DeliveryOrder;
 use Webkul\Invoice\Models\DeliveryOrderItem;
 
 class DeliveryOrderController extends Controller
 {
+    use PDFHandler;
+
     /**
      * Delivery Order listing.
      */
@@ -37,14 +43,7 @@ class DeliveryOrderController extends Controller
      */
     public function show(int $id): View
     {
-        $deliveryOrder = DeliveryOrder::with([
-            'invoice',
-            'quote',
-            'person',
-            'user',
-            'creator',
-            'items',
-        ])->findOrFail($id);
+        $deliveryOrder = $this->findDeliveryOrder($id);
 
         return view(
             'admin::delivery-orders.show',
@@ -57,14 +56,7 @@ class DeliveryOrderController extends Controller
      */
     public function edit(int $id): View
     {
-        $deliveryOrder = DeliveryOrder::with([
-            'invoice',
-            'quote',
-            'person',
-            'user',
-            'creator',
-            'items',
-        ])->findOrFail($id);
+        $deliveryOrder = $this->findDeliveryOrder($id);
 
         return view(
             'admin::delivery-orders.edit',
@@ -73,7 +65,176 @@ class DeliveryOrderController extends Controller
     }
 
     /**
-     * Update Delivery Order.
+     * Download / Print Surat Jalan as A4 PDF.
+     */
+    public function print(
+        int $id
+    ): Response|StreamedResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $fileName = 'Surat_Jalan_'
+            .str_replace(
+                ['/', '\\', ' '],
+                ['-', '-', '_'],
+                $deliveryOrder->delivery_order_number
+            );
+
+        return $this->downloadPDF(
+            view(
+                'admin::delivery-orders.print',
+                compact('deliveryOrder')
+            )->render(),
+            $fileName
+        );
+    }
+
+    /**
+     * Update Delivery Order status.
+     *
+     * Flow:
+     * draft -> issued -> delivered -> returned
+     *
+     * Cancel:
+     * draft / issued -> cancelled
+     */
+    public function updateStatus(
+        Request $request,
+        int $id
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'status' => [
+                'required',
+                Rule::in([
+                    'issued',
+                    'delivered',
+                    'returned',
+                    'cancelled',
+                ]),
+            ],
+        ]);
+
+        $deliveryOrder = DeliveryOrder::findOrFail($id);
+
+        $currentStatus = strtolower(
+            $deliveryOrder->status ?: 'draft'
+        );
+
+        $nextStatus = strtolower(
+            $validated['status']
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Allowed Status Transitions
+        |--------------------------------------------------------------------------
+        */
+
+        $allowedTransitions = [
+            'draft' => [
+                'issued',
+                'cancelled',
+            ],
+
+            'issued' => [
+                'delivered',
+                'cancelled',
+            ],
+
+            'delivered' => [
+                'returned',
+            ],
+
+            'returned' => [],
+
+            'cancelled' => [],
+        ];
+
+        if (
+            ! in_array(
+                $nextStatus,
+                $allowedTransitions[$currentStatus] ?? [],
+                true
+            )
+        ) {
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $deliveryOrder->id
+                )
+                ->with(
+                    'error',
+                    "Status tidak dapat diubah dari {$currentStatus} ke {$nextStatus}."
+                );
+        }
+
+        DB::transaction(
+            function () use (
+                $deliveryOrder,
+                $nextStatus
+            ) {
+                $data = [
+                    'status' => $nextStatus,
+                ];
+
+                /*
+                |--------------------------------------------------------------------------
+                | Automatic Timestamps
+                |--------------------------------------------------------------------------
+                */
+
+                if (
+                    $nextStatus === 'issued'
+                    && ! $deliveryOrder->issued_at
+                ) {
+                    $data['issued_at'] = now();
+                }
+
+                if (
+                    $nextStatus === 'delivered'
+                    && ! $deliveryOrder->delivered_at
+                ) {
+                    $data['delivered_at'] = now();
+                }
+
+                if (
+                    $nextStatus === 'returned'
+                    && ! $deliveryOrder->returned_at
+                ) {
+                    $data['returned_at'] = now();
+                }
+
+                $deliveryOrder->update($data);
+            }
+        );
+
+        session()->flash(
+            'success',
+            match ($nextStatus) {
+                'issued' =>
+                    'Surat Jalan berhasil di-issue.',
+
+                'delivered' =>
+                    'Surat Jalan ditandai sebagai delivered.',
+
+                'returned' =>
+                    'Barang ditandai sudah returned.',
+
+                'cancelled' =>
+                    'Surat Jalan dibatalkan.',
+
+                default =>
+                    'Status Surat Jalan berhasil diperbarui.',
+            }
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.show',
+            $deliveryOrder->id
+        );
+    }
+
+    /**
+     * Update Delivery Order data.
      */
     public function update(
         Request $request,
@@ -81,38 +242,71 @@ class DeliveryOrderController extends Controller
     ): RedirectResponse {
         $deliveryOrder = DeliveryOrder::findOrFail($id);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Validation
-        |--------------------------------------------------------------------------
-        */
-
         $validated = $request->validate([
-            'recipient_name'  => ['nullable', 'string', 'max:255'],
-            'recipient_phone' => ['nullable', 'string', 'max:50'],
+            'recipient_name' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
 
-            'pic_name'  => ['nullable', 'string', 'max:255'],
-            'pic_phone' => ['nullable', 'string', 'max:50'],
+            'recipient_phone' => [
+                'nullable',
+                'string',
+                'max:50',
+            ],
 
-            'event_date' => ['nullable', 'date'],
-            'event_time' => ['nullable', 'date_format:H:i'],
+            'pic_name' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
 
-            'location' => ['nullable', 'string', 'max:255'],
+            'pic_phone' => [
+                'nullable',
+                'string',
+                'max:50',
+            ],
 
-            'delivery_address' => ['nullable', 'string'],
+            'event_date' => [
+                'nullable',
+                'date',
+            ],
 
-            'delivery_date' => ['nullable', 'date'],
-            'delivery_time' => ['nullable', 'date_format:H:i'],
+            'event_time' => [
+                'nullable',
+                'date_format:H:i',
+            ],
 
-            'notes' => ['nullable', 'string'],
+            'location' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
 
-            /*
-            |--------------------------------------------------------------------------
-            | Equipment Items
-            |--------------------------------------------------------------------------
-            */
+            'delivery_address' => [
+                'nullable',
+                'string',
+            ],
 
-            'items' => ['nullable', 'array'],
+            'delivery_date' => [
+                'nullable',
+                'date',
+            ],
+
+            'delivery_time' => [
+                'nullable',
+                'date_format:H:i',
+            ],
+
+            'notes' => [
+                'nullable',
+                'string',
+            ],
+
+            'items' => [
+                'nullable',
+                'array',
+            ],
 
             'items.*.name' => [
                 'nullable',
@@ -148,12 +342,6 @@ class DeliveryOrderController extends Controller
                 $deliveryOrder,
                 $validated
             ) {
-                /*
-                |--------------------------------------------------------------------------
-                | Update Header
-                |--------------------------------------------------------------------------
-                */
-
                 $deliveryOrder->update([
                     'recipient_name' =>
                         $validated['recipient_name'] ?? null,
@@ -191,14 +379,8 @@ class DeliveryOrderController extends Controller
 
                 /*
                 |--------------------------------------------------------------------------
-                | Rebuild Equipment
+                | Rebuild Equipment Items
                 |--------------------------------------------------------------------------
-                |
-                | Untuk versi awal ini:
-                | hapus equipment lama lalu recreate dari form.
-                |
-                | Ini sederhana, aman, dan cukup untuk Delivery Order.
-                |
                 */
 
                 $deliveryOrder
@@ -210,9 +392,6 @@ class DeliveryOrderController extends Controller
                 $sortOrder = 0;
 
                 foreach ($items as $item) {
-                    /*
-                     * Abaikan row kosong.
-                     */
                     $name = trim(
                         (string) ($item['name'] ?? '')
                     );
@@ -258,5 +437,21 @@ class DeliveryOrderController extends Controller
             'admin.delivery-orders.show',
             $deliveryOrder->id
         );
+    }
+
+    /**
+     * Shared Delivery Order loader.
+     */
+    private function findDeliveryOrder(
+        int $id
+    ): DeliveryOrder {
+        return DeliveryOrder::with([
+            'invoice',
+            'quote',
+            'person',
+            'user',
+            'creator',
+            'items',
+        ])->findOrFail($id);
     }
 }

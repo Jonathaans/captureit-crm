@@ -90,35 +90,45 @@
             >
                 Print Invoice
                     </a>
-            @if ($deliveryOrder)
-                <a
-                    href="{{ route(
-                        'admin.delivery-orders.show',
-                        $deliveryOrder->id
-                    ) }}"
-                    class="secondary-button"
-                >
-                    View Surat Jalan
-                </a>
-            @else
-            <form
-                method="POST"
-                action="{{ route(
-                    'admin.invoices.delivery-order.generate',
-                    $invoice->id
-                ) }}"
-                style="margin:0;"
-            >
-                @csrf
+@if ($deliveryOrder)
+    <a
+        href="{{ route(
+            'admin.delivery-orders.show',
+            $deliveryOrder->id
+        ) }}"
+        class="secondary-button"
+    >
+        View Surat Jalan
+    </a>
 
-                <button
-                    type="submit"
-                    class="secondary-button"
-                >
-                    Generate Surat Jalan
-                </button>
-            </form>
-        @endif
+    <a
+        href="{{ route(
+            'admin.delivery-orders.print',
+            $deliveryOrder->id
+        ) }}"
+        class="secondary-button"
+    >
+        Print Surat Jalan
+    </a>
+@else
+    <form
+        method="POST"
+        action="{{ route(
+            'admin.invoices.delivery-order.generate',
+            $invoice->id
+        ) }}"
+        style="margin:0;"
+    >
+        @csrf
+
+        <button
+            type="submit"
+            class="secondary-button"
+        >
+            Generate Surat Jalan
+        </button>
+    </form>
+@endif
         </div>
     </div>
 

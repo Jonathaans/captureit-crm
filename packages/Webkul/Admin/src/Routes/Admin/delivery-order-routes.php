@@ -6,14 +6,26 @@ use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderController;
 Route::controller(DeliveryOrderController::class)
     ->prefix('delivery-orders')
     ->group(function () {
+        Route::get('/', 'index')
+            ->name('admin.delivery-orders.index');
+
         /*
         |--------------------------------------------------------------------------
-        | Listing
+        | Print
         |--------------------------------------------------------------------------
         */
 
-        Route::get('/', 'index')
-            ->name('admin.delivery-orders.index');
+        Route::get('{id}/print', 'print')
+            ->name('admin.delivery-orders.print');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Status Workflow
+        |--------------------------------------------------------------------------
+        */
+
+        Route::put('{id}/status', 'updateStatus')
+            ->name('admin.delivery-orders.status.update');
 
         /*
         |--------------------------------------------------------------------------
