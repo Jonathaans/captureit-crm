@@ -77,14 +77,15 @@
             @endif
 
             {{-- Print dan Edit kita aktifkan pada phase berikutnya --}}
-            <button
-                type="button"
-                class="secondary-button"
-                disabled
-                style="opacity: .55; cursor: not-allowed;"
-            >
-                Edit Surat Jalan
-            </button>
+<a
+    href="{{ route(
+        'admin.delivery-orders.edit',
+        $deliveryOrder->id
+    ) }}"
+    class="secondary-button"
+>
+    Edit Surat Jalan
+</a>
 
             <button
                 type="button"
