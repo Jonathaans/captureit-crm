@@ -45,7 +45,18 @@ Route::controller(InvoiceController::class)
 
         Route::get('financial-report/export', 'exportFinancialReport')
             ->name('admin.invoices.financial-report.export');
-        
+        /*
+|--------------------------------------------------------------------------
+| Delivery Order / Surat Jalan
+|--------------------------------------------------------------------------
+*/
+
+Route::post(
+    '{id}/delivery-order',
+    'generateDeliveryOrder'
+)->name(
+    'admin.invoices.delivery-order.generate'
+);
 
         /*
         |--------------------------------------------------------------------------

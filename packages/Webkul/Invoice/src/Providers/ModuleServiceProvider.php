@@ -3,6 +3,8 @@
 namespace Webkul\Invoice\Providers;
 
 use Webkul\Core\Providers\BaseModuleServiceProvider;
+use Webkul\Invoice\Models\DeliveryOrder;
+use Webkul\Invoice\Models\DeliveryOrderItem;
 use Webkul\Invoice\Models\Expense;
 use Webkul\Invoice\Models\Invoice;
 use Webkul\Invoice\Models\InvoiceItem;
@@ -15,5 +17,7 @@ class ModuleServiceProvider extends BaseModuleServiceProvider
         InvoiceItem::class,
         Payment::class,
         Expense::class,
+        DeliveryOrder::class,
+        DeliveryOrderItem::class,
     ];
 }

@@ -3,11 +3,18 @@
         {{ $invoice->invoice_number }}
     </x-slot>
 
-    @php
-        $totalExpense = (float) $invoice->expenses->sum('amount');
+@php
+    $totalExpense = (float) $invoice->expenses->sum('amount');
 
-        $estimatedProfit = (float) $invoice->grand_total - $totalExpense;
-    @endphp
+    $estimatedProfit =
+        (float) $invoice->grand_total
+        - $totalExpense;
+
+    $deliveryOrder =
+        $invoice->deliveryOrders
+            ->sortBy('id')
+            ->first();
+@endphp
 
 
     <!-- ========================================================= -->
@@ -83,6 +90,36 @@
             >
                 Print Invoice
             </a>
+            @if ($deliveryOrder)
+    <button
+        type="button"
+        class="secondary-button"
+        title="{{ $deliveryOrder->delivery_order_number }}"
+        disabled
+        style="opacity:0.75; cursor:default;"
+    >
+        Surat Jalan:
+        {{ $deliveryOrder->delivery_order_number }}
+    </button>
+@else
+    <form
+        method="POST"
+        action="{{ route(
+            'admin.invoices.delivery-order.generate',
+            $invoice->id
+        ) }}"
+        style="margin:0;"
+    >
+        @csrf
+
+        <button
+            type="submit"
+            class="secondary-button"
+        >
+            Generate Surat Jalan
+        </button>
+    </form>
+@endif
         </div>
     </div>
 

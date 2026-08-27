@@ -14,6 +14,7 @@ use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\Core\Traits\PDFHandler;
+use Webkul\Invoice\Services\DeliveryOrderService;
 use Webkul\Invoice\Models\Expense;
 use Webkul\Invoice\Models\Invoice;
 use Webkul\Invoice\Models\Payment;
@@ -23,16 +24,18 @@ use Webkul\Invoice\Services\PaymentService;
 use Webkul\Quote\Models\Quote;
 use Webkul\Admin\DataGrids\Invoice\InvoiceDataGrid;
 
+
 class InvoiceController extends Controller
 {
     use PDFHandler;
 
-    public function __construct(
-        protected InvoiceService $invoiceService,
-        protected PaymentService $paymentService,
-        protected ExpenseService $expenseService
-    ) {
-    }
+        public function __construct(
+            protected InvoiceService $invoiceService,
+            protected PaymentService $paymentService,
+            protected ExpenseService $expenseService,
+            protected DeliveryOrderService $deliveryOrderService
+        ) {
+        }
 
     /**
      * ============================================================
@@ -1398,27 +1401,27 @@ if ($request->input('person_id') === '__new__') {
      * SHOW INVOICE
      * ============================================================
      */
-    public function show(int $id): View
-    {
-        $invoice = Invoice::with([
-            'items',
-            'payments.creator',
-            'expenses.creator',
-            'quote',
-            'person',
-            'user',
-        ])->findOrFail(
-            $id
-        );
+        public function show(int $id): View
+        {
+            $invoice = Invoice::with([
+                'items',
+                'payments.creator',
+                'expenses.creator',
+                'quote',
+                'person',
+                'user',
+                'deliveryOrders',
+            ])->findOrFail(
+                $id
+            );
 
-        return view(
-            'admin::invoices.show',
-            compact(
-                'invoice'
-            )
-        );
-    }
-
+            return view(
+                'admin::invoices.show',
+                compact(
+                    'invoice'
+                )
+            );
+        }
     /**
      * ============================================================
      * UPDATE EVENT STATUS
@@ -1485,7 +1488,50 @@ if ($request->input('person_id') === '__new__') {
             $invoice->id
         );
     }
+/**
+ * ============================================================
+ * GENERATE DELIVERY ORDER FROM INVOICE
+ * ============================================================
+ */
+public function generateDeliveryOrder(
+    int $id
+): RedirectResponse {
+    $invoice = Invoice::with([
+        'quote',
+        'person',
+        'user',
+    ])->findOrFail(
+        $id
+    );
 
+    $deliveryOrder = $this
+        ->deliveryOrderService
+        ->createFromInvoice(
+            $invoice,
+            auth()
+                ->guard('user')
+                ->id()
+        );
+
+    if ($deliveryOrder->wasRecentlyCreated) {
+        session()->flash(
+            'success',
+            'Surat Jalan berhasil dibuat: '
+            .$deliveryOrder->delivery_order_number
+        );
+    } else {
+        session()->flash(
+            'success',
+            'Surat Jalan untuk invoice ini sudah tersedia: '
+            .$deliveryOrder->delivery_order_number
+        );
+    }
+
+    return redirect()->route(
+        'admin.invoices.show',
+        $invoice->id
+    );
+}
     /**
      * ============================================================
      * ADD PAYMENT

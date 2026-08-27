@@ -86,4 +86,11 @@ protected $fillable = [
 {
     return $this->hasMany(ExpenseProxy::modelClass());
 }
+public function deliveryOrders()
+{
+    return $this->hasMany(
+        DeliveryOrderProxy::modelClass(),
+        'invoice_id'
+    );
+}
 }
