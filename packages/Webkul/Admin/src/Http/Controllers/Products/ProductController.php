@@ -13,6 +13,9 @@ use Webkul\Admin\Http\Requests\AttributeForm;
 use Webkul\Admin\Http\Requests\MassDestroyRequest;
 use Webkul\Admin\Http\Resources\ProductResource;
 use Webkul\Product\Repositories\ProductRepository;
+use Illuminate\Support\Facades\DB;
+use Webkul\Product\Models\ProductEquipmentTemplate;
+use Webkul\Product\Models\ProductEquipmentTemplateItem;
 
 class ProductController extends Controller
 {
@@ -83,47 +86,272 @@ class ProductController extends Controller
      * Show the form for editing the specified resource.
      */
     public function edit(int $id): View|JsonResponse
-    {
-        $product = $this->productRepository->findOrFail($id);
+{
+    $product = $this->productRepository->findOrFail($id);
 
-        $inventories = $product->inventories()
-            ->with('location')
-            ->get()
-            ->map(function ($inventory) {
-                return [
-                    'id' => $inventory->id,
-                    'name' => $inventory->location->name,
-                    'warehouse_id' => $inventory->warehouse_id,
-                    'warehouse_location_id' => $inventory->warehouse_location_id,
-                    'in_stock' => $inventory->in_stock,
-                    'allocated' => $inventory->allocated,
-                ];
-            });
+    $product->load([
+        'equipmentTemplate.items',
+    ]);
 
-        return view('admin::products.edit', compact('product', 'inventories'));
-    }
+    $inventories = $product->inventories()
+        ->with('location')
+        ->get()
+        ->map(function ($inventory) {
+            return [
+                'id'                    => $inventory->id,
+                'name'                  => $inventory->location->name,
+                'warehouse_id'          => $inventory->warehouse_id,
+                'warehouse_location_id' => $inventory->warehouse_location_id,
+                'in_stock'              => $inventory->in_stock,
+                'allocated'             => $inventory->allocated,
+            ];
+        });
+
+    return view(
+        'admin::products.edit',
+        compact(
+            'product',
+            'inventories'
+        )
+    );
+}
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(AttributeForm $request, int $id)
-    {
-        Event::dispatch('product.update.before', $id);
+   public function update(AttributeForm $request, int $id)
+{
+    /*
+    |--------------------------------------------------------------------------
+    | Validate Equipment Template
+    |--------------------------------------------------------------------------
+    */
 
-        $product = $this->productRepository->update($request->all(), $id);
+    $request->validate([
+        'equipment_template_name' => [
+            'nullable',
+            'string',
+            'max:255',
+        ],
 
-        Event::dispatch('product.update.after', $product);
+        'equipment_template_active' => [
+            'nullable',
+            'boolean',
+        ],
 
-        if (request()->ajax()) {
-            return response()->json([
-                'message' => trans('admin::app.products.index.update-success'),
-            ]);
+        'equipment_template_notes' => [
+            'nullable',
+            'string',
+        ],
+
+        'equipment_items' => [
+            'nullable',
+            'array',
+        ],
+
+        'equipment_items.*.name' => [
+            'nullable',
+            'string',
+            'max:255',
+        ],
+
+        'equipment_items.*.description' => [
+            'nullable',
+            'string',
+        ],
+
+        'equipment_items.*.quantity' => [
+            'nullable',
+            'numeric',
+            'min:0.01',
+        ],
+
+        'equipment_items.*.unit' => [
+            'nullable',
+            'string',
+            'max:30',
+        ],
+
+        'equipment_items.*.notes' => [
+            'nullable',
+            'string',
+        ],
+    ]);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Pisahkan data Product dengan Equipment Template
+    |--------------------------------------------------------------------------
+    */
+
+    $productData = $request->except([
+        'equipment_template_name',
+        'equipment_template_active',
+        'equipment_template_notes',
+        'equipment_items',
+    ]);
+
+    Event::dispatch(
+        'product.update.before',
+        $id
+    );
+
+    $product = DB::transaction(
+        function () use (
+            $request,
+            $productData,
+            $id
+        ) {
+            /*
+            |--------------------------------------------------------------------------
+            | Update Product seperti biasa
+            |--------------------------------------------------------------------------
+            */
+
+            $product = $this
+                ->productRepository
+                ->update(
+                    $productData,
+                    $id
+                );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Create / Update Equipment Template
+            |--------------------------------------------------------------------------
+            */
+
+            $templateName = trim(
+                (string) $request->input(
+                    'equipment_template_name'
+                )
+            );
+
+            if ($templateName === '') {
+                $templateName =
+                    $product->name
+                    .' Equipment Template';
+            }
+
+            $template = ProductEquipmentTemplate::updateOrCreate(
+                [
+                    'product_id' => $product->id,
+                ],
+                [
+                    'name' => $templateName,
+
+                    'is_active' =>
+                        $request->boolean(
+                            'equipment_template_active'
+                        ),
+
+                    'notes' =>
+                        $request->input(
+                            'equipment_template_notes'
+                        ),
+                ]
+            );
+
+            /*
+            |--------------------------------------------------------------------------
+            | Rebuild Template Items
+            |--------------------------------------------------------------------------
+            |
+            | Template product adalah master.
+            | Setiap save, item lama dibangun ulang dari form.
+            |
+            */
+
+            $template
+                ->items()
+                ->delete();
+
+            $equipmentItems =
+                $request->input(
+                    'equipment_items',
+                    []
+                );
+
+            $sortOrder = 0;
+
+            foreach ($equipmentItems as $item) {
+                $name = trim(
+                    (string) (
+                        $item['name']
+                        ?? ''
+                    )
+                );
+
+                /*
+                 * Row kosong tidak disimpan.
+                 */
+                if ($name === '') {
+                    continue;
+                }
+
+                ProductEquipmentTemplateItem::create([
+                    'template_id' =>
+                        $template->id,
+
+                    'name' =>
+                        $name,
+
+                    'description' =>
+                        $item['description']
+                        ?? null,
+
+                    'quantity' =>
+                        $item['quantity']
+                        ?? 1,
+
+                    'unit' =>
+                        ! empty($item['unit'])
+                            ? $item['unit']
+                            : 'unit',
+
+                    'notes' =>
+                        $item['notes']
+                        ?? null,
+
+                    'sort_order' =>
+                        $sortOrder++,
+                ]);
+            }
+
+            return $product;
         }
+    );
 
-        session()->flash('success', trans('admin::app.products.index.update-success'));
+    Event::dispatch(
+        'product.update.after',
+        $product
+    );
 
-        return redirect()->route('admin.products.index');
+    if (request()->ajax()) {
+        return response()->json([
+            'message' => trans(
+                'admin::app.products.index.update-success'
+            ),
+        ]);
     }
+
+    session()->flash(
+        'success',
+        trans(
+            'admin::app.products.index.update-success'
+        )
+    );
+
+    /*
+     * Saya ubah redirect agar kembali ke Edit Product.
+     *
+     * Ini lebih enak untuk mengatur Equipment Template.
+     */
+    return redirect()->route(
+        'admin.products.edit',
+        $product->id
+    );
+}
 
     /**
      * Store a newly created resource in storage.

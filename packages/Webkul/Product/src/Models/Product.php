@@ -69,4 +69,14 @@ class Product extends Model implements ProductContract
     {
         return $this->belongsToMany(ActivityProxy::modelClass(), 'product_activities');
     }
+    /**
+ * Equipment template untuk Surat Jalan.
+ */
+public function equipmentTemplate()
+{
+    return $this->hasOne(
+        ProductEquipmentTemplate::class,
+        'product_id'
+    );
+}
 }
