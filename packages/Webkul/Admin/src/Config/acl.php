@@ -163,6 +163,24 @@ return [
     'route' => 'admin.invoices.financial-report.export',
     'sort'  => 1,
 ],
+
+/*
+|--------------------------------------------------------------------------
+| Delivery Orders
+|--------------------------------------------------------------------------
+*/
+
+[
+    'key'   => 'delivery-orders',
+    'name'  => 'admin::app.acl.delivery-orders',
+    'route' => 'admin.delivery-orders.index',
+    'sort'  => 5,
+], [
+    'key'   => 'delivery-orders.view',
+    'name'  => 'admin::app.acl.view',
+    'route' => 'admin.delivery-orders.show',
+    'sort'  => 1,
+],
     [
         'key' => 'mail',
         'name' => 'admin::app.acl.mail',

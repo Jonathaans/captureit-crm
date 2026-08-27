@@ -54,17 +54,31 @@ return [
     'icon-class' => 'icon-quote',
 ],
 
-/*
-|--------------------------------------------------------------------------
-| Financial Report
-|--------------------------------------------------------------------------
-*/
-[
-    'key'        => 'financial-report',
-    'name'       => 'admin::app.layouts.financial-report',
-    'route'      => 'admin.invoices.financial-report',
-    'sort'       => 5,
-    'icon-class' => 'icon-activity',
+    /*
+    |--------------------------------------------------------------------------
+    | Financial Report
+    |--------------------------------------------------------------------------
+    */
+    [
+        'key'        => 'financial-report',
+        'name'       => 'admin::app.layouts.financial-report',
+        'route'      => 'admin.invoices.financial-report',
+        'sort'       => 5,
+        'icon-class' => 'icon-activity',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Delivery Orders
+    |--------------------------------------------------------------------------
+    */
+
+    [
+        'key'        => 'delivery-orders',
+        'name'       => 'admin::app.layouts.delivery-orders',
+        'route'      => 'admin.delivery-orders.index',
+        'sort'       => 6,
+        'icon-class' => 'icon-quote',
 ],
 
     /*
@@ -79,7 +93,7 @@ return [
         'params'     => [
             'route' => 'inbox',
         ],
-        'sort'       => 5,
+        'sort'       => 7,
         'icon-class' => 'icon-mail',
     ],
 
@@ -147,7 +161,7 @@ return [
         'key'        => 'activities',
         'name'       => 'admin::app.layouts.activities',
         'route'      => 'admin.activities.index',
-        'sort'       => 6,
+        'sort'       => 8,
         'icon-class' => 'icon-activity',
     ],
 
@@ -160,7 +174,7 @@ return [
         'key'        => 'contacts',
         'name'       => 'admin::app.layouts.contacts',
         'route'      => 'admin.contacts.persons.index',
-        'sort'       => 7,
+        'sort'       => 9,
         'icon-class' => 'icon-contact',
     ],
 
@@ -189,7 +203,7 @@ return [
         'key'        => 'products',
         'name'       => 'admin::app.layouts.products',
         'route'      => 'admin.products.index',
-        'sort'       => 8,
+        'sort'       => 10,
         'icon-class' => 'icon-product',
     ],
 
@@ -202,7 +216,7 @@ return [
         'key'        => 'settings',
         'name'       => 'admin::app.layouts.settings',
         'route'      => 'admin.settings.index',
-        'sort'       => 9,
+        'sort'       => 11,
         'icon-class' => 'icon-setting',
     ],
 
@@ -441,7 +455,7 @@ return [
         'key'        => 'configuration',
         'name'       => 'admin::app.layouts.configuration',
         'route'      => 'admin.configuration.index',
-        'sort'       => 10,
+        'sort'       => 12,
         'icon-class' => 'icon-configuration',
     ],
 
@@ -454,7 +468,7 @@ return [
         'key'        => 'help',
         'name'       => 'admin::app.layouts.help',
         'route'      => 'admin.help.index',
-        'sort'       => 11,
+        'sort'       => 13,
         'icon-class' => 'icon-help',
     ],
 ];

@@ -7,6 +7,7 @@ return [
         'lead' => 'Lead',
         'quotes' => 'Quotes',
         'invoices' => 'Invoices',
+        'delivery-orders' => 'Delivery Orders',
         'generate-invoice' => 'Generate Invoice',
         'add-payment' => 'Add Payment',
         'update-event-status'     => 'Update Event Status',
@@ -2205,6 +2206,7 @@ return [
         'quote' => 'Quote',
         'invoices' => 'Invoices',
         'financial-report' => 'Financial Report',
+        'delivery-orders' => 'Delivery Orders',
         'invoice' => 'Invoice',
         'mail' => [
             'title' => 'Mail',
