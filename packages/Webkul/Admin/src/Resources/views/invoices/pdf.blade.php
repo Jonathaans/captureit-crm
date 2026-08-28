@@ -119,7 +119,12 @@
 
     <style>
         @page {
-            margin: 22px 28px 50px 28px;
+            /*
+             * Keep a permanent safe zone above the fixed footer.
+             * DOMPDF will flow the next row/block to the next page
+             * before it reaches this bottom margin.
+             */
+            margin: 22px 28px 72px 28px;
         }
 
         * {
@@ -312,10 +317,16 @@
 
         .items-table tr {
             page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .items-table thead {
+            /* Repeat the item header automatically on page 2+. */
             display: table-header-group;
+        }
+
+        .items-table tbody {
+            display: table-row-group;
         }
 
         .item-name {
@@ -331,6 +342,8 @@
 
         .summary-wrap {
             margin-top: 12px;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .summary-table {
@@ -388,6 +401,8 @@
 
         .description-box {
             margin-top: 16px;
+            page-break-inside: avoid;
+            break-inside: avoid;
             padding: 10px 12px;
             background: #f9fafb;
             border-left: 3px solid #d5aa2a;
@@ -402,6 +417,8 @@
         .bottom-table {
             /* Extra breathing room before the signature section. */
             margin-top: 42px;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .bottom-table td {
@@ -441,13 +458,20 @@
         .signature-name {
             font-weight: bold;
             color: #111827;
+            line-height: 1.45;
         }
 
         .footer {
             position: fixed;
             left: 0;
             right: 0;
-            bottom: 8px;
+            /*
+             * IMPORTANT FOR DOMPDF:
+             * The footer must live INSIDE the reserved @page bottom margin.
+             * A positive/zero bottom value places the fixed footer back inside
+             * the normal content area and can touch the Director/signature.
+             */
+            bottom: -42px;
             padding-top: 8px;
             border-top: 1px solid #e5e7eb;
             text-align: center;
@@ -460,8 +484,12 @@
 <body>
 
 @php
+    /*
+     * Keep items as one continuous table.
+     * Pagination is handled by DOMPDF using the reserved @page bottom margin
+     * and page-break-inside rules, so long descriptions are handled safely.
+     */
     $items = $invoice->items->values();
-    $itemChunks = $items->chunk(10);
 @endphp
 
     <!-- KOP -->
@@ -588,9 +616,6 @@
     </table>
 
     <!-- Invoice Items -->
-
-    @foreach($itemChunks as $chunkIndex => $chunk)
-
     <table class="items-table">
         <thead>
             <tr>
@@ -605,71 +630,60 @@
         </thead>
 
         <tbody>
+            @forelse ($items as $index => $item)
+                <tr>
+                    <td class="no">
+                        {{ $index + 1 }}
+                    </td>
 
-        @foreach($chunk as $index => $item)
-
-            <tr>
-
-                <td class="no">
-                    {{ ($chunkIndex * 10) + $loop->iteration }}
-                </td>
-
-                <td class="package">
-                    <div class="item-name">
-                        {{ $item->name }}
-                    </div>
-
-                    @if (! empty($item->sku))
-                        <div class="item-sku">
-                            SKU: {{ $item->sku }}
+                    <td class="package">
+                        <div class="item-name">
+                            {{ $item->name }}
                         </div>
-                    @endif
-                </td>
 
-                <td class="description">
-                    {{ $item->description ?? '-' }}
-                </td>
+                        @if (! empty($item->sku))
+                            <div class="item-sku">
+                                SKU: {{ $item->sku }}
+                            </div>
+                        @endif
+                    </td>
 
-                <td class="day">
-                    {{ $item->day ?? 1 }}
-                </td>
+                    <td class="description">
+                        {{ $item->description ?? '-' }}
+                    </td>
 
-                <td class="qty">
-                    {{ rtrim(rtrim(number_format((float) $item->quantity, 2, '.', ''), '0'), '.') }}
-                </td>
+                    <td class="day">
+                        {{ $item->day ?? 1 }}
+                    </td>
 
-                <td class="price">
-                    Rp {{ number_format((float) $item->price, 0, ',', '.') }}
-                </td>
+                    <td class="qty">
+                        {{ rtrim(rtrim(number_format((float) $item->quantity, 2, '.', ''), '0'), '.') }}
+                    </td>
 
-                <td class="total">
-                    Rp {{ number_format(
-                        (float) $item->total
-                        + (float) $item->tax_amount
-                        - (float) $item->discount_amount,
-                        0,
-                        ',',
-                        '.'
-                    ) }}
-                </td>
+                    <td class="price">
+                        Rp {{ number_format((float) $item->price, 0, ',', '.') }}
+                    </td>
 
-            </tr>
-
-        @endforeach
-
+                    <td class="total">
+                        Rp {{ number_format(
+                            (float) $item->total
+                            + (float) $item->tax_amount
+                            - (float) $item->discount_amount,
+                            0,
+                            ',',
+                            '.'
+                        ) }}
+                    </td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="7" style="padding:18px; text-align:center; color:#9ca3af;">
+                        No items.
+                    </td>
+                </tr>
+            @endforelse
         </tbody>
     </table>
-
-    @if(!$loop->last)
-        <div class="page-break"></div>
-    @endif
-
-    @endforeach
-
-
-    @if($items->count() > 10)
-        <div class="page-break"></div>
-    @endif
 
     <!-- Invoice Summary -->
     <div class="summary-wrap">
@@ -796,7 +810,7 @@
 
             <td class="signature-box">
                 <div class="section-label">
-                    PT. VARBEL ANAVAYA BERSAUDARA
+                    PT. VARBEL ANVAYA BERSAUDARA
                 </div>
 
                 <div class="signature-space"></div>

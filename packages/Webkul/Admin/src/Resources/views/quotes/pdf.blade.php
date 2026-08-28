@@ -108,7 +108,11 @@
 
     <style>
         @page {
-            margin: 22px 28px 45px 28px;
+            /*
+             * Reserve a safe zone for the fixed footer on every page.
+             * Content will continue on page 2 before reaching the footer.
+             */
+            margin: 22px 28px 72px 28px;
         }
 
         * {
@@ -290,22 +294,27 @@
             width: 15%;
             text-align: right;
         }
-        
         .page-break {
-    page-break-before: always;
-}
+            page-break-before: always;
+        }
 
-.items-table {
-    page-break-inside: auto;
-}
+        .items-table {
+            page-break-inside: auto;
+        }
 
-.items-table tr {
-    page-break-inside: avoid;
-}
+        .items-table tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
 
-.items-table thead {
-    display: table-header-group;
-}
+        .items-table thead {
+            /* Repeat the item header automatically on page 2+. */
+            display: table-header-group;
+        }
+
+        .items-table tbody {
+            display: table-row-group;
+        }
         .item-name {
             color: #111827;
             font-weight: bold;
@@ -319,6 +328,8 @@
 
         .summary-wrap {
             margin-top: 12px;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .summary-table {
@@ -350,6 +361,8 @@
 
         .description-box {
             margin-top: 16px;
+            page-break-inside: avoid;
+            break-inside: avoid;
             padding: 10px 12px;
             background: #f9fafb;
             border-left: 3px solid #d5aa2a;
@@ -363,6 +376,8 @@
 
         .bottom-table {
             margin-top: 30px;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .bottom-table td {
@@ -397,6 +412,7 @@
         .signature-name {
             font-weight: bold;
             color: #111827;
+            line-height: 1.45;
         }
 
 .footer {
@@ -404,7 +420,13 @@
 
     left: 0;
     right: 0;
-    bottom: 0;
+    /*
+             * IMPORTANT FOR DOMPDF:
+             * The footer must live INSIDE the reserved @page bottom margin.
+             * A positive/zero bottom value places the fixed footer back inside
+             * the normal content area and can touch the Director/signature.
+             */
+            bottom: -42px;
 
     padding-top: 8px;
     padding-bottom: 4px;
@@ -699,7 +721,7 @@
                 <div class="signature-line"></div>
 
                 <div class="signature-name">
-                    PT VARBEL ANAVAYA BERSAUDARA
+                    PT VARBEL ANVAYA BERSAUDARA
                 </div>
             </td>
         </tr>

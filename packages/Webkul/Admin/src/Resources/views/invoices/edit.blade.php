@@ -43,15 +43,76 @@
 
         /*
          * Custom Bill To selector.
-         * We intentionally keep the working "__new__" flow so the user can
-         * choose an existing person OR create a new one while saving invoice.
+         *
+         * User can:
+         * - choose an existing Person; or
+         * - create a new Person while saving the Invoice.
+         *
+         * For a new Person:
+         * - Email is optional.
+         * - Phone is optional.
+         * - Organization is optional.
+         * - Organization can use an existing record or be quick-added.
          */
         $persons = \Webkul\Contact\Models\Person::query()
+            ->with('organization')
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get([
+                'id',
+                'name',
+                'emails',
+                'contact_numbers',
+                'organization_id',
+            ]);
 
-        $selectedPersonId = (string) old('person_id', $invoice->person_id);
-        $isCreatingNewPerson = $selectedPersonId === '__new__';
+        $organizations = \Webkul\Contact\Models\Organization::query()
+            ->orderBy('name')
+            ->get([
+                'id',
+                'name',
+            ]);
+
+        /*
+         * Lightweight dataset for duplicate warning in the browser.
+         * Server-side validation in InvoiceController must remain the final guard.
+         */
+        $existingPersonDuplicateIndex = $persons
+            ->map(function ($person) {
+                return [
+                    'id' => $person->id,
+                    'name' => $person->name,
+                    'organization_id' => $person->organization_id,
+                    'organization_name' => $person->organization?->name,
+                    'emails' => collect($person->emails ?? [])
+                        ->pluck('value')
+                        ->filter()
+                        ->values()
+                        ->all(),
+                    'phones' => collect($person->contact_numbers ?? [])
+                        ->pluck('value')
+                        ->filter()
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->values()
+            ->all();
+
+        $selectedPersonId = (string) old(
+            'person_id',
+            $invoice->person_id
+        );
+
+        $isCreatingNewPerson =
+            $selectedPersonId === '__new__';
+
+        $selectedNewPersonOrganization = (string) old(
+            'new_person_organization_id',
+            ''
+        );
+
+        $isCreatingNewOrganization =
+            $selectedNewPersonOrganization === '__new__';
 
         $paymentBadge = match ($invoice->status) {
             'paid' => ['label' => 'PAID', 'bg' => '#dcfce7', 'color' => '#15803d', 'border' => '#86efac'],
@@ -390,140 +451,262 @@
                 {{-- RIGHT / SIDEBAR --}}
                 <aside style="display:flex; flex-direction:column; gap:24px;">
 
-                    {{-- CUSTOMER --}}
-                    <section class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-                        <p
-                            class="text-xs font-bold uppercase tracking-wider"
-                            style="color:#f3c94f;"
+{{-- ========================================================= --}}
+{{-- CUSTOMER --}}
+{{-- Replace bagian CUSTOMER lama dengan section ini. --}}
+{{-- ========================================================= --}}
+
+<section class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+    <p
+        class="text-xs font-bold uppercase tracking-wider"
+        style="color:#f3c94f;"
+    >
+        Customer
+    </p>
+
+    <h2 class="mt-1 text-lg font-semibold text-gray-800 dark:text-white">
+        Bill To
+    </h2>
+
+    <div class="mt-5">
+        <label
+            for="invoice-person-id"
+            class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+            Bill To <span class="text-red-600">*</span>
+        </label>
+
+        <select
+            id="invoice-person-id"
+            name="person_id"
+            onchange="window.toggleInvoiceNewPerson && window.toggleInvoiceNewPerson(this)"
+            required
+            class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-yellow-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+        >
+            <option value="">
+                Select Person
+            </option>
+
+            @foreach ($persons as $person)
+                <option
+                    value="{{ $person->id }}"
+                    @selected(
+                        $selectedPersonId
+                        === (string) $person->id
+                    )
+                >
+                    {{ $person->name }}
+
+                    @if ($person->organization)
+                        — {{ $person->organization->name }}
+                    @endif
+                </option>
+            @endforeach
+
+            <option
+                value="__new__"
+                @selected($isCreatingNewPerson)
+            >
+                + Add New Person
+            </option>
+        </select>
+
+        @error('person_id')
+            <p class="mt-2 text-sm text-red-600">
+                {{ $message }}
+            </p>
+        @enderror
+
+        {{-- NEW PERSON FORM --}}
+        <div
+            id="new-person-fields"
+            class="mt-4 rounded-xl p-4"
+            style="
+                {{ $isCreatingNewPerson ? '' : 'display:none;' }}
+                border:1px solid #d4a72c;
+                background:rgba(212,167,44,.08);
+            "
+        >
+            <div class="mb-4">
+                <p class="text-sm font-semibold text-gray-800 dark:text-white">
+                    New Person
+                </p>
+
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Person baru akan dibuat saat Save Changes.
+                    Organization bersifat optional.
+                </p>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:14px;">
+                {{-- NAME --}}
+                <div>
+                    <label
+                        for="new-person-name"
+                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                        Name <span class="text-red-600">*</span>
+                    </label>
+
+                    <input
+                        id="new-person-name"
+                        type="text"
+                        name="new_person_name"
+                        value="{{ old('new_person_name') }}"
+                        placeholder="Contoh: Fajrul"
+                        class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-yellow-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                        @required($isCreatingNewPerson)
+                    >
+                </div>
+
+                {{-- EMAIL --}}
+                <div>
+                    <label
+                        for="new-person-email"
+                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                        Email
+                        <span class="font-normal text-gray-400">
+                            (Optional)
+                        </span>
+                    </label>
+
+                    <input
+                        id="new-person-email"
+                        type="email"
+                        name="new_person_email"
+                        value="{{ old('new_person_email') }}"
+                        placeholder="contoh@email.com"
+                        class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-yellow-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                    >
+                </div>
+
+                {{-- PHONE --}}
+                <div>
+                    <label
+                        for="new-person-phone"
+                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                        Phone
+                        <span class="font-normal text-gray-400">
+                            (Optional)
+                        </span>
+                    </label>
+
+                    <input
+                        id="new-person-phone"
+                        type="text"
+                        name="new_person_phone"
+                        value="{{ old('new_person_phone') }}"
+                        placeholder="08123456789"
+                        class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-yellow-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                    >
+                </div>
+
+                {{-- ORGANIZATION --}}
+                <div>
+                    <label
+                        for="new-person-organization-id"
+                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                        Organization
+                        <span class="font-normal text-gray-400">
+                            (Optional)
+                        </span>
+                    </label>
+
+                    <select
+                        id="new-person-organization-id"
+                        name="new_person_organization_id"
+                        onchange="window.toggleInvoiceNewOrganization && window.toggleInvoiceNewOrganization(this)"
+                        class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-yellow-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                    >
+                        <option value="">
+                            No Organization
+                        </option>
+
+                        @foreach ($organizations as $organization)
+                            <option
+                                value="{{ $organization->id }}"
+                                @selected(
+                                    $selectedNewPersonOrganization
+                                    === (string) $organization->id
+                                )
+                            >
+                                {{ $organization->name }}
+                            </option>
+                        @endforeach
+
+                        <option
+                            value="__new__"
+                            @selected($isCreatingNewOrganization)
                         >
-                            Customer
-                        </p>
+                            + Add New Organization
+                        </option>
+                    </select>
 
-                        <h2 class="mt-1 text-lg font-semibold text-gray-800 dark:text-white">
-                            Bill To
-                        </h2>
+                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                        Pilih organization existing atau Add New Organization jika belum tersedia.
+                    </p>
+                </div>
 
-                        <div class="mt-5">
-                            <label
-                                for="invoice-person-id"
-                                class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                            >
-                                Bill To <span class="text-red-600">*</span>
-                            </label>
+                {{-- QUICK ADD ORGANIZATION --}}
+                <div
+                    id="new-organization-fields"
+                    style="{{ $isCreatingNewOrganization ? '' : 'display:none;' }}"
+                >
+                    <label
+                        for="new-person-organization-name"
+                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                        New Organization Name
+                        <span class="text-red-600">*</span>
+                    </label>
 
-                            <select
-                                id="invoice-person-id"
-                                name="person_id"
-                                onchange="window.toggleInvoiceNewPerson && window.toggleInvoiceNewPerson(this)"
-                                required
-                                class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-yellow-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-                            >
-                                <option value="">
-                                    Select Person
-                                </option>
+                    <input
+                        id="new-person-organization-name"
+                        type="text"
+                        name="new_person_organization_name"
+                        value="{{ old('new_person_organization_name') }}"
+                        placeholder="Contoh: PT Bank Central Asia Tbk"
+                        class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-yellow-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                        @required($isCreatingNewOrganization)
+                    >
+                </div>
+            </div>
+        </div>
+    </div>
 
-                                @foreach ($persons as $person)
-                                    <option
-                                        value="{{ $person->id }}"
-                                        @selected($selectedPersonId === (string) $person->id)
-                                    >
-                                        {{ $person->name }}
-                                    </option>
-                                @endforeach
+    <div
+        class="mt-5 rounded-lg bg-gray-50 p-4 dark:bg-gray-950"
+        style="
+            display:grid;
+            grid-template-columns:repeat(2, minmax(0, 1fr));
+            gap:14px;
+        "
+    >
+        <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Invoice
+            </p>
 
-                                <option
-                                    value="__new__"
-                                    @selected($isCreatingNewPerson)
-                                >
-                                    + Add New Person
-                                </option>
-                            </select>
+            <p class="mt-1 text-sm font-semibold text-gray-800 dark:text-white">
+                {{ $invoice->invoice_number }}
+            </p>
+        </div>
 
-                            {{-- NEW PERSON FORM --}}
-                            <div
-                                id="new-person-fields"
-                                class="mt-4 rounded-xl p-4"
-                                style="
-                                    {{ $isCreatingNewPerson ? '' : 'display:none;' }}
-                                    border:1px solid #d4a72c;
-                                    background:rgba(212,167,44,.08);
-                                "
-                            >
-                                <div class="mb-4">
-                                    <p class="text-sm font-semibold text-gray-800 dark:text-white">
-                                        New Person
-                                    </p>
+        <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Project
+            </p>
 
-                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        Person baru akan dibuat saat Save Changes.
-                                    </p>
-                                </div>
+            <p class="mt-1 text-sm font-semibold text-gray-800 dark:text-white">
+                {{ $invoice->project_code ?: '-' }}
+            </p>
+        </div>
+    </div>
+</section>
 
-                                <div style="display:flex; flex-direction:column; gap:14px;">
-                                    <div>
-                                        <label
-                                            for="new-person-name"
-                                            class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                                        >
-                                            Name <span class="text-red-600">*</span>
-                                        </label>
-
-                                        <input
-                                            id="new-person-name"
-                                            type="text"
-                                            name="new_person_name"
-                                            value="{{ old('new_person_name') }}"
-                                            placeholder="Contoh: Fajrul"
-                                            class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-yellow-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-                                            @required($isCreatingNewPerson)
-                                        >
-                                    </div>
-
-                                    <div>
-                                        <label
-                                            for="new-person-email"
-                                            class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                                        >
-                                            Email <span class="text-red-600">*</span>
-                                        </label>
-
-                                        <input
-                                            id="new-person-email"
-                                            type="email"
-                                            name="new_person_email"
-                                            value="{{ old('new_person_email') }}"
-                                            placeholder="contoh@email.com"
-                                            class="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-yellow-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-                                            @required($isCreatingNewPerson)
-                                        >
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div
-                            class="mt-5 rounded-lg bg-gray-50 p-4 dark:bg-gray-950"
-                            style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px;"
-                        >
-                            <div>
-                                <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                    Invoice
-                                </p>
-                                <p class="mt-1 text-sm font-semibold text-gray-800 dark:text-white">
-                                    {{ $invoice->invoice_number }}
-                                </p>
-                            </div>
-
-                            <div>
-                                <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                                    Project
-                                </p>
-                                <p class="mt-1 text-sm font-semibold text-gray-800 dark:text-white">
-                                    {{ $invoice->project_code ?: '-' }}
-                                </p>
-                            </div>
-                        </div>
-                    </section>
 
                     {{-- STATUS --}}
                     <section class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
@@ -874,37 +1057,215 @@
 
     <script>
         /*
-         * Bill To: existing person / Add New Person.
-         * This is deliberately initialized immediately AND on DOMContentLoaded
-         * so it also works when the Blade script is rendered after the DOM is ready.
-         */
+        |--------------------------------------------------------------------------
+        | Existing Person index for duplicate warning
+        |--------------------------------------------------------------------------
+        */
+        window.invoiceExistingPersons =
+            @json($existingPersonDuplicateIndex);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Show / hide New Person form
+        |--------------------------------------------------------------------------
+        */
         window.toggleInvoiceNewPerson = function (selectElement = null) {
-            const personSelect = selectElement || document.getElementById('invoice-person-id');
-            const newPersonFields = document.getElementById('new-person-fields');
-            const newPersonName = document.getElementById('new-person-name');
-            const newPersonEmail = document.getElementById('new-person-email');
+            const personSelect =
+                selectElement
+                || document.getElementById('invoice-person-id');
+
+            const newPersonFields =
+                document.getElementById('new-person-fields');
+
+            const newPersonName =
+                document.getElementById('new-person-name');
 
             if (! personSelect || ! newPersonFields) {
                 return;
             }
 
-            const isNew = personSelect.value === '__new__';
+            const isNewPerson =
+                personSelect.value === '__new__';
 
-            newPersonFields.style.display = isNew ? 'block' : 'none';
+            newPersonFields.style.display =
+                isNewPerson ? 'block' : 'none';
 
             if (newPersonName) {
-                newPersonName.required = isNew;
+                newPersonName.required = isNewPerson;
             }
 
-            if (newPersonEmail) {
-                newPersonEmail.required = isNew;
+            if (! isNewPerson) {
+                const organizationSelect =
+                    document.getElementById('new-person-organization-id');
+
+                if (organizationSelect) {
+                    organizationSelect.value = '';
+                }
+
+                window.toggleInvoiceNewOrganization(
+                    organizationSelect
+                );
             }
         };
 
-        function initInvoiceEditPage() {
-            const personSelect = document.getElementById('invoice-person-id');
+        /*
+        |--------------------------------------------------------------------------
+        | Show / hide Quick Add Organization field
+        |--------------------------------------------------------------------------
+        */
+        window.toggleInvoiceNewOrganization = function (selectElement = null) {
+            const organizationSelect =
+                selectElement
+                || document.getElementById('new-person-organization-id');
 
-            if (personSelect && ! personSelect.dataset.newPersonBound) {
+            const newOrganizationFields =
+                document.getElementById('new-organization-fields');
+
+            const newOrganizationName =
+                document.getElementById('new-person-organization-name');
+
+            if (! organizationSelect || ! newOrganizationFields) {
+                return;
+            }
+
+            const isNewOrganization =
+                organizationSelect.value === '__new__';
+
+            newOrganizationFields.style.display =
+                isNewOrganization ? 'block' : 'none';
+
+            if (newOrganizationName) {
+                newOrganizationName.required = isNewOrganization;
+            }
+        };
+
+        /*
+        |--------------------------------------------------------------------------
+        | Duplicate Person check before submit
+        |--------------------------------------------------------------------------
+        |
+        | Duplicate rules:
+        | 1) Same Email; or
+        | 2) Same Phone; or
+        | 3) If Email + Phone are empty: same Name + same Organization.
+        |
+        | If found, existing Person is selected automatically and submit is stopped.
+        */
+        window.validateInvoiceNewPersonDuplicate = function () {
+            const personSelect =
+                document.getElementById('invoice-person-id');
+
+            if (! personSelect || personSelect.value !== '__new__') {
+                return true;
+            }
+
+            const name = (
+                document.getElementById('new-person-name')?.value || ''
+            ).trim();
+
+            const email = (
+                document.getElementById('new-person-email')?.value || ''
+            ).trim().toLowerCase();
+
+            const phone = (
+                document.getElementById('new-person-phone')?.value || ''
+            ).replace(/\D+/g, '');
+
+            const organizationSelect =
+                document.getElementById('new-person-organization-id');
+
+            const organizationChoice =
+                organizationSelect?.value || '';
+
+            const newOrganizationName = (
+                document.getElementById('new-person-organization-name')?.value || ''
+            ).trim().toLowerCase();
+
+            const normalize = (value) =>
+                String(value || '').trim().toLowerCase();
+
+            const existingPersons =
+                window.invoiceExistingPersons || [];
+
+            const duplicate = existingPersons.find((person) => {
+                const emailMatch =
+                    email
+                    && (person.emails || []).some(
+                        (value) => normalize(value) === email
+                    );
+
+                if (emailMatch) {
+                    return true;
+                }
+
+                const phoneMatch =
+                    phone
+                    && (person.phones || []).some(
+                        (value) =>
+                            String(value || '').replace(/\D+/g, '') === phone
+                    );
+
+                if (phoneMatch) {
+                    return true;
+                }
+
+                if (
+                    ! email
+                    && ! phone
+                    && normalize(person.name) === normalize(name)
+                ) {
+                    if (
+                        organizationChoice
+                        && organizationChoice !== '__new__'
+                    ) {
+                        return String(person.organization_id || '')
+                            === String(organizationChoice);
+                    }
+
+                    if (organizationChoice === '__new__') {
+                        return normalize(person.organization_name)
+                            === newOrganizationName;
+                    }
+
+                    return ! person.organization_id;
+                }
+
+                return false;
+            });
+
+            if (! duplicate) {
+                return true;
+            }
+
+            alert(
+                'Data client sudah ada: "'
+                + duplicate.name
+                + '".\n\n'
+                + 'Client existing akan dipilih otomatis pada Bill To. '
+                + 'Silakan cek lalu klik Save Changes kembali.'
+            );
+
+            personSelect.value = String(duplicate.id);
+
+            window.toggleInvoiceNewPerson(personSelect);
+
+            return false;
+        };
+
+        /*
+        |--------------------------------------------------------------------------
+        | Initialize Invoice Edit page
+        |--------------------------------------------------------------------------
+        */
+        function initInvoiceEditPage() {
+            /* Bill To */
+            const personSelect =
+                document.getElementById('invoice-person-id');
+
+            if (
+                personSelect
+                && ! personSelect.dataset.newPersonBound
+            ) {
                 personSelect.addEventListener('change', function () {
                     window.toggleInvoiceNewPerson(this);
                 });
@@ -914,10 +1275,49 @@
 
             window.toggleInvoiceNewPerson(personSelect);
 
-            const formatCurrency = (value) =>
-                new Intl.NumberFormat('id-ID').format(Math.round(Number(value) || 0));
+            /* Organization */
+            const organizationSelect =
+                document.getElementById('new-person-organization-id');
 
-            const rows = document.querySelectorAll('.invoice-item-row');
+            if (
+                organizationSelect
+                && ! organizationSelect.dataset.newOrganizationBound
+            ) {
+                organizationSelect.addEventListener('change', function () {
+                    window.toggleInvoiceNewOrganization(this);
+                });
+
+                organizationSelect.dataset.newOrganizationBound = '1';
+            }
+
+            window.toggleInvoiceNewOrganization(organizationSelect);
+
+            /* Duplicate check */
+            const invoiceEditForm =
+                document.getElementById('invoice-edit-form');
+
+            if (
+                invoiceEditForm
+                && ! invoiceEditForm.dataset.duplicateCheckBound
+            ) {
+                invoiceEditForm.addEventListener('submit', function (event) {
+                    if (! window.validateInvoiceNewPersonDuplicate()) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                });
+
+                invoiceEditForm.dataset.duplicateCheckBound = '1';
+            }
+
+            /* Existing Invoice Item calculation */
+            const formatCurrency = (value) =>
+                new Intl.NumberFormat('id-ID').format(
+                    Math.round(Number(value) || 0)
+                );
+
+            const rows =
+                document.querySelectorAll('.invoice-item-row');
 
             function recalculate() {
                 let subtotal = 0;
@@ -925,11 +1325,30 @@
                 let tax = 0;
 
                 rows.forEach((row) => {
-                    const day = Math.max(Number(row.querySelector('.item-day')?.value) || 0, 0);
-                    const quantity = Math.max(Number(row.querySelector('.item-quantity')?.value) || 0, 0);
-                    const price = Math.max(Number(row.querySelector('.item-price')?.value) || 0, 0);
-                    const discountPercent = Math.max(Number(row.querySelector('.item-discount')?.value) || 0, 0);
-                    const taxPercent = Math.max(Number(row.querySelector('.item-tax')?.value) || 0, 0);
+                    const day = Math.max(
+                        Number(row.querySelector('.item-day')?.value) || 0,
+                        0
+                    );
+
+                    const quantity = Math.max(
+                        Number(row.querySelector('.item-quantity')?.value) || 0,
+                        0
+                    );
+
+                    const price = Math.max(
+                        Number(row.querySelector('.item-price')?.value) || 0,
+                        0
+                    );
+
+                    const discountPercent = Math.max(
+                        Number(row.querySelector('.item-discount')?.value) || 0,
+                        0
+                    );
+
+                    const taxPercent = Math.max(
+                        Number(row.querySelector('.item-tax')?.value) || 0,
+                        0
+                    );
 
                     const base = day * quantity * price;
                     const itemDiscount = base * (discountPercent / 100);
@@ -941,24 +1360,73 @@
                     discount += itemDiscount;
                     tax += itemTax;
 
-                    const totalElement = row.querySelector('.item-total');
+                    const totalElement =
+                        row.querySelector('.item-total');
 
                     if (totalElement) {
-                        totalElement.textContent = 'Rp ' + formatCurrency(itemTotal);
+                        totalElement.textContent =
+                            'Rp ' + formatCurrency(itemTotal);
                     }
                 });
 
-                const adjustment = Number(@json((float) $invoice->adjustment_amount)) || 0;
-                const grandTotal = Math.max(subtotal - discount + tax + adjustment, 0);
-                const paid = Number(@json($paidAmount)) || 0;
-                const balance = Math.max(grandTotal - paid, 0);
+                const adjustment =
+                    Number(@json((float) $invoice->adjustment_amount)) || 0;
 
-                document.getElementById('summary-subtotal').textContent = 'Rp ' + formatCurrency(subtotal);
-                document.getElementById('summary-discount').textContent = 'Rp ' + formatCurrency(discount);
-                document.getElementById('summary-tax').textContent = 'Rp ' + formatCurrency(tax);
-                document.getElementById('summary-adjustment').textContent = 'Rp ' + formatCurrency(adjustment);
-                document.getElementById('summary-grand-total').textContent = 'Rp ' + formatCurrency(grandTotal);
-                document.getElementById('summary-balance').textContent = 'Rp ' + formatCurrency(balance);
+                const grandTotal = Math.max(
+                    subtotal - discount + tax + adjustment,
+                    0
+                );
+
+                const paid =
+                    Number(@json($paidAmount)) || 0;
+
+                const balance = Math.max(
+                    grandTotal - paid,
+                    0
+                );
+
+                const subtotalElement =
+                    document.getElementById('summary-subtotal');
+                const discountElement =
+                    document.getElementById('summary-discount');
+                const taxElement =
+                    document.getElementById('summary-tax');
+                const adjustmentElement =
+                    document.getElementById('summary-adjustment');
+                const grandTotalElement =
+                    document.getElementById('summary-grand-total');
+                const balanceElement =
+                    document.getElementById('summary-balance');
+
+                if (subtotalElement) {
+                    subtotalElement.textContent =
+                        'Rp ' + formatCurrency(subtotal);
+                }
+
+                if (discountElement) {
+                    discountElement.textContent =
+                        'Rp ' + formatCurrency(discount);
+                }
+
+                if (taxElement) {
+                    taxElement.textContent =
+                        'Rp ' + formatCurrency(tax);
+                }
+
+                if (adjustmentElement) {
+                    adjustmentElement.textContent =
+                        'Rp ' + formatCurrency(adjustment);
+                }
+
+                if (grandTotalElement) {
+                    grandTotalElement.textContent =
+                        'Rp ' + formatCurrency(grandTotal);
+                }
+
+                if (balanceElement) {
+                    balanceElement.textContent =
+                        'Rp ' + formatCurrency(balance);
+                }
             }
 
             document.querySelectorAll(
@@ -972,7 +1440,11 @@
         }
 
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initInvoiceEditPage, { once: true });
+            document.addEventListener(
+                'DOMContentLoaded',
+                initInvoiceEditPage,
+                { once: true }
+            );
         } else {
             initInvoiceEditPage();
         }

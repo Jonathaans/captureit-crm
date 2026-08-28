@@ -1,13 +1,43 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Webkul\Admin\Http\Controllers\Invoice\FinancialReportController;
 use Webkul\Admin\Http\Controllers\Invoice\InvoiceController;
 
+/*
+|--------------------------------------------------------------------------
+| Financial Report
+|--------------------------------------------------------------------------
+|
+| Route names stay EXACTLY the same, so existing menu + ACL continue
+| working. Report logic now lives in a dedicated controller and no longer
+| makes InvoiceController even larger.
+|
+| IMPORTANT: define these routes BEFORE invoices/{id}.
+|
+*/
+
+Route::controller(FinancialReportController::class)
+    ->prefix('invoices')
+    ->group(function () {
+        Route::get(
+            'financial-report',
+            'index'
+        )->name(
+            'admin.invoices.financial-report'
+        );
+
+        Route::get(
+            'financial-report/export',
+            'export'
+        )->name(
+            'admin.invoices.financial-report.export'
+        );
+    });
 
 Route::controller(InvoiceController::class)
     ->prefix('invoices')
     ->group(function () {
-
         /*
         |--------------------------------------------------------------------------
         | Listing
@@ -17,7 +47,6 @@ Route::controller(InvoiceController::class)
         Route::get('/', 'index')
             ->name('admin.invoices.index');
 
-
         /*
         |--------------------------------------------------------------------------
         | Generate Invoice
@@ -26,7 +55,6 @@ Route::controller(InvoiceController::class)
 
         Route::post('generate/{quoteId}', 'generate')
             ->name('admin.invoices.generate');
-
 
         /*
         |--------------------------------------------------------------------------
@@ -40,23 +68,18 @@ Route::controller(InvoiceController::class)
         Route::put('{id}', 'update')
             ->name('admin.invoices.update');
 
-                    Route::get('financial-report', 'financialReport')
-            ->name('admin.invoices.financial-report');
-
-        Route::get('financial-report/export', 'exportFinancialReport')
-            ->name('admin.invoices.financial-report.export');
         /*
-|--------------------------------------------------------------------------
-| Delivery Order / Surat Jalan
-|--------------------------------------------------------------------------
-*/
+        |--------------------------------------------------------------------------
+        | Delivery Order / Surat Jalan
+        |--------------------------------------------------------------------------
+        */
 
-Route::post(
-    '{id}/delivery-order',
-    'generateDeliveryOrder'
-)->name(
-    'admin.invoices.delivery-order.generate'
-);
+        Route::post(
+            '{id}/delivery-order',
+            'generateDeliveryOrder'
+        )->name(
+            'admin.invoices.delivery-order.generate'
+        );
 
         /*
         |--------------------------------------------------------------------------
@@ -67,7 +90,6 @@ Route::post(
         Route::get('{id}', 'show')
             ->name('admin.invoices.show');
 
-
         /*
         |--------------------------------------------------------------------------
         | Print
@@ -76,7 +98,6 @@ Route::post(
 
         Route::get('{id}/print', 'print')
             ->name('admin.invoices.print');
-
 
         /*
         |--------------------------------------------------------------------------
@@ -87,7 +108,6 @@ Route::post(
         Route::post('{id}/payments', 'addPayment')
             ->name('admin.invoices.payments.store');
 
-
         /*
         |--------------------------------------------------------------------------
         | Expenses
@@ -97,12 +117,19 @@ Route::post(
         Route::post('{id}/expenses', 'addExpense')
             ->name('admin.invoices.expenses.store');
 
-        Route::put('{invoiceId}/expenses/{expenseId}', 'updateExpense')
-            ->name('admin.invoices.expenses.update');
+        Route::put(
+            '{invoiceId}/expenses/{expenseId}',
+            'updateExpense'
+        )->name(
+            'admin.invoices.expenses.update'
+        );
 
-        Route::delete('{invoiceId}/expenses/{expenseId}', 'deleteExpense')
-            ->name('admin.invoices.expenses.delete');
-
+        Route::delete(
+            '{invoiceId}/expenses/{expenseId}',
+            'deleteExpense'
+        )->name(
+            'admin.invoices.expenses.delete'
+        );
 
         /*
         |--------------------------------------------------------------------------
@@ -110,14 +137,10 @@ Route::post(
         |--------------------------------------------------------------------------
         */
 
-        Route::put('{id}/event-status', 'updateEventStatus')
-            ->name('admin.invoices.event-status.update');
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Report
-        |--------------------------------------------------------------------------
-        */
-
+        Route::put(
+            '{id}/event-status',
+            'updateEventStatus'
+        )->name(
+            'admin.invoices.event-status.update'
+        );
     });

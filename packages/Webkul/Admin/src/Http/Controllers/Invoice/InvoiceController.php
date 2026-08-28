@@ -981,50 +981,367 @@ public function update(
 |
 */
 
+/*
+|--------------------------------------------------------------------------
+| REPLACE BLOCK NEW PERSON DI InvoiceController::update()
+|--------------------------------------------------------------------------
+|
+| Ganti block lama:
+|
+| if ($request->input('person_id') === '__new__') {
+|     ...
+| }
+|
+| dengan block ini.
+|
+*/
+
 if ($request->input('person_id') === '__new__') {
     $newPersonData = $request->validate([
         'new_person_name' => [
             'required',
             'string',
+            'min:2',
             'max:255',
         ],
 
         'new_person_email' => [
-            'required',
+            'nullable',
             'email',
+            'max:255',
+        ],
+
+        'new_person_phone' => [
+            'nullable',
+            'string',
+            'max:50',
+        ],
+
+        'new_person_organization_id' => [
+            'nullable',
+        ],
+
+        'new_person_organization_name' => [
+            'nullable',
+            'string',
             'max:255',
         ],
     ]);
 
-    $person = app(
-        \Webkul\Contact\Repositories\PersonRepository::class
-    )->create([
-        'name' => $newPersonData['new_person_name'],
+    $name = trim(
+        $newPersonData['new_person_name']
+    );
 
-        'emails' => [
+    $email = strtolower(
+        trim(
+            $newPersonData['new_person_email']
+            ?? ''
+        )
+    );
+
+    $phone = trim(
+        $newPersonData['new_person_phone']
+        ?? ''
+    );
+
+    $normalizedPhone = preg_replace(
+        '/\D+/',
+        '',
+        $phone
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | ORGANIZATION
+    |--------------------------------------------------------------------------
+    |
+    | Existing:
+    | new_person_organization_id = numeric ID
+    |
+    | Quick Add:
+    | new_person_organization_id = "__new__"
+    | new_person_organization_name = nama organization
+    |
+    */
+
+    $organizationChoice = (string) (
+        $newPersonData['new_person_organization_id']
+        ?? ''
+    );
+
+    $organizationId = null;
+    $organizationName = null;
+
+    if (
+        $organizationChoice !== ''
+        && $organizationChoice !== '__new__'
+    ) {
+        if (! ctype_digit($organizationChoice)) {
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'new_person_organization_id' =>
+                        'Organization tidak valid.',
+                ]);
+        }
+
+        $organization = \Webkul\Contact\Models\Organization::find(
+            (int) $organizationChoice
+        );
+
+        if (! $organization) {
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'new_person_organization_id' =>
+                        'Organization tidak ditemukan.',
+                ]);
+        }
+
+        $organizationId = $organization->id;
+    }
+
+    if ($organizationChoice === '__new__') {
+        $requestedOrganizationName = trim(
+            $newPersonData['new_person_organization_name']
+            ?? ''
+        );
+
+        if ($requestedOrganizationName === '') {
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'new_person_organization_name' =>
+                        'Nama organization wajib diisi jika memilih Add New Organization.',
+                ]);
+        }
+
+        /*
+         * Hindari duplicate organization karena beda kapitalisasi.
+         * Contoh:
+         * "BCA" dan "bca" akan dianggap organization yang sama.
+         */
+        $existingOrganization = \Webkul\Contact\Models\Organization::query()
+            ->get([
+                'id',
+                'name',
+            ])
+            ->first(
+                fn ($organization) =>
+                    mb_strtolower(
+                        trim($organization->name)
+                    )
+                    === mb_strtolower(
+                        $requestedOrganizationName
+                    )
+            );
+
+        if ($existingOrganization) {
+            $organizationId =
+                $existingOrganization->id;
+        } else {
+            $organizationName =
+                $requestedOrganizationName;
+        }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DUPLICATE PERSON CHECK
+    |--------------------------------------------------------------------------
+    |
+    | Strong duplicate:
+    | - Email sama, ATAU
+    | - Phone sama.
+    |
+    | Jika Email dan Phone kosong:
+    | - Name + Organization yang sama dianggap duplicate.
+    |
+    */
+
+    $existingPersons = \Webkul\Contact\Models\Person::query()
+        ->with('organization')
+        ->get([
+            'id',
+            'name',
+            'emails',
+            'contact_numbers',
+            'organization_id',
+        ]);
+
+    $duplicatePerson = $existingPersons->first(
+        function ($person) use (
+            $name,
+            $email,
+            $normalizedPhone,
+            $organizationId,
+            $organizationName
+        ) {
+            $emailMatch = false;
+
+            if ($email !== '') {
+                $emailMatch = collect(
+                    $person->emails ?? []
+                )->contains(
+                    fn ($item) =>
+                        strtolower(
+                            trim(
+                                $item['value']
+                                ?? ''
+                            )
+                        ) === $email
+                );
+            }
+
+            if ($emailMatch) {
+                return true;
+            }
+
+            $phoneMatch = false;
+
+            if ($normalizedPhone !== '') {
+                $phoneMatch = collect(
+                    $person->contact_numbers ?? []
+                )->contains(
+                    fn ($item) =>
+                        preg_replace(
+                            '/\D+/',
+                            '',
+                            (string) (
+                                $item['value']
+                                ?? ''
+                            )
+                        ) === $normalizedPhone
+                );
+            }
+
+            if ($phoneMatch) {
+                return true;
+            }
+
+            /*
+             * Kalau tidak ada Email/Phone,
+             * gunakan Name + Organization untuk mencegah duplicate.
+             */
+            if (
+                $email === ''
+                && $normalizedPhone === ''
+            ) {
+                $sameName =
+                    mb_strtolower(
+                        trim($person->name)
+                    )
+                    === mb_strtolower($name);
+
+                if (! $sameName) {
+                    return false;
+                }
+
+                if ($organizationId) {
+                    return
+                        (int) $person->organization_id
+                        === (int) $organizationId;
+                }
+
+                if ($organizationName) {
+                    return mb_strtolower(
+                        trim(
+                            $person->organization?->name
+                            ?? ''
+                        )
+                    ) === mb_strtolower(
+                        trim($organizationName)
+                    );
+                }
+
+                return empty(
+                    $person->organization_id
+                );
+            }
+
+            return false;
+        }
+    );
+
+    if ($duplicatePerson) {
+        return back()
+            ->withInput()
+            ->withErrors([
+                'person_id' =>
+                    'Data client sudah ada: '
+                    .$duplicatePerson->name
+                    .'. Silakan pilih client tersebut pada Bill To, jangan membuat data baru.',
+            ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CREATE PERSON
+    |--------------------------------------------------------------------------
+    */
+
+    $personPayload = [
+        'name' => $name,
+
+        'emails' => $email !== ''
+            ? [
+                [
+                    'value' => $email,
+                    'label' => 'work',
+                ],
+            ]
+            : [],
+
+        'user_id' => auth()
+            ->guard('user')
+            ->id(),
+
+        'organization_id' =>
+            $organizationId,
+
+        'quick_add' => 1,
+
+        'entity_type' =>
+            'persons',
+    ];
+
+    /*
+     * Jangan kirim contact_numbers kosong karena
+     * PersonRepository melakukan akses ke index pertama.
+     */
+    if ($phone !== '') {
+        $personPayload['contact_numbers'] = [
             [
-                'value' => $newPersonData['new_person_email'],
+                'value' => $phone,
                 'label' => 'work',
             ],
-        ],
+        ];
+    }
 
-        'contact_numbers' => [],
-'contact_numbers' => [
-    [
-        'value' => '',
-        'label' => 'work',
-    ],
-],
-        // Same metadata used by Krayin Quick Add Person.
-        'quick_add' => 'person',
-        'entity_type' => 'persons',
-    ]);
+    /*
+     * PersonRepository akan otomatis fetch/create
+     * organization dari organization_name.
+     */
+    if ($organizationName) {
+        $personPayload['organization_name'] =
+            $organizationName;
+    }
 
-    // Continue the normal invoice validation/update using the real Person ID.
+    $person = app(
+        \Webkul\Contact\Repositories\PersonRepository::class
+    )->create(
+        $personPayload
+    );
+
+    /*
+     * Lanjut ke validasi/update Invoice normal
+     * menggunakan Person ID yang baru.
+     */
     $request->merge([
         'person_id' => $person->id,
     ]);
 }
+
 
 
 /*

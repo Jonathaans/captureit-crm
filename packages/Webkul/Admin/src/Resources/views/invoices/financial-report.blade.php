@@ -1,1257 +1,399 @@
 <x-admin::layouts>
     <x-slot:title>
         Financial Report
-    </x-slot>
+    </x-slot:title>
 
-    <!-- ========================================================= -->
-    <!-- PAGE HEADER -->
-    <!-- ========================================================= -->
+    @php
+        $rupiah = static fn ($value) => 'Rp '.number_format((float) $value, 0, ',', '.');
 
-    <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-            <a
-                href="{{ route('admin.invoices.index') }}"
-                class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-            >
-                ← Back to Invoices
-            </a>
+        $periodLabel = $month
+            ? \Carbon\Carbon::createFromDate($year, $month, 1)->format('F Y')
+            : (string) $year;
 
-            <h1 class="mt-3 text-2xl font-bold text-gray-800 dark:text-white">
-                Financial Report
-            </h1>
+        $businessUnitLabel = $businessUnit
+            ? ($businessUnitOptions[$businessUnit] ?? '-')
+            : 'All Business Units';
 
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Financial performance, payment received, expenses, estimated profit, and cash surplus.
-            </p>
-        </div>
+        $eventStatusLabel = $eventStatus
+            ? ucfirst($eventStatus)
+            : 'All Events';
+    @endphp
 
-        <!-- ===================================================== -->
-        <!-- FILTER + EXPORT -->
-        <!-- ===================================================== -->
-
-        <div class="flex flex-wrap items-end gap-3">
-            <form
-                method="GET"
-                action="{{ route('admin.invoices.financial-report') }}"
-                class="flex flex-wrap items-end gap-3"
-            >
-                <!-- YEAR -->
+    <div class="space-y-7 lg:space-y-8">
+        {{-- Header --}}
+        <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
-                    <label
-                        class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                    >
-                        Year
-                    </label>
-
-                    <select
-                        name="year"
-                        class="min-w-[130px] cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-                    >
-                        @foreach ($availableYears as $availableYear)
-                            <option
-                                value="{{ $availableYear }}"
-                                @selected((int) $year === (int) $availableYear)
-                            >
-                                {{ $availableYear }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-
-
-                <!-- EVENT STATUS -->
-                <div>
-                    <label
-                        class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                    >
-                        Event Status
-                    </label>
-
-                    <select
-                        name="event_status"
-                        class="min-w-[170px] cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 outline-none transition focus:border-blue-500 dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-                    >
-                        <option value="">
-                            All Events
-                        </option>
-
-                        <option
-                            value="confirm"
-                            @selected($eventStatus === 'confirm')
-                        >
-                            Confirm
-                        </option>
-
-                        <option
-                            value="prospect"
-                            @selected($eventStatus === 'prospect')
-                        >
-                            Prospect
-                        </option>
-
-                        <option
-                            value="cancel"
-                            @selected($eventStatus === 'cancel')
-                        >
-                            Cancel
-                        </option>
-                    </select>
-                </div>
-
-
-                <!-- APPLY FILTER -->
-                <button
-                    type="submit"
-                    class="primary-button"
-                >
-                    Apply Filter
-                </button>
-
-
-                <!-- RESET -->
-                <a
-                    href="{{ route('admin.invoices.financial-report') }}"
-                    class="secondary-button"
-                >
-                    Reset
-                </a>
-            </form>
-
-
-            <!-- EXPORT CSV -->
-            <a
-                href="{{ route('admin.invoices.financial-report.export', [
-                    'year' => $year,
-                    'event_status' => $eventStatus,
-                ]) }}"
-                class="secondary-button"
-            >
-                Export CSV
-            </a>
-        </div>
-    </div>
-
-
-    <!-- ========================================================= -->
-    <!-- CURRENT FILTER -->
-    <!-- ========================================================= -->
-
-    <div class="mt-5 flex flex-wrap items-center gap-2">
-        <span
-            class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-300"
-        >
-            Year: {{ $year }}
-        </span>
-
-        @if ($eventStatus === 'confirm')
-            <span
-                class="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 dark:bg-green-900/40 dark:text-green-300"
-            >
-                CONFIRM
-            </span>
-
-        @elseif ($eventStatus === 'prospect')
-            <span
-                class="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-            >
-                PROSPECT
-            </span>
-
-        @elseif ($eventStatus === 'cancel')
-            <span
-                class="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700 dark:bg-red-900/40 dark:text-red-300"
-            >
-                CANCEL
-            </span>
-
-        @else
-            <span
-                class="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-700 dark:bg-gray-800 dark:text-gray-300"
-            >
-                ALL EVENTS
-            </span>
-        @endif
-    </div>
-
-
-    <!-- ========================================================= -->
-    <!-- FINANCIAL SUMMARY -->
-    <!-- ========================================================= -->
-
-    <div class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-
-        <!-- ===================================================== -->
-        <!-- REVENUE -->
-        <!-- ===================================================== -->
-
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-                Revenue
-            </p>
-
-            <p
-                class="mt-2 text-2xl font-bold text-gray-800 dark:text-white"
-            >
-                Rp {{ number_format(
-                    (float) $financialSummary['revenue'],
-                    0,
-                    ',',
-                    '.'
-                ) }}
-            </p>
-
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Nilai invoice event yang sudah Confirm.
-            </p>
-        </div>
-
-
-        <!-- ===================================================== -->
-        <!-- PAYMENT RECEIVED -->
-        <!-- ===================================================== -->
-
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-                Payment Received
-            </p>
-
-            <p
-                class="mt-2 text-2xl font-bold text-green-600 dark:text-green-400"
-            >
-                Rp {{ number_format(
-                    (float) $financialSummary['received'],
-                    0,
-                    ',',
-                    '.'
-                ) }}
-            </p>
-
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Seluruh uang yang benar-benar diterima, termasuk Partial dan Paid.
-            </p>
-        </div>
-
-
-        <!-- ===================================================== -->
-        <!-- OUTSTANDING -->
-        <!-- ===================================================== -->
-
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-                Outstanding
-            </p>
-
-            <p
-                class="mt-2 text-2xl font-bold text-red-600 dark:text-red-400"
-            >
-                Rp {{ number_format(
-                    (float) $financialSummary['outstanding'],
-                    0,
-                    ',',
-                    '.'
-                ) }}
-            </p>
-
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Sisa pembayaran invoice Confirm yang belum diterima.
-            </p>
-        </div>
-
-
-        <!-- ===================================================== -->
-        <!-- EXPENSE -->
-        <!-- ===================================================== -->
-
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-                Total Expense
-            </p>
-
-            <p
-                class="mt-2 text-2xl font-bold text-orange-600 dark:text-orange-400"
-            >
-                Rp {{ number_format(
-                    (float) $financialSummary['expense'],
-                    0,
-                    ',',
-                    '.'
-                ) }}
-            </p>
-
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Total pengeluaran aktual pada periode laporan.
-            </p>
-        </div>
-
-
-        <!-- ===================================================== -->
-        <!-- ESTIMATED PROFIT -->
-        <!-- ===================================================== -->
-
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-                Estimated Profit
-            </p>
-
-            <p
-                class="mt-2 text-2xl font-bold
-                {{
-                    (float) $financialSummary['estimated_profit'] >= 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                }}"
-            >
-                Rp {{ number_format(
-                    (float) $financialSummary['estimated_profit'],
-                    0,
-                    ',',
-                    '.'
-                ) }}
-            </p>
-
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Estimasi profit Confirm + Prospect. Event Cancel tidak dihitung.
-            </p>
-        </div>
-
-
-        <!-- ===================================================== -->
-        <!-- CASH SURPLUS -->
-        <!-- ===================================================== -->
-
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-                Cash Surplus
-            </p>
-
-            <p
-                class="mt-2 text-2xl font-bold
-                {{
-                    (float) $financialSummary['cash_surplus'] >= 0
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-red-600 dark:text-red-400'
-                }}"
-            >
-                Rp {{ number_format(
-                    (float) $financialSummary['cash_surplus'],
-                    0,
-                    ',',
-                    '.'
-                ) }}
-            </p>
-
-            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Payment Received dikurangi Expense aktual.
-            </p>
-        </div>
-    </div>
-
-
-    <!-- ========================================================= -->
-    <!-- PAYMENT STATUS STATISTICS -->
-    <!-- ========================================================= -->
-
-    <div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
-        <!-- TOTAL -->
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-                Total Invoice
-            </p>
-
-            <p
-                class="mt-2 text-2xl font-bold text-gray-800 dark:text-white"
-            >
-                {{ number_format($invoiceStats['total']) }}
-            </p>
-        </div>
-
-
-        <!-- PAID -->
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-                Paid
-            </p>
-
-            <p
-                class="mt-2 text-2xl font-bold text-green-600 dark:text-green-400"
-            >
-                {{ number_format($invoiceStats['paid']) }}
-            </p>
-        </div>
-
-
-        <!-- PARTIAL -->
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-                Partial
-            </p>
-
-            <p
-                class="mt-2 text-2xl font-bold text-yellow-600 dark:text-yellow-400"
-            >
-                {{ number_format($invoiceStats['partial']) }}
-            </p>
-        </div>
-
-
-        <!-- UNPAID -->
-        <div
-            class="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <p
-                class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-                Unpaid
-            </p>
-
-            <p
-                class="mt-2 text-2xl font-bold text-red-600 dark:text-red-400"
-            >
-                {{ number_format($invoiceStats['unpaid']) }}
-            </p>
-        </div>
-    </div>
-
-
-    <!-- ========================================================= -->
-    <!-- MONTHLY PERFORMANCE -->
-    <!-- ========================================================= -->
-
-    <div
-        class="mt-6 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
-    >
-        <div
-            class="border-b border-gray-200 px-6 py-4 dark:border-gray-800"
-        >
-            <h2
-                class="text-lg font-semibold text-gray-800 dark:text-white"
-            >
-                Monthly Performance
-            </h2>
-
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Financial performance per month for {{ $year }}.
-            </p>
-        </div>
-
-
-        <div class="overflow-x-auto">
-            <table class="w-full min-w-[1050px]">
-
-                <thead>
-                    <tr
-                        class="border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950"
-                    >
-                        <th
-                            class="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Month
-                        </th>
-
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Revenue
-                        </th>
-
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Payment Received
-                        </th>
-
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Expense
-                        </th>
-
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Est. Profit
-                        </th>
-
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Cash Surplus
-                        </th>
-                    </tr>
-                </thead>
-
-
-                <tbody>
-                    @foreach ($monthlyPerformance as $month)
-                        <tr
-                            class="border-b border-gray-100 dark:border-gray-800"
-                        >
-                            <!-- MONTH -->
-                            <td class="px-5 py-4">
-                                <p
-                                    class="font-semibold text-gray-800 dark:text-white"
-                                >
-                                    {{ $month['month_full'] }}
-                                </p>
-
-                                <p
-                                    class="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                                >
-                                    {{ $month['month'] }} {{ $year }}
-                                </p>
-                            </td>
-
-
-                            <!-- REVENUE -->
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right font-medium text-gray-800 dark:text-gray-200"
-                            >
-                                Rp {{ number_format(
-                                    (float) $month['revenue'],
-                                    0,
-                                    ',',
-                                    '.'
-                                ) }}
-                            </td>
-
-
-                            <!-- RECEIVED -->
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right font-medium text-green-600 dark:text-green-400"
-                            >
-                                Rp {{ number_format(
-                                    (float) $month['received'],
-                                    0,
-                                    ',',
-                                    '.'
-                                ) }}
-                            </td>
-
-
-                            <!-- EXPENSE -->
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right font-medium text-orange-600 dark:text-orange-400"
-                            >
-                                Rp {{ number_format(
-                                    (float) $month['expense'],
-                                    0,
-                                    ',',
-                                    '.'
-                                ) }}
-                            </td>
-
-
-                            <!-- PROFIT -->
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right font-semibold
-                                {{
-                                    (float) $month['profit'] >= 0
-                                        ? 'text-green-600 dark:text-green-400'
-                                        : 'text-red-600 dark:text-red-400'
-                                }}"
-                            >
-                                Rp {{ number_format(
-                                    (float) $month['profit'],
-                                    0,
-                                    ',',
-                                    '.'
-                                ) }}
-                            </td>
-
-
-                            <!-- CASH SURPLUS -->
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right font-semibold
-                                {{
-                                    (float) $month['cash_surplus'] >= 0
-                                        ? 'text-green-600 dark:text-green-400'
-                                        : 'text-red-600 dark:text-red-400'
-                                }}"
-                            >
-                                Rp {{ number_format(
-                                    (float) $month['cash_surplus'],
-                                    0,
-                                    ',',
-                                    '.'
-                                ) }}
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-
-            </table>
-        </div>
-    </div>
-
-
-    <!-- ========================================================= -->
-    <!-- EXPENSE BREAKDOWN -->
-    <!-- ========================================================= -->
-
-    <div
-        class="mt-6 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
-    >
-        <div
-            class="border-b border-gray-200 px-6 py-4 dark:border-gray-800"
-        >
-            <h2
-                class="text-lg font-semibold text-gray-800 dark:text-white"
-            >
-                Expense Breakdown
-            </h2>
-
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Expense grouped by category.
-            </p>
-        </div>
-
-
-        <div class="overflow-x-auto">
-            <table class="w-full">
-
-                <thead>
-                    <tr
-                        class="border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950"
-                    >
-                        <th
-                            class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Category
-                        </th>
-
-                        <th
-                            class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Amount
-                        </th>
-                    </tr>
-                </thead>
-
-
-                <tbody>
-                    @forelse ($expenseByCategory as $category)
-                        <tr
-                            class="border-b border-gray-100 dark:border-gray-800"
-                        >
-                            <td
-                                class="px-6 py-4 font-medium text-gray-800 dark:text-white"
-                            >
-                                {{ $category['category'] }}
-                            </td>
-
-                            <td
-                                class="whitespace-nowrap px-6 py-4 text-right font-semibold text-orange-600 dark:text-orange-400"
-                            >
-                                Rp {{ number_format(
-                                    (float) $category['total'],
-                                    0,
-                                    ',',
-                                    '.'
-                                ) }}
-                            </td>
-                        </tr>
-
-                    @empty
-                        <tr>
-                            <td
-                                colspan="2"
-                                class="px-6 py-10 text-center text-sm text-gray-500 dark:text-gray-400"
-                            >
-                                No expense data found.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-
-            </table>
-        </div>
-    </div>
-
-
-    <!-- ========================================================= -->
-    <!-- INVOICE PERFORMANCE -->
-    <!-- ========================================================= -->
-
-    <div
-        class="mt-6 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
-    >
-        <div
-            class="border-b border-gray-200 px-6 py-4 dark:border-gray-800"
-        >
-            <div
-                class="flex flex-wrap items-center justify-between gap-3"
-            >
-                <div>
-                    <h2
-                        class="text-lg font-semibold text-gray-800 dark:text-white"
-                    >
-                        Invoice Performance
-                    </h2>
-
-                    <p
-                        class="mt-1 text-sm text-gray-500 dark:text-gray-400"
-                    >
+                    <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Financial Report</h1>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         Revenue, payment, expense, estimated profit, and cash position per invoice.
                     </p>
                 </div>
 
-                <div>
-                    @if ($eventStatus)
-                        <span
-                            class="text-xs font-medium text-gray-500 dark:text-gray-400"
-                        >
-                            Showing:
-                            <strong>
-                                {{ strtoupper($eventStatus) }}
-                            </strong>
-                        </span>
-                    @else
-                        <span
-                            class="text-xs font-medium text-gray-500 dark:text-gray-400"
-                        >
-                            Showing all event statuses
-                        </span>
-                    @endif
+                <div class="flex flex-wrap gap-2">
+                    <span class="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                        {{ $periodLabel }}
+                    </span>
+                    <span class="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                        {{ $businessUnitLabel }}
+                    </span>
+                    <span class="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                        {{ $eventStatusLabel }}
+                    </span>
                 </div>
             </div>
         </div>
 
+        {{-- Modern Filter --}}
+        <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div class="mb-4 flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Filters</h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Filter by period, business unit, and event status.
+                    </p>
+                </div>
 
-        <div class="overflow-x-auto">
-            <table class="w-full min-w-[1550px]">
-
-                <!-- ================================================= -->
-                <!-- TABLE HEADER -->
-                <!-- ================================================= -->
-
-                <thead>
-                    <tr
-                        class="border-b border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950"
+                @if (bouncer()->hasPermission('invoices.financial-report.export'))
+                    <a
+                        href="{{ route('admin.invoices.financial-report.export', ['year' => $year, 'month' => $month, 'business_unit' => $businessUnit, 'event_status' => $eventStatus]) }}"
+                        class="secondary-button rounded-lg px-4 py-2.5 text-sm"
                     >
-                        <th
-                            class="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Invoice
-                        </th>
+                        Export CSV
+                    </a>
+                @endif
+            </div>
 
-                        <th
-                            class="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+            <form method="GET" action="{{ route('admin.invoices.financial-report') }}">
+                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                        <label class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            Year
+                        </label>
+                        <select
+                            name="year"
+                            class="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-500 focus:bg-white dark:border-gray-700 dark:bg-gray-950 dark:text-white"
                         >
-                            Customer / Subject
-                        </th>
+                            @foreach ($availableYears as $availableYear)
+                                <option value="{{ $availableYear }}" @selected((int) $year === (int) $availableYear)>
+                                    {{ $availableYear }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                    <div>
+                        <label class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            Month
+                        </label>
+                        <select
+                            name="month"
+                            class="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-500 focus:bg-white dark:border-gray-700 dark:bg-gray-950 dark:text-white"
                         >
-                            Invoice Value
-                        </th>
+                            <option value="">All Months</option>
+                            @foreach (range(1, 12) as $monthNumber)
+                                <option value="{{ $monthNumber }}" @selected((int) ($month ?? 0) === $monthNumber)>
+                                    {{ \Carbon\Carbon::createFromDate($year, $monthNumber, 1)->format('F') }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                    <div>
+                        <label class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            Business Unit
+                        </label>
+                        <select
+                            name="business_unit"
+                            class="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-500 focus:bg-white dark:border-gray-700 dark:bg-gray-950 dark:text-white"
                         >
-                            Paid
-                        </th>
+                            <option value="">All Business Units</option>
+                            @foreach ($businessUnitOptions as $value => $label)
+                                <option value="{{ $value }}" @selected($businessUnit === $value)>
+                                    {{ $label }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Outstanding
-                        </th>
-
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Expense
-                        </th>
-
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Est. Profit
-                        </th>
-
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Cash Surplus
-                        </th>
-
-                        <th
-                            class="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
+                    <div>
+                        <label class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                             Event Status
-                        </th>
-
-                        <th
-                            class="px-5 py-4 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
+                        </label>
+                        <select
+                            name="event_status"
+                            class="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-500 focus:bg-white dark:border-gray-700 dark:bg-gray-950 dark:text-white"
                         >
-                            Payment
-                        </th>
+                            <option value="">All Events</option>
+                            <option value="confirm" @selected($eventStatus === 'confirm')>Confirm</option>
+                            <option value="prospect" @selected($eventStatus === 'prospect')>Prospect</option>
+                            <option value="cancel" @selected($eventStatus === 'cancel')>Cancel</option>
+                        </select>
+                    </div>
+                </div>
 
-                        <th
-                            class="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-                        >
-                            Action
-                        </th>
-                    </tr>
-                </thead>
+                <div class="mt-4 flex flex-wrap gap-3">
+                    <button type="submit" class="primary-button rounded-lg px-5 py-2.5 text-sm">
+                        Apply Filter
+                    </button>
 
+                    <a href="{{ route('admin.invoices.financial-report') }}" class="secondary-button rounded-lg px-5 py-2.5 text-sm">
+                        Reset
+                    </a>
+                </div>
+            </form>
+        </div>
 
-                <!-- ================================================= -->
-                <!-- TABLE BODY -->
-                <!-- ================================================= -->
+        {{-- Summary cards --}}
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Revenue</div>
+                <div class="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{{ $rupiah($financialSummary['revenue']) }}</div>
+                <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">Confirm invoice cohort</div>
+            </div>
 
-                <tbody>
-                    @forelse ($invoicePerformance as $invoice)
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Payment Received</div>
+                <div class="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">{{ $rupiah($financialSummary['received']) }}</div>
+                <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">Cash in during period</div>
+            </div>
 
-                        <tr
-                            class="border-b border-gray-100 transition hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-950/50"
-                        >
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Outstanding</div>
+                <div class="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">{{ $rupiah($financialSummary['outstanding']) }}</div>
+                <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">Current confirm balance</div>
+            </div>
 
-                            <!-- ===================================== -->
-                            <!-- INVOICE -->
-                            <!-- ===================================== -->
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Expense</div>
+                <div class="mt-2 text-3xl font-bold text-orange-600 dark:text-orange-400">{{ $rupiah($financialSummary['expense']) }}</div>
+                <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">Cash out during period</div>
+            </div>
 
-                            <td class="px-5 py-4">
-                                <a
-                                    href="{{ route('admin.invoices.show', $invoice['id']) }}"
-                                    class="font-semibold text-blue-600 hover:underline dark:text-blue-400"
-                                >
-                                    {{ $invoice['invoice_number'] }}
-                                </a>
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Est. Project Profit</div>
+                <div class="mt-2 text-3xl font-bold {{ (float) $financialSummary['estimated_profit'] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
+                    {{ $rupiah($financialSummary['estimated_profit']) }}
+                </div>
+                <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">Cohort less all project expense</div>
+            </div>
 
-                                @if ($invoice['issued_at'])
-                                    <p
-                                        class="mt-1 text-xs text-gray-500 dark:text-gray-400"
-                                    >
-                                        {{ $invoice['issued_at']->format('d M Y') }}
-                                    </p>
-                                @endif
-                            </td>
+            <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <div class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Cash Surplus</div>
+                <div class="mt-2 text-3xl font-bold {{ (float) $financialSummary['cash_surplus'] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
+                    {{ $rupiah($financialSummary['cash_surplus']) }}
+                </div>
+                <div class="mt-1 text-sm text-gray-500 dark:text-gray-400">Cash in minus cash out</div>
+            </div>
+        </div>
 
+        {{-- Invoice cohort --}}
+        <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+                <span class="font-semibold text-gray-800 dark:text-white">Invoice Cohort</span>
+                <span class="text-gray-600 dark:text-gray-300">Total: <strong>{{ $invoiceStats['total'] }}</strong></span>
+                <span class="text-green-600 dark:text-green-400">Paid: <strong>{{ $invoiceStats['paid'] }}</strong></span>
+                <span class="text-yellow-600 dark:text-yellow-400">Partial: <strong>{{ $invoiceStats['partial'] }}</strong></span>
+                <span class="text-red-600 dark:text-red-400">Unpaid: <strong>{{ $invoiceStats['unpaid'] }}</strong></span>
+            </div>
+        </div>
 
-                            <!-- ===================================== -->
-                            <!-- CUSTOMER -->
-                            <!-- ===================================== -->
+        {{-- Invoice performance --}}
+        <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div class="flex flex-col gap-2 border-b border-gray-200 px-5 py-4 dark:border-gray-800 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Invoice Performance</h2>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        Project metrics plus cash activity for the selected period.
+                    </p>
+                </div>
 
-                            <td class="px-5 py-4">
-                                <p
-                                    class="font-medium text-gray-800 dark:text-white"
-                                >
-                                    {{ $invoice['customer'] }}
-                                </p>
+                <div class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ $periodLabel }} · {{ $businessUnitLabel }}
+                </div>
+            </div>
 
-                                <p
-                                    class="mt-1 max-w-[250px] truncate text-xs text-gray-500 dark:text-gray-400"
-                                    title="{{ $invoice['subject'] }}"
-                                >
-                                    {{ $invoice['subject'] ?: '-' }}
-                                </p>
-                            </td>
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[1450px]">
+                    <thead>
+                        <tr class="bg-gray-50 dark:bg-gray-950">
+                            <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Invoice / Project</th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Customer / Subject</th>
+                            <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Invoice Value</th>
+                            <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Received</th>
+                            <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Outstanding</th>
+                            <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Expense</th>
+                            <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Est. Profit</th>
+                            <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Cash Surplus</th>
+                            <th class="px-6 py-4 text-center text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Status</th>
+                            <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Action</th>
+                        </tr>
+                    </thead>
 
+                    <tbody>
+                        @forelse ($invoicePerformance as $invoice)
+                            <tr class="border-t border-gray-100 dark:border-gray-800">
+                                <td class="px-6 py-5 align-top">
+                                    <a href="{{ route('admin.invoices.show', $invoice['id']) }}" class="text-base font-semibold text-blue-600 hover:underline dark:text-blue-400">
+                                        {{ $invoice['invoice_number'] }}
+                                    </a>
+                                    <div class="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
+                                        <div>{{ $invoice['project_code'] }}</div>
+                                        <div>{{ optional($invoice['issued_at'])->format('d M Y') }}</div>
+                                    </div>
+                                </td>
 
-                            <!-- ===================================== -->
-                            <!-- INVOICE VALUE -->
-                            <!-- ===================================== -->
-
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right font-medium text-gray-800 dark:text-gray-200"
-                            >
-                                Rp {{ number_format(
-                                    (float) $invoice['revenue'],
-                                    0,
-                                    ',',
-                                    '.'
-                                ) }}
-                            </td>
-
-
-                            <!-- ===================================== -->
-                            <!-- PAID -->
-                            <!-- ===================================== -->
-
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right font-medium text-green-600 dark:text-green-400"
-                            >
-                                Rp {{ number_format(
-                                    (float) $invoice['paid'],
-                                    0,
-                                    ',',
-                                    '.'
-                                ) }}
-                            </td>
-
-
-                            <!-- ===================================== -->
-                            <!-- OUTSTANDING -->
-                            <!-- ===================================== -->
-
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right font-medium
-                                {{
-                                    (float) $invoice['outstanding'] > 0
-                                        ? 'text-red-600 dark:text-red-400'
-                                        : 'text-gray-500 dark:text-gray-400'
-                                }}"
-                            >
-                                @if ($invoice['event_status'] === 'cancel')
-                                    Rp 0
-                                @elseif ($invoice['event_status'] === 'prospect')
-                                    -
-                                @else
-                                    Rp {{ number_format(
-                                        (float) $invoice['outstanding'],
-                                        0,
-                                        ',',
-                                        '.'
-                                    ) }}
-                                @endif
-                            </td>
-
-
-                            <!-- ===================================== -->
-                            <!-- EXPENSE -->
-                            <!-- ===================================== -->
-
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right font-medium text-orange-600 dark:text-orange-400"
-                            >
-                                Rp {{ number_format(
-                                    (float) $invoice['expense'],
-                                    0,
-                                    ',',
-                                    '.'
-                                ) }}
-                            </td>
-
-
-                            <!-- ===================================== -->
-                            <!-- ESTIMATED PROFIT -->
-                            <!-- ===================================== -->
-
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right"
-                            >
-                                @if ($invoice['event_status'] === 'cancel')
-
-                                    <p
-                                        class="font-semibold text-gray-400 dark:text-gray-500"
-                                    >
-                                        Rp 0
-                                    </p>
-
-                                    <p
-                                        class="mt-1 text-xs text-red-500"
-                                    >
-                                        Cancelled
-                                    </p>
-
-                                @else
-
-                                    <p
-                                        class="font-semibold
-                                        {{
-                                            (float) $invoice['profit'] >= 0
-                                                ? 'text-green-600 dark:text-green-400'
-                                                : 'text-red-600 dark:text-red-400'
-                                        }}"
-                                    >
-                                        Rp {{ number_format(
-                                            (float) $invoice['profit'],
-                                            0,
-                                            ',',
-                                            '.'
-                                        ) }}
-                                    </p>
-
-                                    @if ($invoice['event_status'] === 'prospect')
-                                        <p
-                                            class="mt-1 text-xs text-blue-500"
-                                        >
-                                            Potential
-                                        </p>
+                                <td class="px-6 py-5 align-top">
+                                    <div class="text-base font-semibold text-gray-800 dark:text-white">{{ $invoice['customer'] }}</div>
+                                    <div class="mt-2 max-w-[320px] text-sm leading-6 text-gray-500 dark:text-gray-400">{{ $invoice['subject'] }}</div>
+                                    @if (! empty($invoice['business_unit_label']))
+                                        <div class="mt-3">
+                                            <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                                                {{ $invoice['business_unit_label'] }}
+                                            </span>
+                                        </div>
                                     @endif
+                                </td>
 
-                                @endif
-                            </td>
+                                <td class="px-6 py-5 text-right align-top font-semibold text-gray-800 dark:text-white">{{ $rupiah($invoice['invoice_value']) }}</td>
 
+                                <td class="px-6 py-5 text-right align-top">
+                                    <div class="font-semibold text-green-600 dark:text-green-400">{{ $rupiah($invoice['received_in_period']) }}</div>
+                                    <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">To date: {{ $rupiah($invoice['paid_to_date']) }}</div>
+                                </td>
 
-                            <!-- ===================================== -->
-                            <!-- CASH SURPLUS -->
-                            <!-- ===================================== -->
+                                <td class="px-6 py-5 text-right align-top font-semibold text-red-600 dark:text-red-400">{{ $rupiah($invoice['outstanding']) }}</td>
 
-                            <td
-                                class="whitespace-nowrap px-5 py-4 text-right font-semibold
-                                {{
-                                    (float) $invoice['cash_surplus'] >= 0
-                                        ? 'text-green-600 dark:text-green-400'
-                                        : 'text-red-600 dark:text-red-400'
-                                }}"
-                            >
-                                Rp {{ number_format(
-                                    (float) $invoice['cash_surplus'],
-                                    0,
-                                    ',',
-                                    '.'
-                                ) }}
-                            </td>
+                                <td class="px-6 py-5 text-right align-top">
+                                    <div class="font-semibold text-orange-600 dark:text-orange-400">{{ $rupiah($invoice['expense_in_period']) }}</div>
+                                    <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">Project: {{ $rupiah($invoice['project_expense']) }}</div>
+                                </td>
 
+                                <td class="px-6 py-5 text-right align-top font-semibold {{ (float) $invoice['estimated_profit'] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">{{ $rupiah($invoice['estimated_profit']) }}</td>
 
-                            <!-- ===================================== -->
-                            <!-- EVENT STATUS -->
-                            <!-- ===================================== -->
+                                <td class="px-6 py-5 text-right align-top font-semibold {{ (float) $invoice['cash_surplus_in_period'] >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">{{ $rupiah($invoice['cash_surplus_in_period']) }}</td>
 
-                            <td class="px-5 py-4 text-center">
+                                <td class="px-6 py-5 text-center align-top">
+                                    <div class="flex flex-col items-center gap-2">
+                                        <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                                            {{ $invoice['event_status'] }}
+                                        </span>
+                                        <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                                            {{ $invoice['status'] }}
+                                        </span>
+                                    </div>
+                                </td>
 
-                                @if ($invoice['event_status'] === 'confirm')
-
-                                    <span
-                                        class="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                                    >
-                                        CONFIRM
-                                    </span>
-
-                                @elseif ($invoice['event_status'] === 'cancel')
-
-                                    <span
-                                        class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                                    >
-                                        CANCEL
-                                    </span>
-
-                                @else
-
-                                    <span
-                                        class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                                    >
-                                        PROSPECT
-                                    </span>
-
-                                @endif
-                            </td>
-
-
-                            <!-- ===================================== -->
-                            <!-- PAYMENT STATUS -->
-                            <!-- ===================================== -->
-
-                            <td class="px-5 py-4 text-center">
-
-                                @if ($invoice['status'] === 'paid')
-
-                                    <span
-                                        class="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                                    >
-                                        PAID
-                                    </span>
-
-                                @elseif ($invoice['status'] === 'partial')
-
-                                    <span
-                                        class="inline-flex rounded-full bg-yellow-400 px-3 py-1 text-xs font-bold text-gray-900"
-                                    >
-                                        PARTIAL
-                                    </span>
-
-                                @else
-
-                                    <span
-                                        class="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                                    >
-                                        UNPAID
-                                    </span>
-
-                                @endif
-                            </td>
-
-
-                            <!-- ===================================== -->
-                            <!-- ACTION -->
-                            <!-- ===================================== -->
-
-                            <td class="px-5 py-4 text-right">
-                                <a
-                                    href="{{ route('admin.invoices.show', $invoice['id']) }}"
-                                    class="text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400"
-                                >
-                                    View
-                                </a>
-                            </td>
-                        </tr>
-
-                    @empty
-
-                        <tr>
-                            <td
-                                colspan="11"
-                                class="px-6 py-14 text-center"
-                            >
-                                <p
-                                    class="font-medium text-gray-700 dark:text-gray-300"
-                                >
-                                    No financial data found.
-                                </p>
-
-                                <p
-                                    class="mt-1 text-sm text-gray-500 dark:text-gray-400"
-                                >
-                                    Try changing the year or event status filter.
-                                </p>
-                            </td>
-                        </tr>
-
-                    @endforelse
-                </tbody>
-
-            </table>
+                                <td class="px-6 py-5 text-right align-top">
+                                    <a href="{{ route('admin.invoices.show', $invoice['id']) }}" class="inline-flex rounded-lg bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/60">
+                                        View
+                                    </a>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="10" class="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                                    No invoice data for the selected filters.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
+
+        <div class="pt-1"></div>
+
+        {{-- Monthly analytics --}}
+        @if (! $month)
+            <details class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900" open>
+                <summary class="cursor-pointer px-5 py-4 text-base font-semibold text-gray-800 dark:text-white">
+                    Monthly Analytics — {{ $year }}
+                </summary>
+
+                <div class="overflow-x-auto border-t border-gray-200 dark:border-gray-800">
+                    <table class="w-full min-w-[920px]">
+                        <thead>
+                            <tr class="bg-gray-50 dark:bg-gray-950">
+                                <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Month</th>
+                                <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Revenue</th>
+                                <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Received</th>
+                                <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Expense</th>
+                                <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Est. Profit</th>
+                                <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Cash Surplus</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($monthlyPerformance as $row)
+                                <tr class="border-t border-gray-100 dark:border-gray-800">
+                                    <td class="px-6 py-4 font-medium text-gray-800 dark:text-white">{{ $row['month_full'] }}</td>
+                                    <td class="px-6 py-4 text-right text-gray-800 dark:text-gray-200">{{ $rupiah($row['revenue']) }}</td>
+                                    <td class="px-6 py-4 text-right text-green-600 dark:text-green-400">{{ $rupiah($row['received']) }}</td>
+                                    <td class="px-6 py-4 text-right text-orange-600 dark:text-orange-400">{{ $rupiah($row['expense']) }}</td>
+                                    <td class="px-6 py-4 text-right text-gray-800 dark:text-gray-200">{{ $rupiah($row['profit']) }}</td>
+                                    <td class="px-6 py-4 text-right text-gray-800 dark:text-gray-200">{{ $rupiah($row['cash_surplus']) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        @endif
+
+        <div class="pt-1"></div>
+
+        {{-- Expense breakdown --}}
+        <details class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <summary class="cursor-pointer px-5 py-4 text-base font-semibold text-gray-800 dark:text-white">
+                Expense Breakdown
+            </summary>
+
+            <div class="border-t border-gray-200 p-5 dark:border-gray-800">
+                @forelse ($expenseByCategory as $expense)
+                    <div class="flex items-center justify-between gap-4 border-b border-gray-100 py-3.5 last:border-b-0 dark:border-gray-800">
+                        <span class="text-sm font-medium text-gray-600 dark:text-gray-300">{{ $expense['category'] }}</span>
+                        <span class="text-base font-semibold text-orange-600 dark:text-orange-400">{{ $rupiah($expense['total']) }}</span>
+                    </div>
+                @empty
+                    <p class="text-sm text-gray-500 dark:text-gray-400">No expense in this selected period.</p>
+                @endforelse
+            </div>
+        </details>
+
+        <div class="pt-1"></div>
+
+        {{-- How calculations work --}}
+        <details class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <summary class="cursor-pointer px-5 py-4 text-base font-semibold text-gray-800 dark:text-white">
+                Financial Calculation
+            </summary>
+
+            <div class="grid gap-4 border-t border-gray-200 p-5 sm:grid-cols-2 dark:border-gray-800">
+                <div>
+                    <div class="font-semibold text-gray-800 dark:text-white">Revenue</div>
+                    <div class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Invoice value from confirmed invoice cohort.</div>
+                </div>
+                <div>
+                    <div class="font-semibold text-gray-800 dark:text-white">Payment Received</div>
+                    <div class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">All payment transactions actually received in the selected period.</div>
+                </div>
+                <div>
+                    <div class="font-semibold text-gray-800 dark:text-white">Outstanding</div>
+                    <div class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Remaining balance of confirmed invoices in the selected cohort.</div>
+                </div>
+                <div>
+                    <div class="font-semibold text-gray-800 dark:text-white">Expense</div>
+                    <div class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Actual recorded expenses in the selected period.</div>
+                </div>
+                <div>
+                    <div class="font-semibold text-gray-800 dark:text-white">Estimated Project Profit</div>
+                    <div class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Confirm + Prospect minus all project expenses. Cancel is excluded.</div>
+                </div>
+                <div>
+                    <div class="font-semibold text-gray-800 dark:text-white">Cash Surplus</div>
+                    <div class="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">Payment received in period minus expense in the same period.</div>
+                </div>
+            </div>
+        </details>
     </div>
-
-
-    <!-- ========================================================= -->
-    <!-- FINANCIAL DEFINITIONS -->
-    <!-- ========================================================= -->
-
-    <div
-        class="mt-6 rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900"
-    >
-        <h2
-            class="text-lg font-semibold text-gray-800 dark:text-white"
-        >
-            Financial Calculation
-        </h2>
-
-        <div
-            class="mt-4 grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-3"
-        >
-
-            <div>
-                <p
-                    class="font-semibold text-gray-800 dark:text-white"
-                >
-                    Revenue
-                </p>
-
-                <p
-                    class="mt-1 text-gray-500 dark:text-gray-400"
-                >
-                    Invoice value dari event Confirm.
-                </p>
-            </div>
-
-
-            <div>
-                <p
-                    class="font-semibold text-gray-800 dark:text-white"
-                >
-                    Payment Received
-                </p>
-
-                <p
-                    class="mt-1 text-gray-500 dark:text-gray-400"
-                >
-                    Seluruh pembayaran aktual yang sudah diterima, termasuk Partial dan Paid.
-                </p>
-            </div>
-
-
-            <div>
-                <p
-                    class="font-semibold text-gray-800 dark:text-white"
-                >
-                    Outstanding
-                </p>
-
-                <p
-                    class="mt-1 text-gray-500 dark:text-gray-400"
-                >
-                    Sisa pembayaran invoice Confirm.
-                </p>
-            </div>
-
-
-            <div>
-                <p
-                    class="font-semibold text-gray-800 dark:text-white"
-                >
-                    Expense
-                </p>
-
-                <p
-                    class="mt-1 text-gray-500 dark:text-gray-400"
-                >
-                    Pengeluaran aktual yang sudah dicatat.
-                </p>
-            </div>
-
-
-            <div>
-                <p
-                    class="font-semibold text-gray-800 dark:text-white"
-                >
-                    Estimated Profit
-                </p>
-
-                <p
-                    class="mt-1 text-gray-500 dark:text-gray-400"
-                >
-                    Confirm + Prospect dikurangi expense. Cancel tidak masuk perhitungan.
-                </p>
-            </div>
-
-
-            <div>
-                <p
-                    class="font-semibold text-gray-800 dark:text-white"
-                >
-                    Cash Surplus
-                </p>
-
-                <p
-                    class="mt-1 text-gray-500 dark:text-gray-400"
-                >
-                    Payment Received dikurangi Expense.
-                </p>
-            </div>
-
-        </div>
-    </div>
-
 </x-admin::layouts>

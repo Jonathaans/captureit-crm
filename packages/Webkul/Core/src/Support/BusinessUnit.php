@@ -10,21 +10,11 @@ final class BusinessUnit
 
     public const CAPTURE_IT = 'capture_it';
 
-    /**
-     * Stable values stored in database.
-     */
     public static function values(): array
     {
-        return [
-            self::VARBEL,
-            self::VARTECH,
-            self::CAPTURE_IT,
-        ];
+        return array_keys(self::options());
     }
 
-    /**
-     * Labels used in backend form/filter only.
-     */
     public static function options(): array
     {
         return [
