@@ -109,6 +109,33 @@ class InventoryMovementController extends Controller
                 ]);
             }
 
+            if (! $isIncoming) {
+                $reserved = (float) DB::table(
+                    'delivery_order_inventory_allocations'
+                )
+                    ->where('inventory_item_id', $item->id)
+                    ->where('tracking_type', 'quantity')
+                    ->whereIn('status', [
+                        'allocated',
+                        'picked',
+                        'out',
+                        'return_pending',
+                    ])
+                    ->sum('quantity');
+
+                if ($after + 0.0001 < $reserved) {
+                    throw ValidationException::withMessages([
+                        'quantity' => sprintf(
+                            'Stock tidak dapat dikurangi sampai %s %s karena %s %s sedang reserved untuk Surat Jalan.',
+                            $this->formatQuantity($after),
+                            $item->unit,
+                            $this->formatQuantity($reserved),
+                            $item->unit
+                        ),
+                    ]);
+                }
+            }
+
             $item->update([
                 'quantity_on_hand' => $after,
             ]);

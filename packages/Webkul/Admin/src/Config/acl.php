@@ -245,6 +245,18 @@ return [
     'name'  => 'admin::app.acl.cancel-delivery-order',
     'route' => 'admin.delivery-orders.cancel',
     'sort'  => 8,
+], [
+    /*
+     * Allocate / release actual warehouse inventory for a Surat Jalan.
+     */
+    'key'   => 'delivery-orders.inventory-allocation',
+    'name'  => 'Inventory Allocation',
+    'route' => [
+        'admin.delivery-orders.inventory-allocation.edit',
+        'admin.delivery-orders.inventory-allocation.update',
+        'admin.delivery-orders.inventory-allocation.release',
+    ],
+    'sort'  => 9,
 ],
 
 /*

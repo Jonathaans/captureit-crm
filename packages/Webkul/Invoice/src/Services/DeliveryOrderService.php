@@ -277,9 +277,24 @@ class DeliveryOrderService
                 $quantity = $templateQuantity * $productQuantity;
 
                 /*
+                 * Inventory master yang dipetakan dari Equipment Template.
+                 *
+                 * Null berarti requirement masih berupa text dan belum
+                 * terhubung ke Inventory Master.
+                 */
+                $inventoryItemId = $templateItem->inventory_item_id
+                    ? (int) $templateItem->inventory_item_id
+                    : null;
+
+                /*
                 |--------------------------------------------------------------------------
                 | Merge Key
                 |--------------------------------------------------------------------------
+                |
+                | inventory_item_id ikut menjadi bagian merge key.
+                | Dua baris text yang sama tetapi menunjuk master inventory
+                | berbeda tidak boleh digabung menjadi satu requirement.
+                |
                 */
 
                 $mergeKey = mb_strtolower(
@@ -290,6 +305,8 @@ class DeliveryOrderService
                     .$unit
                     .'|'
                     .$notes
+                    .'|inventory:'
+                    .($inventoryItemId ?? 'none')
                 );
 
                 if (isset($equipment[$mergeKey])) {
@@ -316,6 +333,7 @@ class DeliveryOrderService
 
                 $equipment[$mergeKey] = [
                     'product_id' => (int) $invoiceItem->product_id,
+                    'inventory_item_id' => $inventoryItemId,
                     'sku' => $sku !== '' ? $sku : null,
 
                     'name' => $name,
@@ -350,6 +368,7 @@ class DeliveryOrderService
                 'delivery_order_id' => $deliveryOrder->id,
 
                 'product_id' => $item['product_id'],
+                'inventory_item_id' => $item['inventory_item_id'],
                 'sku' => $item['sku'],
 
                 'name' => $item['name'],

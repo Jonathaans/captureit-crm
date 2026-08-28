@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderController;
+use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderInventoryController;
 
 Route::controller(DeliveryOrderController::class)
     ->prefix('delivery-orders')
@@ -67,4 +68,23 @@ Route::controller(DeliveryOrderController::class)
 
         Route::get('{id}', 'show')
             ->name('admin.delivery-orders.show');
+    });
+
+
+/*
+|--------------------------------------------------------------------------
+| Delivery Order > Inventory Allocation
+|--------------------------------------------------------------------------
+*/
+Route::controller(DeliveryOrderInventoryController::class)
+    ->prefix('delivery-orders')
+    ->group(function () {
+        Route::get('{id}/inventory-allocation', 'edit')
+            ->name('admin.delivery-orders.inventory-allocation.edit');
+
+        Route::put('{id}/inventory-allocation/{itemId}', 'update')
+            ->name('admin.delivery-orders.inventory-allocation.update');
+
+        Route::delete('{id}/inventory-allocation/{itemId}', 'release')
+            ->name('admin.delivery-orders.inventory-allocation.release');
     });

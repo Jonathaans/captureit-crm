@@ -563,105 +563,11 @@
         </div>
 
         {{-- ===================================================== --}}
-        {{-- EQUIPMENT --}}
-        {{-- ===================================================== --}}
+        {{-- EQUIPMENT / INVENTORY REQUIREMENT --}}
+        @include('admin::delivery-orders.partials.equipment-show')
 
-        <div
-            class="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
-        >
-            <div class="mb-5">
-                <p class="text-base font-semibold text-gray-800 dark:text-white">
-                    Equipment / Items
-                </p>
 
-                <p class="mt-1 text-xs text-gray-500">
-                    Barang yang dibawa untuk project ini.
-                </p>
-            </div>
-
-            @if ($deliveryOrder->items->isEmpty())
-                <div
-                    class="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-700"
-                >
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-300">
-                        Belum ada equipment.
-                    </p>
-
-                    <p class="mt-1 text-xs text-gray-500">
-                        Equipment dapat ditambahkan melalui Edit Surat Jalan.
-                    </p>
-                </div>
-            @else
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead>
-                            <tr
-                                class="border-b border-gray-200 dark:border-gray-800"
-                            >
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
-                                    #
-                                </th>
-
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
-                                    Item
-                                </th>
-
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
-                                    Description
-                                </th>
-
-                                <th class="px-3 py-3 text-right text-xs font-semibold text-gray-500">
-                                    Qty
-                                </th>
-
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
-                                    Unit
-                                </th>
-
-                                <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
-                                    Notes
-                                </th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            @foreach ($deliveryOrder->items as $item)
-                                <tr
-                                    class="border-b border-gray-100 dark:border-gray-800"
-                                >
-                                    <td class="px-3 py-4 text-sm text-gray-500">
-                                        {{ $loop->iteration }}
-                                    </td>
-
-                                    <td class="px-3 py-4 text-sm font-medium text-gray-800 dark:text-white">
-                                        {{ $item->name }}
-                                    </td>
-
-                                    <td class="px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
-                                        {{ $item->description ?: '-' }}
-                                    </td>
-
-                                    <td class="px-3 py-4 text-right text-sm text-gray-800 dark:text-white">
-                                        {{ rtrim(rtrim($item->quantity, '0'), '.') }}
-                                    </td>
-
-                                    <td class="px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
-                                        {{ $item->unit }}
-                                    </td>
-
-                                    <td class="px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
-                                        {{ $item->notes ?: '-' }}
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @endif
-        </div>
-
-        {{-- ===================================================== --}}
-        {{-- NOTES --}}
+        {{-- ===================================================== --}}{{-- NOTES --}}
         {{-- ===================================================== --}}
 
         <div

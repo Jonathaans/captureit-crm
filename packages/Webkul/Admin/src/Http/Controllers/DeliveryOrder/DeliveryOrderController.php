@@ -13,6 +13,8 @@ use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\Core\Traits\PDFHandler;
 use Webkul\Invoice\Models\DeliveryOrder;
 use Webkul\Invoice\Models\DeliveryOrderItem;
+use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
+use Webkul\Invoice\Services\DeliveryOrderInventoryAllocationService;
 
 class DeliveryOrderController extends Controller
 {
@@ -95,6 +97,32 @@ class DeliveryOrderController extends Controller
      */
     public function issue(int $id): RedirectResponse
     {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $allocationService = app(
+            DeliveryOrderInventoryAllocationService::class
+        );
+
+        if (! $allocationService->isComplete($deliveryOrder)) {
+            $incomplete = $allocationService
+                ->incompleteItemNames($deliveryOrder);
+
+            $suffix = empty($incomplete)
+                ? ''
+                : ' Belum lengkap: '.implode(', ', $incomplete).'.';
+
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $deliveryOrder->id
+                )
+                ->with(
+                    'error',
+                    'Surat Jalan belum dapat di-issue karena inventory allocation belum lengkap.'
+                    .$suffix
+                );
+        }
+
         return $this->transitionStatus(
             $id,
             'issued',
@@ -111,6 +139,23 @@ class DeliveryOrderController extends Controller
      */
     public function markDelivered(int $id): RedirectResponse
     {
+        $hasAllocatedInventory = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $id)
+            ->where('status', 'allocated')
+            ->exists();
+
+        if ($hasAllocatedInventory) {
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $id
+                )
+                ->with(
+                    'error',
+                    'Barang masih berstatus ALLOCATED. Selesaikan Picking / OUT sebelum menandai Surat Jalan sebagai delivered.'
+                );
+        }
+
         return $this->transitionStatus(
             $id,
             'delivered',
@@ -221,6 +266,15 @@ class DeliveryOrderController extends Controller
                     $data['returned_at'] = now();
                 }
 
+                if ($nextStatus === 'cancelled') {
+                    app(
+                        DeliveryOrderInventoryAllocationService::class
+                    )->releaseAll(
+                        $deliveryOrder,
+                        auth()->guard('user')->id()
+                    );
+                }
+
                 $deliveryOrder->update($data);
             }
         );
@@ -244,6 +298,26 @@ class DeliveryOrderController extends Controller
         int $id
     ): RedirectResponse {
         $deliveryOrder = DeliveryOrder::findOrFail($id);
+
+        $hasActiveAllocations = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->whereIn(
+                'status',
+                DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+            )
+            ->exists();
+
+        if ($hasActiveAllocations) {
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $deliveryOrder->id
+                )
+                ->with(
+                    'error',
+                    'Surat Jalan memiliki inventory allocation aktif. Release allocation terlebih dahulu sebelum mengubah Equipment / Items.'
+                );
+        }
 
         $validated = $request->validate([
             'recipient_name' => [
@@ -309,6 +383,12 @@ class DeliveryOrderController extends Controller
             'items' => [
                 'nullable',
                 'array',
+            ],
+
+            'items.*.inventory_item_id' => [
+                'nullable',
+                'integer',
+                'exists:inventory_items,id',
             ],
 
             'items.*.name' => [
@@ -407,6 +487,11 @@ class DeliveryOrderController extends Controller
                         'delivery_order_id' =>
                             $deliveryOrder->id,
 
+                        'inventory_item_id' =>
+                            ! empty($item['inventory_item_id'])
+                                ? (int) $item['inventory_item_id']
+                                : null,
+
                         'name' =>
                             $name,
 
@@ -454,7 +539,8 @@ class DeliveryOrderController extends Controller
             'person',
             'user',
             'creator',
-            'items',
+            'items.inventoryItem',
+            'items.allocations.inventoryAsset',
         ])->findOrFail($id);
     }
 }

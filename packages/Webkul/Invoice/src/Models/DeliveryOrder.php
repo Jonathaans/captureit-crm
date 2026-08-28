@@ -107,4 +107,15 @@ class DeliveryOrder extends Model implements DeliveryOrderContract
             'delivery_order_id'
         )->orderBy('sort_order');
     }
+
+    /**
+     * Seluruh allocation inventory milik Surat Jalan.
+     */
+    public function inventoryAllocations()
+    {
+        return $this->hasMany(
+            DeliveryOrderInventoryAllocation::class,
+            'delivery_order_id'
+        );
+    }
 }

@@ -149,6 +149,12 @@ class ProductController extends Controller
             'array',
         ],
 
+        'equipment_items.*.inventory_item_id' => [
+            'nullable',
+            'integer',
+            'exists:inventory_items,id',
+        ],
+
         'equipment_items.*.name' => [
             'nullable',
             'string',
@@ -292,6 +298,11 @@ class ProductController extends Controller
                 ProductEquipmentTemplateItem::create([
                     'template_id' =>
                         $template->id,
+
+                    'inventory_item_id' =>
+                        ! empty($item['inventory_item_id'])
+                            ? (int) $item['inventory_item_id']
+                            : null,
 
                     'name' =>
                         $name,
