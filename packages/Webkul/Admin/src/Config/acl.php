@@ -169,8 +169,8 @@ return [
 | Delivery Orders
 |--------------------------------------------------------------------------
 |
-| Hak akses Delivery Order dipisah per aksi agar setiap role
-| dapat memiliki kewenangan yang berbeda.
+| Simplified warehouse flow:
+| Request -> Scan Allocation -> Issue/Auto OUT -> Delivered -> Scan Return.
 |
 */
 [
@@ -179,25 +179,16 @@ return [
     'route' => 'admin.delivery-orders.index',
     'sort'  => 5,
 ], [
-    /*
-     * View Delivery Order.
-     */
     'key'   => 'delivery-orders.view',
     'name'  => 'admin::app.acl.view',
     'route' => 'admin.delivery-orders.show',
     'sort'  => 1,
 ], [
-    /*
-     * Generate Surat Jalan from Invoice.
-     */
     'key'   => 'delivery-orders.generate',
     'name'  => 'admin::app.acl.generate-delivery-order',
     'route' => 'admin.invoices.delivery-order.generate',
     'sort'  => 2,
 ], [
-    /*
-     * Edit Draft Surat Jalan.
-     */
     'key'   => 'delivery-orders.edit',
     'name'  => 'admin::app.acl.edit',
     'route' => [
@@ -206,16 +197,13 @@ return [
     ],
     'sort'  => 3,
 ], [
-    /*
-     * Print Surat Jalan.
-     */
     'key'   => 'delivery-orders.print',
     'name'  => 'admin::app.acl.print',
     'route' => 'admin.delivery-orders.print',
     'sort'  => 4,
 ], [
     /*
-     * Draft -> Issued.
+     * Draft -> Issued and inventory automatically becomes OUT.
      */
     'key'   => 'delivery-orders.issue',
     'name'  => 'admin::app.acl.issue-delivery-order',
@@ -223,93 +211,57 @@ return [
     'sort'  => 5,
 ], [
     /*
-     * Issued -> Delivered.
+     * Administrative delivery status only.
      */
     'key'   => 'delivery-orders.delivered',
     'name'  => 'admin::app.acl.mark-delivered',
     'route' => 'admin.delivery-orders.delivered',
     'sort'  => 6,
 ], [
-    /*
-     * Delivered -> Returned.
-     */
     'key'   => 'delivery-orders.returned',
     'name'  => 'admin::app.acl.mark-returned',
     'route' => 'admin.delivery-orders.returned',
     'sort'  => 7,
 ], [
-    /*
-     * Draft / Issued -> Cancelled.
-     */
     'key'   => 'delivery-orders.cancel',
     'name'  => 'admin::app.acl.cancel-delivery-order',
     'route' => 'admin.delivery-orders.cancel',
     'sort'  => 8,
 ], [
     /*
-     * Allocate / release actual warehouse inventory for a Surat Jalan.
+     * Serialized asset allocation is primarily driven by global QR scan.
      */
     'key'   => 'delivery-orders.inventory-allocation',
     'name'  => 'Inventory Allocation',
     'route' => [
         'admin.delivery-orders.inventory-allocation.edit',
+        'admin.delivery-orders.inventory-allocation.scan',
         'admin.delivery-orders.inventory-allocation.update',
         'admin.delivery-orders.inventory-allocation.release',
     ],
     'sort'  => 9,
-],
- [
-    /*
-     * Warehouse picking after Surat Jalan is issued.
-     */
-    'key'   => 'delivery-orders.picking',
-    'name'  => 'Picking Inventory',
-    'route' => [
-        'admin.delivery-orders.picking.show',
-        'admin.delivery-orders.picking.mark',
-        'admin.delivery-orders.picking.mark-all',
-        'admin.delivery-orders.picking.scan-pick',
-    ],
-    'sort'  => 10,
 ], [
     /*
-     * Confirm picked inventory physically leaves warehouse.
-     */
-    'key'   => 'delivery-orders.out',
-    'name'  => 'Confirm Inventory OUT',
-    'route' => [
-        'admin.delivery-orders.picking.out',
-        'admin.delivery-orders.picking.scan-out',
-    ],
-    'sort'  => 11,
-], [
-    'key'   => 'delivery-orders.picking.print',
-    'name'  => 'Print Picking List',
-    'route' => 'admin.delivery-orders.picking.print',
-    'sort'  => 12,
-],
- [
-    /*
-     * Start return and view return workflow.
+     * Return page only. No Start Return action is required.
      */
     'key'   => 'delivery-orders.return',
     'name'  => 'Return Inventory',
     'route' => [
         'admin.delivery-orders.return.show',
-        'admin.delivery-orders.return.start',
     ],
-    'sort'  => 12,
+    'sort'  => 10,
 ], [
     /*
-     * Physical Check-In after inventory becomes RETURN PENDING.
+     * Direct QR Check-In, batch quantity return, and Missing fallback.
      */
     'key'   => 'delivery-orders.return.check-in',
     'name'  => 'Check-In Inventory',
     'route' => [
         'admin.delivery-orders.return.check-in',
         'admin.delivery-orders.return.scan-check-in',
+        'admin.delivery-orders.return.finalize',
     ],
-    'sort'  => 1,
+    'sort'  => 11,
 ],
 
 /*

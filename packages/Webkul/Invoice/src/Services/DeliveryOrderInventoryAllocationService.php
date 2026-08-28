@@ -13,6 +13,180 @@ use Webkul\Warehouse\Models\InventoryStockMovement;
 
 class DeliveryOrderInventoryAllocationService
 {
+    /**
+     * Allocate satu serialized asset dari hasil scan QR / barcode.
+     *
+     * Scan tidak mengganti allocation lain yang sudah ada. Ia hanya
+     * menambahkan satu asset ke requirement yang masih kurang.
+     */
+    public function allocateSerializedAsset(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderItem $deliveryOrderItem,
+        InventoryAsset $inventoryAsset,
+        ?int $performedBy = null
+    ): DeliveryOrderInventoryAllocation {
+        $this->assertDraft($deliveryOrder);
+
+        $inventoryItem = $this->getMappedInventoryItem(
+            $deliveryOrderItem
+        );
+
+        if (! $inventoryItem->isSerialized()) {
+            throw ValidationException::withMessages([
+                'barcode' => 'Requirement ini bukan serialized asset.',
+            ]);
+        }
+
+        $need = (float) $deliveryOrderItem->quantity;
+
+        if (floor($need) !== $need) {
+            throw ValidationException::withMessages([
+                'barcode' => 'Requirement serialized harus menggunakan quantity bilangan bulat.',
+            ]);
+        }
+
+        $requiredCount = (int) $need;
+
+        return DB::transaction(function () use (
+            $deliveryOrder,
+            $deliveryOrderItem,
+            $inventoryItem,
+            $inventoryAsset,
+            $performedBy,
+            $requiredCount
+        ) {
+            /*
+             * Lock allocation requirement terlebih dahulu supaya dua scan
+             * yang hampir bersamaan tidak dapat melewati batas NEED.
+             */
+            $currentAllocations = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->where('delivery_order_item_id', $deliveryOrderItem->id)
+                ->where('tracking_type', 'serialized')
+                ->whereIn(
+                    'status',
+                    DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                )
+                ->lockForUpdate()
+                ->get();
+
+            $alreadyAllocated = $currentAllocations
+                ->firstWhere(
+                    'inventory_asset_id',
+                    $inventoryAsset->id
+                );
+
+            if ($alreadyAllocated) {
+                return $alreadyAllocated;
+            }
+
+            if ($currentAllocations->count() >= $requiredCount) {
+                throw ValidationException::withMessages([
+                    'barcode' => sprintf(
+                        'Requirement %s sudah lengkap: %d / %d asset.',
+                        $deliveryOrderItem->name,
+                        $currentAllocations->count(),
+                        $requiredCount
+                    ),
+                ]);
+            }
+
+            $lockedAsset = InventoryAsset::query()
+                ->lockForUpdate()
+                ->findOrFail($inventoryAsset->id);
+
+            if (
+                (int) $lockedAsset->inventory_item_id
+                !== (int) $inventoryItem->id
+            ) {
+                throw ValidationException::withMessages([
+                    'barcode' => sprintf(
+                        'Asset %s tidak cocok dengan Inventory Item %s.',
+                        $lockedAsset->asset_code,
+                        $inventoryItem->code
+                    ),
+                ]);
+            }
+
+            /*
+             * Defensive check: satu asset tidak boleh aktif di dua SJ.
+             */
+            $otherActiveAllocation = DeliveryOrderInventoryAllocation::query()
+                ->where('inventory_asset_id', $lockedAsset->id)
+                ->whereIn(
+                    'status',
+                    DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                )
+                ->lockForUpdate()
+                ->first();
+
+            if ($otherActiveAllocation) {
+                if (
+                    (int) $otherActiveAllocation->delivery_order_id
+                    === (int) $deliveryOrder->id
+                ) {
+                    return $otherActiveAllocation;
+                }
+
+                throw ValidationException::withMessages([
+                    'barcode' => sprintf(
+                        'Asset %s sudah terikat ke Surat Jalan lain.',
+                        $lockedAsset->asset_code
+                    ),
+                ]);
+            }
+
+            if ($lockedAsset->status !== 'available') {
+                throw ValidationException::withMessages([
+                    'barcode' => sprintf(
+                        'Asset %s tidak AVAILABLE. Status saat ini: %s.',
+                        $lockedAsset->asset_code,
+                        strtoupper($lockedAsset->status)
+                    ),
+                ]);
+            }
+
+            $lockedAsset->update([
+                'status' => 'allocated',
+            ]);
+
+            $allocation = DeliveryOrderInventoryAllocation::create([
+                'delivery_order_id'      => $deliveryOrder->id,
+                'delivery_order_item_id' => $deliveryOrderItem->id,
+                'inventory_item_id'      => $inventoryItem->id,
+                'inventory_asset_id'     => $lockedAsset->id,
+                'tracking_type'          => 'serialized',
+                'quantity'               => 1,
+                'status'                 => 'allocated',
+                'allocated_by'           => $performedBy,
+                'allocated_at'           => now(),
+                'notes'                  => sprintf(
+                    'Allocated by scan for %s / %s.',
+                    $deliveryOrder->delivery_order_number,
+                    $deliveryOrderItem->name
+                ),
+            ]);
+
+            $this->recordMovement(
+                $deliveryOrder,
+                $inventoryItem,
+                $lockedAsset,
+                'allocated',
+                1,
+                'available',
+                'allocated',
+                $performedBy,
+                sprintf(
+                    'Scanned allocation to %s / %s.',
+                    $deliveryOrder->delivery_order_number,
+                    $deliveryOrderItem->name
+                )
+            );
+
+            return $allocation;
+        });
+    }
+
     public function syncSerialized(
         DeliveryOrder $deliveryOrder,
         DeliveryOrderItem $deliveryOrderItem,
@@ -196,6 +370,57 @@ class DeliveryOrderInventoryAllocationService
                 );
             }
         });
+    }
+
+    /**
+     * Auto reserve semua quantity-tracked requirement yang stoknya cukup.
+     *
+     * Tidak ada tombol Save per quantity pada simplified warehouse flow.
+     * Bila stock tidak cukup, item dibiarkan INCOMPLETE agar Surat Jalan
+     * tidak dapat di-issue.
+     *
+     * @return array<int, string> Error per Delivery Order Item ID.
+     */
+    public function autoReserveQuantityRequirements(
+        DeliveryOrder $deliveryOrder,
+        ?int $performedBy = null
+    ): array {
+        $this->assertDraft($deliveryOrder);
+
+        $deliveryOrder->loadMissing([
+            'items.inventoryItem',
+        ]);
+
+        $errors = [];
+
+        foreach ($deliveryOrder->items as $item) {
+            $inventoryItem = $item->inventoryItem;
+
+            if (
+                ! $inventoryItem
+                || ! $inventoryItem->isQuantityTracked()
+            ) {
+                continue;
+            }
+
+            try {
+                $this->syncQuantity(
+                    $deliveryOrder,
+                    $item,
+                    (float) $item->quantity,
+                    $performedBy
+                );
+            } catch (ValidationException $exception) {
+                $messages = $exception->errors();
+
+                $errors[$item->id] = collect($messages)
+                    ->flatten()
+                    ->first()
+                    ?: 'Stock quantity tidak cukup untuk auto reserve.';
+            }
+        }
+
+        return $errors;
     }
 
     public function syncQuantity(

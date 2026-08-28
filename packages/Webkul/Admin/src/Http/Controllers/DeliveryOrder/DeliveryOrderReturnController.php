@@ -2,6 +2,7 @@
 
 namespace Webkul\Admin\Http\Controllers\DeliveryOrder;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -29,7 +30,6 @@ class DeliveryOrderReturnController extends Controller
                 'deliveryOrderItem',
                 'inventoryItem',
                 'inventoryAsset',
-                'returnPendingBy',
                 'checkedInBy',
             ])
             ->where('delivery_order_id', $deliveryOrder->id)
@@ -75,26 +75,6 @@ class DeliveryOrderReturnController extends Controller
         );
     }
 
-    public function start(int $id): RedirectResponse
-    {
-        $deliveryOrder = $this->findDeliveryOrder($id);
-
-        $this->returnService->startReturn(
-            $deliveryOrder,
-            auth()->guard('user')->id()
-        );
-
-        session()->flash(
-            'success',
-            'Proses return dimulai. Inventory sekarang berstatus RETURN PENDING.'
-        );
-
-        return redirect()->route(
-            'admin.delivery-orders.return.show',
-            $deliveryOrder->id
-        );
-    }
-
     /**
      * Scanner Check-In for serialized assets.
      *
@@ -105,7 +85,7 @@ class DeliveryOrderReturnController extends Controller
     public function scanCheckIn(
         Request $request,
         int $id
-    ): RedirectResponse {
+    ): JsonResponse|RedirectResponse {
         $deliveryOrder = $this->findDeliveryOrder($id);
 
         $validated = $request->validate([
@@ -114,22 +94,11 @@ class DeliveryOrderReturnController extends Controller
                 'string',
                 'max:100',
             ],
-            'condition' => [
-                'required',
-                Rule::in([
-                    'good',
-                    'fair',
-                    'damaged',
-                ]),
-            ],
-            'notes' => [
-                'nullable',
-                'string',
-                'max:2000',
-            ],
         ]);
 
-        $barcode = trim($validated['barcode']);
+        $barcode = trim(
+            $validated['barcode']
+        );
 
         $asset = InventoryAsset::query()
             ->where(function ($query) use ($barcode) {
@@ -141,61 +110,160 @@ class DeliveryOrderReturnController extends Controller
 
         if (! $asset) {
             throw ValidationException::withMessages([
-                'barcode' => 'Barcode / Asset Code tidak ditemukan: '.$barcode,
+                'barcode' => 'QR / Barcode / Asset Code tidak ditemukan: '.$barcode,
             ]);
         }
 
         $allocation = DeliveryOrderInventoryAllocation::query()
+            ->with([
+                'deliveryOrderItem',
+                'inventoryItem',
+                'inventoryAsset',
+            ])
             ->where('delivery_order_id', $deliveryOrder->id)
             ->where('tracking_type', 'serialized')
             ->where('inventory_asset_id', $asset->id)
-            ->whereIn('status', [
-                'return_pending',
-                'returned',
-            ])
+            ->whereIn(
+                'status',
+                [
+                    'out',
+                    'return_pending',
+                    'returned',
+                ]
+            )
             ->orderByDesc('id')
             ->first();
 
         if (! $allocation) {
             throw ValidationException::withMessages([
                 'barcode' => sprintf(
-                    'Asset %s tidak berada pada RETURN PENDING untuk %s.',
+                    'Asset %s bukan barang milik %s yang sedang Return.',
                     $asset->asset_code,
                     $deliveryOrder->delivery_order_number
                 ),
             ]);
         }
 
-        if ($allocation->status === 'returned') {
-            session()->flash(
-                'success',
-                'Asset '.$asset->asset_code.' sudah selesai Check-In.'
-            );
+        $previousStatus = $allocation->status;
 
-            return redirect()->route(
-                'admin.delivery-orders.return.show',
-                $deliveryOrder->id
-            );
+        if ($allocation->status === 'out') {
+            $allocation = $this->returnService
+                ->scanReturnSerialized(
+                    $deliveryOrder,
+                    $allocation,
+                    auth()->guard('user')->id()
+                );
+
+            $allocation->load([
+                'deliveryOrderItem',
+                'inventoryAsset',
+            ]);
         }
 
-        $this->returnService->checkInSerialized(
+        $alreadyReceived = in_array(
+            $previousStatus,
+            [
+                'return_pending',
+                'returned',
+            ],
+            true
+        );
+
+        $message = match ($previousStatus) {
+            'returned' => $asset->asset_code.' sudah selesai Return.',
+            'return_pending' => $asset->asset_code.' sudah discan masuk warehouse.',
+            default => sprintf(
+                'RECEIVED: %s -> menunggu inspection.',
+                $asset->asset_code
+            ),
+        };
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'duplicate' => $alreadyReceived,
+                'message' => $message,
+                'allocation' => [
+                    'id' => $allocation->id,
+                    'asset_code' => $asset->asset_code,
+                    'item_name' => $allocation->deliveryOrderItem?->name,
+                    'status' => $allocation->status,
+                    'received_at' => optional(
+                        $allocation->return_pending_at
+                    )->format('d M Y H:i:s'),
+                ],
+            ]);
+        }
+
+        return redirect()
+            ->route(
+                'admin.delivery-orders.return.show',
+                $deliveryOrder->id
+            )
+            ->with('success', $message);
+    }
+
+    /**
+     * Save all quantity returns in one submit.
+     */
+    /**
+     * Finalize inspection and quantity return in one submit.
+     *
+     * Operator flow:
+     * 1. Scan all physical serialized assets first.
+     * 2. Review / change only Fair or Damaged.
+     * 3. Fill quantity return.
+     * 4. Click Finalize Return once.
+     */
+    public function finalize(
+        Request $request,
+        int $id
+    ): RedirectResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $validated = $request->validate([
+            'conditions' => [
+                'nullable',
+                'array',
+            ],
+
+            'conditions.*' => [
+                'required',
+                Rule::in([
+                    'good',
+                    'fair',
+                    'damaged',
+                ]),
+            ],
+
+            'quantities' => [
+                'nullable',
+                'array',
+            ],
+
+            'quantities.*' => [
+                'required',
+                'numeric',
+                'min:0',
+            ],
+        ]);
+
+        $this->returnService->finalizeReturnBatch(
             $deliveryOrder,
-            $allocation,
-            $validated['condition'],
-            $validated['notes'] ?? null,
+            $validated['conditions'] ?? [],
+            $validated['quantities'] ?? [],
             auth()->guard('user')->id()
         );
 
-        session()->flash(
-            'success',
-            'SCAN CHECK-IN: '.$asset->asset_code
-            .' / '.strtoupper($validated['condition'])
-        );
-
-        return redirect()->route(
-            'admin.delivery-orders.return.show',
-            $deliveryOrder->id
-        );
+        return redirect()
+            ->route(
+                'admin.delivery-orders.return.show',
+                $deliveryOrder->id
+            )
+            ->with(
+                'success',
+                'Return berhasil difinalisasi. Condition dan quantity return sudah disimpan.'
+            );
     }
 
 

@@ -15,8 +15,8 @@ use Webkul\Invoice\Models\DeliveryOrder;
 use Webkul\Invoice\Models\DeliveryOrderItem;
 use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
 use Webkul\Invoice\Services\DeliveryOrderInventoryAllocationService;
-use Webkul\Invoice\Services\DeliveryOrderPickingService;
 use Webkul\Invoice\Services\DeliveryOrderReturnService;
+use Webkul\Invoice\Services\DeliveryOrderWarehouseReleaseService;
 
 class DeliveryOrderController extends Controller
 {
@@ -120,17 +120,37 @@ class DeliveryOrderController extends Controller
                 )
                 ->with(
                     'error',
-                    'Surat Jalan belum dapat di-issue karena inventory allocation belum lengkap.'
+                    'Surat Jalan belum dapat dirilis karena request barang belum lengkap.'
                     .$suffix
                 );
         }
 
-        return $this->transitionStatus(
-            $id,
-            'issued',
-            ['draft'],
-            'Surat Jalan berhasil di-issue.'
+        DB::transaction(
+            function () use ($deliveryOrder) {
+                app(
+                    DeliveryOrderWarehouseReleaseService::class
+                )->releaseOnIssue(
+                    $deliveryOrder,
+                    auth()->guard('user')->id()
+                );
+
+                $deliveryOrder->update([
+                    'status' => 'issued',
+                    'issued_at' => $deliveryOrder->issued_at
+                        ?: now(),
+                ]);
+            }
         );
+
+        return redirect()
+            ->route(
+                'admin.delivery-orders.show',
+                $deliveryOrder->id
+            )
+            ->with(
+                'success',
+                'Surat Jalan berhasil dirilis. Inventory otomatis berubah menjadi OUT.'
+            );
     }
 
     /**
@@ -144,8 +164,9 @@ class DeliveryOrderController extends Controller
         $deliveryOrder = $this->findDeliveryOrder($id);
 
         if (
-            ! app(DeliveryOrderPickingService::class)
-                ->allOut($deliveryOrder)
+            ! app(
+                DeliveryOrderWarehouseReleaseService::class
+            )->allOut($deliveryOrder)
         ) {
             return redirect()
                 ->route(
@@ -154,7 +175,7 @@ class DeliveryOrderController extends Controller
                 )
                 ->with(
                     'error',
-                    'Surat Jalan belum dapat ditandai Delivered. Seluruh inventory harus selesai PICKED dan OUT dari warehouse.'
+                    'Surat Jalan belum dapat ditandai Delivered karena inventory belum seluruhnya OUT.'
                 );
         }
 
@@ -207,16 +228,15 @@ class DeliveryOrderController extends Controller
      */
     public function cancel(int $id): RedirectResponse
     {
-        $hasPickedOrOutInventory = DeliveryOrderInventoryAllocation::query()
+        $hasReleasedInventory = DeliveryOrderInventoryAllocation::query()
             ->where('delivery_order_id', $id)
             ->whereIn('status', [
-                'picked',
                 'out',
                 'return_pending',
             ])
             ->exists();
 
-        if ($hasPickedOrOutInventory) {
+        if ($hasReleasedInventory) {
             return redirect()
                 ->route(
                     'admin.delivery-orders.show',
@@ -224,7 +244,7 @@ class DeliveryOrderController extends Controller
                 )
                 ->with(
                     'error',
-                    'Surat Jalan tidak dapat dibatalkan karena inventory sudah PICKED / OUT. Selesaikan workflow inventory terlebih dahulu.'
+                    'Surat Jalan tidak dapat dibatalkan karena inventory sudah OUT dari warehouse.'
                 );
         }
 

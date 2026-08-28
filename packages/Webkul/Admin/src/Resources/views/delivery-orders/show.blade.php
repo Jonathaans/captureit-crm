@@ -112,24 +112,6 @@
             @endif
 
             @if (
-                in_array($status, ['issued', 'delivered'], true)
-                && (
-                    bouncer()->hasPermission('delivery-orders.picking')
-                    || bouncer()->hasPermission('delivery-orders.out')
-                )
-            )
-                <a
-                    href="{{ route(
-                        'admin.delivery-orders.picking.show',
-                        $deliveryOrder->id
-                    ) }}"
-                    class="secondary-button"
-                >
-                    Picking / OUT
-                </a>
-            @endif
-
-            @if (
                 in_array($status, ['delivered', 'returned'], true)
                 && bouncer()->hasPermission('delivery-orders.return')
             )
@@ -174,7 +156,7 @@
                 </p>
 
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Workflow: Draft -> Issued -> Picking -> OUT -> Delivered -> Return Pending -> Check-In -> Returned
+                    Workflow: Draft -> Scan Allocation -> Release/Issue (Auto OUT) -> Delivered -> Scan Return -> Returned
                 </p>
             </div>
 

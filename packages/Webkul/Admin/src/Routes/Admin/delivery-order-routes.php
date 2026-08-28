@@ -3,7 +3,6 @@
 use Illuminate\Support\Facades\Route;
 use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderController;
 use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderInventoryController;
-use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderPickingController;
 use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderReturnController;
 
 Route::controller(DeliveryOrderController::class)
@@ -84,42 +83,14 @@ Route::controller(DeliveryOrderInventoryController::class)
         Route::get('{id}/inventory-allocation', 'edit')
             ->name('admin.delivery-orders.inventory-allocation.edit');
 
+        Route::put('{id}/inventory-allocation/scan', 'scanAllocate')
+            ->name('admin.delivery-orders.inventory-allocation.scan');
+
         Route::put('{id}/inventory-allocation/{itemId}', 'update')
             ->name('admin.delivery-orders.inventory-allocation.update');
 
         Route::delete('{id}/inventory-allocation/{itemId}', 'release')
             ->name('admin.delivery-orders.inventory-allocation.release');
-    });
-
-
-/*
-|--------------------------------------------------------------------------
-| Delivery Order > Picking / OUT
-|--------------------------------------------------------------------------
-*/
-Route::controller(DeliveryOrderPickingController::class)
-    ->prefix('delivery-orders')
-    ->group(function () {
-        Route::get('{id}/picking', 'show')
-            ->name('admin.delivery-orders.picking.show');
-
-        Route::get('{id}/picking/print', 'print')
-            ->name('admin.delivery-orders.picking.print');
-
-        Route::put('{id}/picking/scan-pick', 'scanPick')
-            ->name('admin.delivery-orders.picking.scan-pick');
-
-        Route::put('{id}/picking/scan-out', 'scanOut')
-            ->name('admin.delivery-orders.picking.scan-out');
-
-        Route::put('{id}/picking/{allocationId}/picked', 'markPicked')
-            ->name('admin.delivery-orders.picking.mark');
-
-        Route::put('{id}/picking/mark-all-picked', 'markAllPicked')
-            ->name('admin.delivery-orders.picking.mark-all');
-
-        Route::put('{id}/picking/confirm-out', 'confirmOut')
-            ->name('admin.delivery-orders.picking.out');
     });
 
 
@@ -134,11 +105,11 @@ Route::controller(DeliveryOrderReturnController::class)
         Route::get('{id}/return', 'show')
             ->name('admin.delivery-orders.return.show');
 
-        Route::put('{id}/return/start', 'start')
-            ->name('admin.delivery-orders.return.start');
-
         Route::put('{id}/return/scan-check-in', 'scanCheckIn')
             ->name('admin.delivery-orders.return.scan-check-in');
+
+        Route::put('{id}/return/finalize', 'finalize')
+            ->name('admin.delivery-orders.return.finalize');
 
         Route::put('{id}/return/{allocationId}/check-in', 'checkIn')
             ->name('admin.delivery-orders.return.check-in');

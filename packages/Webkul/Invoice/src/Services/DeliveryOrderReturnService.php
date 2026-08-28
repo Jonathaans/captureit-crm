@@ -13,6 +13,147 @@ use Webkul\Warehouse\Models\InventoryStockMovement;
 class DeliveryOrderReturnService
 {
     /**
+     * One-scan serialized return.
+     *
+     * If allocation is still OUT, the service internally records:
+     * OUT -> RETURN_PENDING
+     * then immediately completes physical Check-In:
+     * RETURN_PENDING -> AVAILABLE / DAMAGED
+     *
+     * The operator only scans once.
+     */
+    /**
+     * Scan serialized asset as physically RECEIVED.
+     *
+     * Important:
+     * Scan DOES NOT decide the final condition.
+     *
+     * OUT -> RETURN_PENDING
+     *
+     * RETURN_PENDING means:
+     * barang fisik sudah diterima warehouse dan menunggu inspection.
+     */
+    public function scanReturnSerialized(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderInventoryAllocation $allocation,
+        ?int $performedBy = null
+    ): DeliveryOrderInventoryAllocation {
+        $this->assertDelivered($deliveryOrder);
+
+        return DB::transaction(function () use (
+            $deliveryOrder,
+            $allocation,
+            $performedBy
+        ) {
+            $lockedAllocation = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->lockForUpdate()
+                ->findOrFail($allocation->id);
+
+            if ($lockedAllocation->tracking_type !== 'serialized') {
+                throw ValidationException::withMessages([
+                    'barcode' => 'Asset scan bukan serialized allocation.',
+                ]);
+            }
+
+            /*
+             * Idempotent:
+             * double scan does not create duplicate movement.
+             */
+            if (
+                in_array(
+                    $lockedAllocation->status,
+                    [
+                        'return_pending',
+                        'returned',
+                    ],
+                    true
+                )
+            ) {
+                return $lockedAllocation->fresh([
+                    'inventoryAsset',
+                ]);
+            }
+
+            if ($lockedAllocation->status !== 'out') {
+                throw ValidationException::withMessages([
+                    'barcode' => sprintf(
+                        'Asset tidak dapat diterima dari status %s.',
+                        strtoupper($lockedAllocation->status)
+                    ),
+                ]);
+            }
+
+            $this->moveOneToReturnPending(
+                $deliveryOrder,
+                $lockedAllocation,
+                $performedBy
+            );
+
+            return $lockedAllocation->fresh([
+                'inventoryAsset',
+            ]);
+        });
+    }
+
+    /**
+     * One-submit quantity return.
+     *
+     * Quantity OUT can be checked in directly. The service still records
+     * the internal OUT -> RETURN_PENDING movement first for audit.
+     */
+    public function returnQuantityDirect(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderInventoryAllocation $allocation,
+        float $returnedQuantity,
+        ?string $notes = null,
+        ?int $performedBy = null
+    ): void {
+        $this->assertDelivered($deliveryOrder);
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $allocation,
+            $returnedQuantity,
+            $notes,
+            $performedBy
+        ) {
+            $lockedAllocation = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->lockForUpdate()
+                ->findOrFail($allocation->id);
+
+            if ($lockedAllocation->tracking_type !== 'quantity') {
+                throw ValidationException::withMessages([
+                    'returned_quantity' => 'Allocation ini bukan quantity stock.',
+                ]);
+            }
+
+            if ($lockedAllocation->status === 'returned') {
+                return;
+            }
+
+            if ($lockedAllocation->status === 'out') {
+                $this->moveOneToReturnPending(
+                    $deliveryOrder,
+                    $lockedAllocation,
+                    $performedBy
+                );
+
+                $lockedAllocation->refresh();
+            }
+
+            $this->finalizeQuantityCheckIn(
+                $deliveryOrder,
+                $lockedAllocation,
+                $returnedQuantity,
+                $notes,
+                $performedBy
+            );
+        });
+    }
+
+    /**
      * Memulai proses return untuk seluruh allocation yang masih OUT.
      *
      * Serialized asset:
@@ -129,6 +270,169 @@ class DeliveryOrderReturnService
     }
 
     /**
+     * Finalize all received serialized assets and all quantity returns
+     * in one transaction.
+     *
+     * Serialized:
+     * RETURN_PENDING -> AVAILABLE / DAMAGED
+     *
+     * Quantity:
+     * OUT / RETURN_PENDING -> RETURNED
+     *
+     * Serialized assets that are still OUT block finalization because
+     * they have not been physically scanned back yet. Missing assets must
+     * be explicitly marked Missing before finalization.
+     *
+     * @param array<int, string> $conditions
+     * @param array<int, float|int|string> $quantities
+     */
+    public function finalizeReturnBatch(
+        DeliveryOrder $deliveryOrder,
+        array $conditions,
+        array $quantities,
+        ?int $performedBy = null
+    ): void {
+        $this->assertDelivered($deliveryOrder);
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $conditions,
+            $quantities,
+            $performedBy
+        ) {
+            $notReceived = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->where('tracking_type', 'serialized')
+                ->where('status', 'out')
+                ->with('inventoryAsset')
+                ->get();
+
+            if ($notReceived->isNotEmpty()) {
+                $codes = $notReceived
+                    ->pluck('inventoryAsset.asset_code')
+                    ->filter()
+                    ->values()
+                    ->all();
+
+                throw ValidationException::withMessages([
+                    'return' => 'Masih ada serialized asset yang belum discan kembali: '
+                        .implode(', ', $codes)
+                        .'. Scan barangnya atau tandai Missing.',
+                ]);
+            }
+
+            $pendingSerialized = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->where('tracking_type', 'serialized')
+                ->where('status', 'return_pending')
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($pendingSerialized as $allocation) {
+                $key = (string) $allocation->id;
+
+                if (! array_key_exists($key, $conditions)) {
+                    throw ValidationException::withMessages([
+                        'conditions.'.$allocation->id => 'Pilih condition untuk seluruh asset yang sudah diterima.',
+                    ]);
+                }
+
+                $condition = strtolower(
+                    trim(
+                        (string) $conditions[$key]
+                    )
+                );
+
+                if (
+                    ! in_array(
+                        $condition,
+                        [
+                            'good',
+                            'fair',
+                            'damaged',
+                        ],
+                        true
+                    )
+                ) {
+                    throw ValidationException::withMessages([
+                        'conditions.'.$allocation->id => 'Condition hanya boleh Good, Fair, atau Damaged.',
+                    ]);
+                }
+
+                $this->finalizeSerializedCheckIn(
+                    $deliveryOrder,
+                    $allocation,
+                    $condition,
+                    null,
+                    $performedBy
+                );
+            }
+
+            $activeQuantity = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->where('tracking_type', 'quantity')
+                ->whereIn(
+                    'status',
+                    [
+                        'out',
+                        'return_pending',
+                    ]
+                )
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($activeQuantity as $allocation) {
+                $key = (string) $allocation->id;
+
+                if (! array_key_exists($key, $quantities)) {
+                    throw ValidationException::withMessages([
+                        'quantities.'.$allocation->id => 'Isi Returned Quantity untuk seluruh quantity item.',
+                    ]);
+                }
+
+                $returnedQuantity = round(
+                    (float) $quantities[$key],
+                    2
+                );
+
+                if (
+                    $returnedQuantity < 0
+                    || $returnedQuantity > (float) $allocation->quantity + 0.0001
+                ) {
+                    throw ValidationException::withMessages([
+                        'quantities.'.$allocation->id => sprintf(
+                            'Returned Quantity harus antara 0 dan %s.',
+                            $this->formatQuantity(
+                                (float) $allocation->quantity
+                            )
+                        ),
+                    ]);
+                }
+
+                if ($allocation->status === 'out') {
+                    $this->moveOneToReturnPending(
+                        $deliveryOrder,
+                        $allocation,
+                        $performedBy
+                    );
+
+                    $allocation->refresh();
+                }
+
+                $this->finalizeQuantityCheckIn(
+                    $deliveryOrder,
+                    $allocation,
+                    $returnedQuantity,
+                    null,
+                    $performedBy
+                );
+            }
+        });
+    }
+
+    /**
      * Check-In satu serialized asset.
      */
     public function checkInSerialized(
@@ -140,14 +444,18 @@ class DeliveryOrderReturnService
     ): void {
         $this->assertDelivered($deliveryOrder);
 
-        $allowedConditions = [
-            'good',
-            'fair',
-            'damaged',
-            'missing',
-        ];
-
-        if (! in_array($condition, $allowedConditions, true)) {
+        if (
+            ! in_array(
+                $condition,
+                [
+                    'good',
+                    'fair',
+                    'damaged',
+                    'missing',
+                ],
+                true
+            )
+        ) {
             throw ValidationException::withMessages([
                 'condition' => 'Return condition tidak valid.',
             ]);
@@ -171,83 +479,22 @@ class DeliveryOrderReturnService
                 ]);
             }
 
-            if ($lockedAllocation->status !== 'return_pending') {
-                throw ValidationException::withMessages([
-                    'condition' => sprintf(
-                        'Serialized asset hanya dapat di-Check-In dari RETURN PENDING. Status saat ini: %s.',
-                        strtoupper($lockedAllocation->status)
-                    ),
-                ]);
+            if ($lockedAllocation->status === 'out') {
+                $this->moveOneToReturnPending(
+                    $deliveryOrder,
+                    $lockedAllocation,
+                    $performedBy
+                );
+
+                $lockedAllocation->refresh();
             }
 
-            $inventoryItem = InventoryItem::query()
-                ->findOrFail($lockedAllocation->inventory_item_id);
-
-            $inventoryAsset = InventoryAsset::query()
-                ->lockForUpdate()
-                ->findOrFail($lockedAllocation->inventory_asset_id);
-
-            if ($inventoryAsset->status !== 'return_pending') {
-                throw ValidationException::withMessages([
-                    'condition' => sprintf(
-                        'Asset %s harus berstatus RETURN PENDING. Status saat ini: %s.',
-                        $inventoryAsset->asset_code,
-                        strtoupper($inventoryAsset->status)
-                    ),
-                ]);
-            }
-
-            $targetStatus = match ($condition) {
-                'damaged' => 'damaged',
-                'missing' => 'missing',
-                default   => 'available',
-            };
-
-            $assetData = [
-                'status' => $targetStatus,
-            ];
-
-            if ($condition !== 'missing') {
-                $assetData['condition'] = $condition;
-            }
-
-            $inventoryAsset->update($assetData);
-
-            $returnedQuantity = $condition === 'missing'
-                ? 0
-                : 1;
-
-            $lockedAllocation->update([
-                'status'            => 'returned',
-                'checked_in_by'     => $performedBy,
-                'checked_in_at'     => now(),
-                'return_condition'  => $condition,
-                'returned_quantity' => $returnedQuantity,
-                'return_notes'      => $notes,
-            ]);
-
-            $movementType = match ($condition) {
-                'damaged' => 'damaged',
-                'missing' => 'missing',
-                default   => 'returned',
-            };
-
-            $this->recordMovement(
+            $this->finalizeSerializedCheckIn(
                 $deliveryOrder,
-                $inventoryItem,
-                $inventoryAsset,
-                $movementType,
-                1,
-                'return_pending',
-                $targetStatus,
-                $performedBy,
-                sprintf(
-                    'Check-In %s from %s. Condition: %s.%s',
-                    $inventoryAsset->asset_code,
-                    $deliveryOrder->delivery_order_number,
-                    strtoupper($condition),
-                    $notes ? ' '.$notes : ''
-                )
+                $lockedAllocation,
+                $condition,
+                $notes,
+                $performedBy
             );
         });
     }
@@ -286,92 +533,271 @@ class DeliveryOrderReturnService
                 ]);
             }
 
-            if ($lockedAllocation->status !== 'return_pending') {
-                throw ValidationException::withMessages([
-                    'returned_quantity' => sprintf(
-                        'Quantity hanya dapat di-Check-In dari RETURN PENDING. Status saat ini: %s.',
-                        strtoupper($lockedAllocation->status)
-                    ),
-                ]);
+            if ($lockedAllocation->status === 'out') {
+                $this->moveOneToReturnPending(
+                    $deliveryOrder,
+                    $lockedAllocation,
+                    $performedBy
+                );
+
+                $lockedAllocation->refresh();
             }
 
-            $outQuantity = (float) $lockedAllocation->quantity;
-            $returnedQuantity = round($returnedQuantity, 2);
-
-            if (
-                $returnedQuantity < 0
-                || $returnedQuantity > $outQuantity + 0.0001
-            ) {
-                throw ValidationException::withMessages([
-                    'returned_quantity' => sprintf(
-                        'Jumlah kembali harus antara 0 dan %s.',
-                        $this->formatQuantity($outQuantity)
-                    ),
-                ]);
-            }
-
-            $returnedQuantity = min(
-                $returnedQuantity,
-                $outQuantity
-            );
-
-            $inventoryItem = InventoryItem::query()
-                ->lockForUpdate()
-                ->findOrFail($lockedAllocation->inventory_item_id);
-
-            $before = (float) $inventoryItem->quantity_on_hand;
-            $after = $before + $returnedQuantity;
-            $consumedQuantity = max(
-                $outQuantity - $returnedQuantity,
-                0
-            );
-
-            if ($returnedQuantity > 0) {
-                $inventoryItem->update([
-                    'quantity_on_hand' => $after,
-                ]);
-            }
-
-            $returnCondition = match (true) {
-                $returnedQuantity <= 0.0001 => 'consumed',
-                $consumedQuantity <= 0.0001 => 'full_return',
-                default                    => 'partial_return',
-            };
-
-            $lockedAllocation->update([
-                'status'            => 'returned',
-                'checked_in_by'     => $performedBy,
-                'checked_in_at'     => now(),
-                'return_condition'  => $returnCondition,
-                'returned_quantity' => $returnedQuantity,
-                'return_notes'      => $notes,
-            ]);
-
-            $this->recordMovement(
+            $this->finalizeQuantityCheckIn(
                 $deliveryOrder,
-                $inventoryItem,
-                null,
-                'returned',
+                $lockedAllocation,
                 $returnedQuantity,
-                'return_pending',
-                'available',
-                $performedBy,
-                sprintf(
-                    'Quantity Check-In for %s. Returned %s %s, consumed %s %s. Stock %s %s -> %s %s.%s',
-                    $deliveryOrder->delivery_order_number,
-                    $this->formatQuantity($returnedQuantity),
-                    $inventoryItem->unit,
-                    $this->formatQuantity($consumedQuantity),
-                    $inventoryItem->unit,
-                    $this->formatQuantity($before),
-                    $inventoryItem->unit,
-                    $this->formatQuantity($after),
-                    $inventoryItem->unit,
-                    $notes ? ' '.$notes : ''
-                )
+                $notes,
+                $performedBy
             );
         });
     }
+
+    private function moveOneToReturnPending(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderInventoryAllocation $allocation,
+        ?int $performedBy
+    ): void {
+        if ($allocation->status === 'return_pending') {
+            return;
+        }
+
+        if ($allocation->status !== 'out') {
+            throw ValidationException::withMessages([
+                'inventory' => sprintf(
+                    'Inventory hanya dapat masuk Return Pending dari OUT. Status saat ini: %s.',
+                    strtoupper($allocation->status)
+                ),
+            ]);
+        }
+
+        $inventoryItem = InventoryItem::query()
+            ->findOrFail($allocation->inventory_item_id);
+
+        $inventoryAsset = null;
+
+        if ($allocation->tracking_type === 'serialized') {
+            $inventoryAsset = InventoryAsset::query()
+                ->lockForUpdate()
+                ->findOrFail($allocation->inventory_asset_id);
+
+            if ($inventoryAsset->status !== 'out') {
+                throw ValidationException::withMessages([
+                    'inventory' => sprintf(
+                        'Asset %s harus OUT sebelum Check-In.',
+                        $inventoryAsset->asset_code
+                    ),
+                ]);
+            }
+
+            $inventoryAsset->update([
+                'status' => 'return_pending',
+            ]);
+        }
+
+        $allocation->update([
+            'status'            => 'return_pending',
+            'return_pending_by' => $performedBy,
+            'return_pending_at' => now(),
+        ]);
+
+        $this->recordMovement(
+            $deliveryOrder,
+            $inventoryItem,
+            $inventoryAsset,
+            'return_pending',
+            (float) $allocation->quantity,
+            'out',
+            'return_pending',
+            $performedBy,
+            sprintf(
+                'Physical return received for %s; entering inspection.',
+                $deliveryOrder->delivery_order_number
+            )
+        );
+    }
+
+    private function finalizeSerializedCheckIn(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderInventoryAllocation $allocation,
+        string $condition,
+        ?string $notes,
+        ?int $performedBy
+    ): void {
+        if ($allocation->status !== 'return_pending') {
+            throw ValidationException::withMessages([
+                'condition' => sprintf(
+                    'Serialized asset hanya dapat Check-In dari RETURN PENDING. Status saat ini: %s.',
+                    strtoupper($allocation->status)
+                ),
+            ]);
+        }
+
+        $inventoryItem = InventoryItem::query()
+            ->findOrFail($allocation->inventory_item_id);
+
+        $inventoryAsset = InventoryAsset::query()
+            ->lockForUpdate()
+            ->findOrFail($allocation->inventory_asset_id);
+
+        if ($inventoryAsset->status !== 'return_pending') {
+            throw ValidationException::withMessages([
+                'condition' => sprintf(
+                    'Asset %s harus RETURN PENDING. Status saat ini: %s.',
+                    $inventoryAsset->asset_code,
+                    strtoupper($inventoryAsset->status)
+                ),
+            ]);
+        }
+
+        $targetStatus = match ($condition) {
+            'damaged' => 'damaged',
+            'missing' => 'missing',
+            default   => 'available',
+        };
+
+        $assetData = [
+            'status' => $targetStatus,
+        ];
+
+        if ($condition !== 'missing') {
+            $assetData['condition'] = $condition;
+        }
+
+        $inventoryAsset->update($assetData);
+
+        $allocation->update([
+            'status'            => 'returned',
+            'checked_in_by'     => $performedBy,
+            'checked_in_at'     => now(),
+            'return_condition'  => $condition,
+            'returned_quantity' => $condition === 'missing'
+                ? 0
+                : 1,
+            'return_notes'      => $notes,
+        ]);
+
+        $movementType = match ($condition) {
+            'damaged' => 'damaged',
+            'missing' => 'missing',
+            default   => 'returned',
+        };
+
+        $this->recordMovement(
+            $deliveryOrder,
+            $inventoryItem,
+            $inventoryAsset,
+            $movementType,
+            1,
+            'return_pending',
+            $targetStatus,
+            $performedBy,
+            sprintf(
+                'Check-In %s from %s. Condition: %s.%s',
+                $inventoryAsset->asset_code,
+                $deliveryOrder->delivery_order_number,
+                strtoupper($condition),
+                $notes ? ' '.$notes : ''
+            )
+        );
+    }
+
+    private function finalizeQuantityCheckIn(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderInventoryAllocation $allocation,
+        float $returnedQuantity,
+        ?string $notes,
+        ?int $performedBy
+    ): void {
+        if ($allocation->status !== 'return_pending') {
+            throw ValidationException::withMessages([
+                'returned_quantity' => sprintf(
+                    'Quantity hanya dapat Check-In dari RETURN PENDING. Status saat ini: %s.',
+                    strtoupper($allocation->status)
+                ),
+            ]);
+        }
+
+        $outQuantity = (float) $allocation->quantity;
+        $returnedQuantity = round(
+            $returnedQuantity,
+            2
+        );
+
+        if (
+            $returnedQuantity < 0
+            || $returnedQuantity > $outQuantity + 0.0001
+        ) {
+            throw ValidationException::withMessages([
+                'returned_quantity' => sprintf(
+                    'Jumlah kembali harus antara 0 dan %s.',
+                    $this->formatQuantity($outQuantity)
+                ),
+            ]);
+        }
+
+        $returnedQuantity = min(
+            $returnedQuantity,
+            $outQuantity
+        );
+
+        $inventoryItem = InventoryItem::query()
+            ->lockForUpdate()
+            ->findOrFail($allocation->inventory_item_id);
+
+        $before = (float) $inventoryItem->quantity_on_hand;
+        $after = $before + $returnedQuantity;
+        $consumedQuantity = max(
+            $outQuantity - $returnedQuantity,
+            0
+        );
+
+        if ($returnedQuantity > 0) {
+            $inventoryItem->update([
+                'quantity_on_hand' => $after,
+            ]);
+        }
+
+        $returnCondition = match (true) {
+            $returnedQuantity <= 0.0001 => 'consumed',
+            $consumedQuantity <= 0.0001 => 'full_return',
+            default                    => 'partial_return',
+        };
+
+        $allocation->update([
+            'status'            => 'returned',
+            'checked_in_by'     => $performedBy,
+            'checked_in_at'     => now(),
+            'return_condition'  => $returnCondition,
+            'returned_quantity' => $returnedQuantity,
+            'return_notes'      => $notes,
+        ]);
+
+        $this->recordMovement(
+            $deliveryOrder,
+            $inventoryItem,
+            null,
+            'returned',
+            $returnedQuantity,
+            'return_pending',
+            'available',
+            $performedBy,
+            sprintf(
+                'Quantity Check-In for %s. Returned %s %s, consumed %s %s. Stock %s %s -> %s %s.%s',
+                $deliveryOrder->delivery_order_number,
+                $this->formatQuantity($returnedQuantity),
+                $inventoryItem->unit,
+                $this->formatQuantity($consumedQuantity),
+                $inventoryItem->unit,
+                $this->formatQuantity($before),
+                $inventoryItem->unit,
+                $this->formatQuantity($after),
+                $inventoryItem->unit,
+                $notes ? ' '.$notes : ''
+            )
+        );
+    }
+
 
     /**
      * Return dianggap complete bila ada allocation RETURNED dan
