@@ -1,0 +1,3196 @@
+﻿
+==================================================
+DELIVERY ORDER PRINT
+==================================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <title>
+        {{ $deliveryOrder->delivery_order_number }}
+    </title>
+
+    <style>
+        @page {
+            size: A4 portrait;
+
+            /*
+             * Bottom margin intentionally larger so fixed footer
+             * never collides with document content.
+             */
+            margin: 12mm 12mm 21mm 12mm;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            color: #111827;
+            font-family: DejaVu Sans, sans-serif;
+            font-size: 9.5px;
+            line-height: 1.35;
+        }
+
+        .footer {
+            position: fixed;
+            right: 0;
+            bottom: -14mm;
+            left: 0;
+            height: 10mm;
+            border-top: 0.5px solid #d1d5db;
+            padding-top: 2.5mm;
+            color: #6b7280;
+            font-size: 7.5px;
+        }
+
+        .footer-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .footer-table td {
+            padding: 0;
+            border: 0;
+        }
+
+        .footer-right {
+            text-align: right;
+        }
+
+        .header-table,
+        .info-table,
+        .equipment-table,
+        .signature-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .header-table td {
+            vertical-align: top;
+            border: 0;
+        }
+
+        .logo-cell {
+            width: 42%;
+        }
+
+        .logo {
+            width: 42mm;
+            max-height: 18mm;
+            object-fit: contain;
+        }
+
+        .company-name {
+            margin-top: 2mm;
+            font-size: 8px;
+            color: #4b5563;
+        }
+
+        .document-cell {
+            width: 58%;
+            text-align: right;
+        }
+
+        .document-title {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .document-number {
+            margin-top: 2mm;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .document-status {
+            margin-top: 1mm;
+            color: #6b7280;
+            font-size: 8px;
+            text-transform: uppercase;
+        }
+
+        .top-rule {
+            margin: 5mm 0 4mm;
+            border-top: 1.5px solid #111827;
+        }
+
+        .section {
+            margin-top: 4mm;
+        }
+
+        .section-title {
+            margin: 0 0 2mm;
+            padding-bottom: 1.3mm;
+            border-bottom: 0.7px solid #9ca3af;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
+        .info-table td {
+            width: 25%;
+            padding: 1.4mm 2.5mm 1.4mm 0;
+            vertical-align: top;
+            border: 0;
+        }
+
+        .label {
+            margin-bottom: 0.6mm;
+            color: #6b7280;
+            font-size: 7.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .value {
+            font-size: 9px;
+            font-weight: 600;
+            word-wrap: break-word;
+        }
+
+        .value.normal {
+            font-weight: 400;
+        }
+
+        .full-width-cell {
+            width: 100% !important;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Equipment Table
+        |--------------------------------------------------------------------------
+        |
+        | thead repeats when table continues on the next PDF page.
+        | Each row is kept together where possible.
+        |
+        */
+
+        .equipment-table {
+            margin-top: 2mm;
+        }
+
+        .equipment-table thead {
+            display: table-header-group;
+        }
+
+        .equipment-table tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .equipment-table th {
+            padding: 2mm 1.5mm;
+            border: 0.6px solid #9ca3af;
+            background: #f3f4f6;
+            font-size: 7.7px;
+            text-align: left;
+            text-transform: uppercase;
+        }
+
+        .equipment-table td {
+            padding: 1.8mm 1.5mm;
+            border: 0.6px solid #d1d5db;
+            vertical-align: top;
+            font-size: 8.3px;
+        }
+
+        .col-no {
+            width: 7%;
+            text-align: center !important;
+        }
+
+        .col-item {
+            width: 24%;
+        }
+
+        .col-description {
+            width: 31%;
+        }
+
+        .col-qty {
+            width: 9%;
+            text-align: center !important;
+        }
+
+        .col-unit {
+            width: 11%;
+            text-align: center !important;
+        }
+
+        .col-notes {
+            width: 18%;
+        }
+
+        .empty-equipment {
+            padding: 5mm !important;
+            color: #6b7280;
+            text-align: center;
+        }
+
+        .notes-box {
+            min-height: 14mm;
+            padding: 2.5mm;
+            border: 0.6px solid #d1d5db;
+            white-space: pre-line;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Signatures
+        |--------------------------------------------------------------------------
+        |
+        | CRITICAL:
+        | Entire signature block must stay together.
+        |
+        | If there is not enough space after Notes/Equipment on Page 1,
+        | DomPDF moves this WHOLE block to Page 2 automatically.
+        |
+        */
+
+        .signature-section {
+            margin-top: 6mm;
+
+            page-break-inside: avoid !important;
+            break-inside: avoid-page !important;
+        }
+
+        .signature-table {
+            table-layout: fixed;
+
+            page-break-inside: avoid !important;
+            break-inside: avoid-page !important;
+        }
+
+        .signature-table td {
+            width: 25%;
+            padding: 0 2.2mm;
+            vertical-align: top;
+            text-align: center;
+            border: 0;
+        }
+
+        .signature-action {
+            min-height: 5mm;
+            font-size: 8.5px;
+            font-weight: 700;
+        }
+
+        .signature-role {
+            margin-top: 0.8mm;
+            min-height: 4mm;
+            color: #6b7280;
+            font-size: 7.5px;
+        }
+
+        /*
+         * Real handwriting area.
+         * 34 mm gives enough physical room for manual signature.
+         */
+        .signature-space {
+            height: 34mm;
+        }
+
+        .signature-line {
+            border-top: 0.7px solid #111827;
+            padding-top: 1.5mm;
+            font-size: 8px;
+            font-weight: 700;
+        }
+
+        .signature-name {
+            min-height: 5mm;
+        }
+
+        .small-muted {
+            color: #6b7280;
+            font-size: 7.5px;
+        }
+    </style>
+</head>
+
+<body>
+    {{-- ============================================================= --}}
+    {{-- FOOTER - appears on every PDF page --}}
+    {{-- ============================================================= --}}
+
+    <div class="footer">
+        <table class="footer-table">
+            <tr>
+                <td>
+                    Capture It Photobooth â€¢ Varbel Corps
+                </td>
+
+                <td class="footer-right">
+                    {{ $deliveryOrder->delivery_order_number }}
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {{-- ============================================================= --}}
+    {{-- HEADER --}}
+    {{-- ============================================================= --}}
+
+    <table class="header-table">
+        <tr>
+            <td class="logo-cell">
+                @php
+                    $logoPath = public_path('images/logo-varbel.png');
+                @endphp
+
+                @if (file_exists($logoPath))
+                    <img
+                        src="{{ $logoPath }}"
+                        class="logo"
+                        alt="Varbel Corps"
+                    >
+                @else
+                    <div style="font-size: 16px; font-weight: 700;">
+                        CAPTURE IT
+                    </div>
+                @endif
+
+                <div class="company-name">
+                    Capture It Photobooth â€¢ Varbel Corps
+                </div>
+            </td>
+
+            <td class="document-cell">
+                <p class="document-title">
+                    SURAT JALAN
+                </p>
+
+                <div class="document-number">
+                    {{ $deliveryOrder->delivery_order_number }}
+                </div>
+
+                <div class="document-status">
+                    Status:
+                    {{ strtoupper($deliveryOrder->status ?: 'draft') }}
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="top-rule"></div>
+
+    {{-- ============================================================= --}}
+    {{-- PROJECT INFORMATION --}}
+    {{-- ============================================================= --}}
+
+    <div class="section">
+        <div class="section-title">
+            Project Information
+        </div>
+
+        <table class="info-table">
+            <tr>
+                <td>
+                    <div class="label">Project Code</div>
+                    <div class="value">
+                        {{ $deliveryOrder->project_code ?: '-' }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">Project Name</div>
+                    <div class="value">
+                        {{ $deliveryOrder->project_name ?: '-' }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">Customer</div>
+                    <div class="value">
+                        {{ $deliveryOrder->customer_name ?: '-' }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">Sales</div>
+                    <div class="value">
+                        {{ $deliveryOrder->sales_person_name ?: '-' }}
+                    </div>
+                </td>
+            </tr>
+
+            <tr>
+                <td>
+                    <div class="label">Invoice</div>
+                    <div class="value normal">
+                        {{ $deliveryOrder->invoice_number ?: '-' }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">Quote</div>
+                    <div class="value normal">
+                        {{ $deliveryOrder->quote_number ?: '-' }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">Created By</div>
+                    <div class="value normal">
+                        {{ $deliveryOrder->creator?->name ?: '-' }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">Issued Date</div>
+                    <div class="value normal">
+                        {{
+                            $deliveryOrder->issued_at
+                                ? $deliveryOrder->issued_at->format('d M Y')
+                                : '-'
+                        }}
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {{-- ============================================================= --}}
+    {{-- EVENT & DELIVERY --}}
+    {{-- ============================================================= --}}
+
+    <div class="section">
+        <div class="section-title">
+            Event & Delivery Information
+        </div>
+
+        <table class="info-table">
+            <tr>
+                <td>
+                    <div class="label">Event Date</div>
+                    <div class="value">
+                        {{
+                            $deliveryOrder->event_date
+                                ? $deliveryOrder->event_date->format('d M Y')
+                                : '-'
+                        }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">Event Time</div>
+                    <div class="value">
+                        {{ $deliveryOrder->event_time ?: '-' }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">Delivery Date</div>
+                    <div class="value">
+                        {{
+                            $deliveryOrder->delivery_date
+                                ? $deliveryOrder->delivery_date->format('d M Y')
+                                : '-'
+                        }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">Delivery Time</div>
+                    <div class="value">
+                        {{ $deliveryOrder->delivery_time ?: '-' }}
+                    </div>
+                </td>
+            </tr>
+
+            <tr>
+                <td colspan="2" style="width: 50%;">
+                    <div class="label">Event Location</div>
+                    <div class="value normal">
+                        {{ $deliveryOrder->location ?: '-' }}
+                    </div>
+                </td>
+
+                <td colspan="2" style="width: 50%;">
+                    <div class="label">Delivery Address</div>
+                    <div class="value normal">
+                        {{ $deliveryOrder->delivery_address ?: '-' }}
+                    </div>
+                </td>
+            </tr>
+
+            <tr>
+                <td>
+                    <div class="label">Recipient</div>
+                    <div class="value">
+                        {{ $deliveryOrder->recipient_name ?: '-' }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">Recipient Phone</div>
+                    <div class="value normal">
+                        {{ $deliveryOrder->recipient_phone ?: '-' }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">PIC</div>
+                    <div class="value">
+                        {{ $deliveryOrder->pic_name ?: '-' }}
+                    </div>
+                </td>
+
+                <td>
+                    <div class="label">PIC Phone</div>
+                    <div class="value normal">
+                        {{ $deliveryOrder->pic_phone ?: '-' }}
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    {{-- ============================================================= --}}
+    {{-- EQUIPMENT --}}
+    {{-- ============================================================= --}}
+
+    <div class="section">
+        <div class="section-title">
+            Equipment / Items
+        </div>
+
+        <table class="equipment-table">
+            <thead>
+                <tr>
+                    <th class="col-no">No</th>
+                    <th class="col-item">Item</th>
+                    <th class="col-description">Description</th>
+                    <th class="col-qty">Qty</th>
+                    <th class="col-unit">Unit</th>
+                    <th class="col-notes">Notes</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @forelse ($deliveryOrder->items as $index => $item)
+                    <tr>
+                        <td class="col-no">
+                            {{ $index + 1 }}
+                        </td>
+
+                        <td class="col-item">
+                            <strong>
+                                {{ $item->name }}
+                            </strong>
+                        </td>
+
+                        <td class="col-description">
+                            {{ $item->description ?: '-' }}
+                        </td>
+
+                        <td class="col-qty">
+                            {{
+                                rtrim(
+                                    rtrim(
+                                        number_format(
+                                            (float) $item->quantity,
+                                            2,
+                                            '.',
+                                            ''
+                                        ),
+                                        '0'
+                                    ),
+                                    '.'
+                                )
+                            }}
+                        </td>
+
+                        <td class="col-unit">
+                            {{ $item->unit ?: 'unit' }}
+                        </td>
+
+                        <td class="col-notes">
+                            {{ $item->notes ?: '-' }}
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td
+                            colspan="6"
+                            class="empty-equipment"
+                        >
+                            No equipment items.
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    {{-- ============================================================= --}}
+    {{-- NOTES --}}
+    {{-- ============================================================= --}}
+
+    @if ($deliveryOrder->notes)
+        <div class="section">
+            <div class="section-title">
+                Notes
+            </div>
+
+            <div class="notes-box">
+                {{ $deliveryOrder->notes }}
+            </div>
+        </div>
+    @endif
+
+    {{-- ============================================================= --}}
+    {{-- SIGNATURES --}}
+    {{-- ============================================================= --}}
+    {{--
+        IMPORTANT:
+        signature-section has page-break-inside: avoid.
+
+        If the remaining space on Page 1 is not enough for all four
+        signature columns, DomPDF moves the entire signature section
+        to Page 2 instead of cutting it.
+    --}}
+
+    <div class="signature-section">
+        <div class="section-title">
+            Signatures
+        </div>
+
+        <table class="signature-table">
+            <tr>
+                {{-- 1. Sales --}}
+                <td>
+                    <div class="signature-action">
+                        Prepared By
+                    </div>
+
+                    <div class="signature-role">
+                        Sales
+                    </div>
+
+                    <div class="signature-space"></div>
+
+                    <div class="signature-line">
+                        <div class="signature-name">
+                            {{ $deliveryOrder->sales_person_name ?: '________________' }}
+                        </div>
+
+                    </div>
+                </td>
+
+                {{-- 2. Head Warehouse --}}
+                <td>
+                    <div class="signature-action">
+                        Approved By
+                    </div>
+
+                    <div class="signature-role">
+                        Head Warehouse
+                    </div>
+
+                    <div class="signature-space"></div>
+
+                    <div class="signature-line">
+                        <div class="signature-name">
+                            Hafiz Eka Nugroho
+                        </div>
+                    </div>
+                </td>
+
+                {{-- 3. Staff Warehouse --}}
+                <td>
+                    <div class="signature-action">
+                        Released By
+                    </div>
+
+                    <div class="signature-role">
+                        Staff Warehouse
+                    </div>
+
+                    <div class="signature-space"></div>
+
+                    <div class="signature-line">
+                        <div class="signature-name">
+                            __________________
+                        </div>
+
+                    </div>
+                </td>
+
+                {{-- 4. PIC --}}
+                <td>
+                    <div class="signature-action">
+                        Received By
+                    </div>
+
+                    <div class="signature-role">
+                        PIC
+                    </div>
+
+                    <div class="signature-space"></div>
+
+                    <div class="signature-line">
+                        <div class="signature-name">
+                            {{
+                                $deliveryOrder->pic_name
+                                ?: $deliveryOrder->recipient_name
+                                ?: '________________'
+                            }}
+                        </div>
+
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+</body>
+</html>
+
+==================================================
+PICKING BLADE
+==================================================
+<x-admin::layouts>
+    <x-slot:title>
+        Picking / OUT - {{ $deliveryOrder->delivery_order_number }}
+    </x-slot>
+
+    @php
+        $status = strtolower(
+            $deliveryOrder->status ?: 'draft'
+        );
+
+        $formatQty = static function ($value) {
+            return rtrim(
+                rtrim(
+                    number_format((float) $value, 2, '.', ''),
+                    '0'
+                ),
+                '.'
+            );
+        };
+
+        $statusClass = static function ($allocationStatus) {
+            return match ($allocationStatus) {
+                'allocated' =>
+                    'bg-blue-100 text-blue-700',
+
+                'picked' =>
+                    'bg-yellow-100 text-yellow-700',
+
+                'out' =>
+                    'bg-purple-100 text-purple-700',
+
+                'return_pending' =>
+                    'bg-orange-100 text-orange-700',
+
+                default =>
+                    'bg-gray-100 text-gray-700',
+            };
+        };
+    @endphp
+
+    <div class="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white p-4 max-sm:flex-wrap dark:border-gray-800 dark:bg-gray-900">
+        <div>
+            <a
+                href="{{ route(
+                    'admin.delivery-orders.show',
+                    $deliveryOrder->id
+                ) }}"
+                class="text-sm text-gray-600 hover:text-brandColor dark:text-gray-300"
+            >
+                &larr; Back to Surat Jalan
+            </a>
+
+            <div class="mt-2 flex items-center gap-3">
+                <p class="text-xl font-bold text-gray-800 dark:text-white">
+                    Picking / OUT
+                </p>
+
+                <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold uppercase text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                    {{ $status }}
+                </span>
+            </div>
+
+            <p class="mt-1 text-sm text-gray-500">
+                {{ $deliveryOrder->delivery_order_number }}
+                &middot; {{ $deliveryOrder->project_code ?: '-' }}
+
+                @if ($deliveryOrder->project_name)
+                    &middot; {{ $deliveryOrder->project_name }}
+                @endif
+            </p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+            @if (
+                $canOperate
+                && $summary['allocated'] > 0
+                && bouncer()->hasPermission('delivery-orders.picking')
+            )
+                <form
+                    method="POST"
+                    action="{{ route(
+                        'admin.delivery-orders.picking.mark-all',
+                        $deliveryOrder->id
+                    ) }}"
+                >
+                    @csrf
+                    @method('PUT')
+
+                    <button
+                        type="submit"
+                        class="secondary-button"
+                        onclick="return confirm('Tandai seluruh inventory ALLOCATED sebagai PICKED? Pastikan barang sudah benar-benar diambil dari storage.')"
+                    >
+                        Mark All Picked
+                    </button>
+                </form>
+            @endif
+
+            @if (
+                $canOperate
+                && $allPicked
+                && bouncer()->hasPermission('delivery-orders.out')
+            )
+                <form
+                    method="POST"
+                    action="{{ route(
+                        'admin.delivery-orders.picking.out',
+                        $deliveryOrder->id
+                    ) }}"
+                >
+                    @csrf
+                    @method('PUT')
+
+                    <button
+                        type="submit"
+                        class="primary-button"
+                        onclick="return confirm('Confirm seluruh barang OUT dari warehouse? Untuk quantity, physical stock akan dikurangi sekarang.')"
+                    >
+                        Confirm OUT
+                    </button>
+                </form>
+            @endif
+        </div>
+    </div>
+
+    <div class="mt-4 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
+        <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <p class="text-xs font-semibold uppercase text-blue-600">
+                Allocated
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-blue-800">
+                {{ $summary['allocated'] }}
+            </p>
+        </div>
+
+        <div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+            <p class="text-xs font-semibold uppercase text-yellow-600">
+                Picked
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-yellow-800">
+                {{ $summary['picked'] }}
+            </p>
+        </div>
+
+        <div class="rounded-lg border border-purple-200 bg-purple-50 p-4">
+            <p class="text-xs font-semibold uppercase text-purple-600">
+                Out
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-purple-800">
+                {{ $summary['out'] }}
+            </p>
+        </div>
+
+        <div class="rounded-lg border border-orange-200 bg-orange-50 p-4">
+            <p class="text-xs font-semibold uppercase text-orange-600">
+                Return Pending
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-orange-800">
+                {{ $summary['return_pending'] }}
+            </p>
+        </div>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+        <div class="mb-5">
+            <p class="text-base font-semibold text-gray-800 dark:text-white">
+                Picking List
+            </p>
+
+            <p class="mt-1 text-xs text-gray-500">
+                PICKED berarti barang sudah diambil dari storage tetapi belum keluar warehouse.
+                OUT berarti barang benar-benar meninggalkan warehouse.
+            </p>
+        </div>
+
+        @if ($allocations->isEmpty())
+            <div class="rounded-lg border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
+                Tidak ada inventory allocation aktif.
+            </div>
+        @else
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[1100px]">
+                    <thead>
+                        <tr class="border-b border-gray-200 dark:border-gray-800">
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                #
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                Equipment
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                Inventory Item
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                Actual Item
+                            </th>
+
+                            <th class="px-3 py-3 text-right text-xs font-semibold text-gray-500">
+                                Qty
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                Status
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                Picked At
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                OUT At
+                            </th>
+
+                            <th class="px-3 py-3 text-right text-xs font-semibold text-gray-500">
+                                Action
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach ($allocations as $allocation)
+                            <tr class="border-b border-gray-100 dark:border-gray-800">
+                                <td class="px-3 py-4 text-sm text-gray-500">
+                                    {{ $loop->iteration }}
+                                </td>
+
+                                <td class="px-3 py-4">
+                                    <p class="text-sm font-semibold text-gray-800 dark:text-white">
+                                        {{ $allocation->deliveryOrderItem?->name ?: '-' }}
+                                    </p>
+
+                                    @if ($allocation->deliveryOrderItem?->description)
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            {{ $allocation->deliveryOrderItem->description }}
+                                        </p>
+                                    @endif
+                                </td>
+
+                                <td class="px-3 py-4">
+                                    <p class="text-sm font-semibold text-gray-800 dark:text-white">
+                                        {{ $allocation->inventoryItem?->code ?: '-' }}
+                                    </p>
+
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        {{ $allocation->inventoryItem?->name ?: '-' }}
+                                    </p>
+                                </td>
+
+                                <td class="px-3 py-4 text-sm">
+                                    @if ($allocation->tracking_type === 'serialized')
+                                        <span class="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-800">
+                                            {{ $allocation->inventoryAsset?->asset_code ?: '-' }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-600 dark:text-gray-300">
+                                            Quantity Stock
+                                        </span>
+                                    @endif
+                                </td>
+
+                                <td class="px-3 py-4 text-right text-sm font-semibold text-gray-800 dark:text-white">
+                                    {{ $formatQty($allocation->quantity) }}
+                                    {{ $allocation->inventoryItem?->unit ?: $allocation->deliveryOrderItem?->unit }}
+                                </td>
+
+                                <td class="px-3 py-4">
+                                    <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $statusClass($allocation->status) }}">
+                                        {{ strtoupper($allocation->status) }}
+                                    </span>
+                                </td>
+
+                                <td class="px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                    @if ($allocation->picked_at)
+                                        {{ $allocation->picked_at->format('d M Y H:i') }}
+
+                                        <div class="mt-1 text-xs text-gray-500">
+                                            {{ $allocation->pickedBy?->name ?: '-' }}
+                                        </div>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
+
+                                <td class="px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                    @if ($allocation->out_at)
+                                        {{ $allocation->out_at->format('d M Y H:i') }}
+
+                                        <div class="mt-1 text-xs text-gray-500">
+                                            {{ $allocation->outBy?->name ?: '-' }}
+                                        </div>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
+
+                                <td class="px-3 py-4 text-right">
+                                    @if (
+                                        $canOperate
+                                        && $allocation->status === 'allocated'
+                                        && bouncer()->hasPermission('delivery-orders.picking')
+                                    )
+                                        <form
+                                            method="POST"
+                                            action="{{ route(
+                                                'admin.delivery-orders.picking.mark',
+                                                [
+                                                    $deliveryOrder->id,
+                                                    $allocation->id,
+                                                ]
+                                            ) }}"
+                                        >
+                                            @csrf
+                                            @method('PUT')
+
+                                            <button
+                                                type="submit"
+                                                class="secondary-button"
+                                                onclick="return confirm('Tandai item ini sebagai PICKED?')"
+                                            >
+                                                Mark Picked
+                                            </button>
+                                        </form>
+                                    @else
+                                        <span class="text-xs text-gray-400">
+                                            -
+                                        </span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+
+        @if ($allOut)
+            <div class="mt-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+                Semua inventory sudah OUT. Surat Jalan sekarang dapat diproses ke Mark as Delivered.
+            </div>
+        @elseif (
+            $summary['picked'] > 0
+            && $summary['allocated'] > 0
+        )
+            <div class="mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
+                Picking belum lengkap. Confirm OUT baru tersedia setelah seluruh allocation berstatus PICKED.
+            </div>
+        @endif
+    </div>
+</x-admin::layouts>
+
+==================================================
+RETURN BLADE
+==================================================
+<x-admin::layouts>
+    <x-slot:title>
+        Return / Check-In - {{ $deliveryOrder->delivery_order_number }}
+    </x-slot>
+
+    @php
+        $status = strtolower(
+            $deliveryOrder->status ?: 'draft'
+        );
+
+        $formatQty = static function ($value) {
+            return rtrim(
+                rtrim(
+                    number_format((float) $value, 2, '.', ''),
+                    '0'
+                ),
+                '.'
+            );
+        };
+
+        $statusClass = static function ($allocationStatus) {
+            return match ($allocationStatus) {
+                'out' =>
+                    'bg-purple-100 text-purple-700',
+
+                'return_pending' =>
+                    'bg-orange-100 text-orange-700',
+
+                'returned' =>
+                    'bg-green-100 text-green-700',
+
+                default =>
+                    'bg-gray-100 text-gray-700',
+            };
+        };
+    @endphp
+
+    <div class="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white p-4 max-sm:flex-wrap dark:border-gray-800 dark:bg-gray-900">
+        <div>
+            <a
+                href="{{ route(
+                    'admin.delivery-orders.show',
+                    $deliveryOrder->id
+                ) }}"
+                class="text-sm text-gray-600 hover:text-brandColor dark:text-gray-300"
+            >
+                &larr; Back to Surat Jalan
+            </a>
+
+            <div class="mt-2 flex items-center gap-3">
+                <p class="text-xl font-bold text-gray-800 dark:text-white">
+                    Return / Check-In
+                </p>
+
+                <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold uppercase text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                    {{ $status }}
+                </span>
+            </div>
+
+            <p class="mt-1 text-sm text-gray-500">
+                {{ $deliveryOrder->delivery_order_number }}
+                &middot; {{ $deliveryOrder->project_code ?: '-' }}
+
+                @if ($deliveryOrder->project_name)
+                    &middot; {{ $deliveryOrder->project_name }}
+                @endif
+            </p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+            @if (
+                $canOperate
+                && $summary['out'] > 0
+                && bouncer()->hasPermission('delivery-orders.return')
+            )
+                <form
+                    method="POST"
+                    action="{{ route(
+                        'admin.delivery-orders.return.start',
+                        $deliveryOrder->id
+                    ) }}"
+                >
+                    @csrf
+                    @method('PUT')
+
+                    <button
+                        type="submit"
+                        class="secondary-button"
+                        onclick="return confirm('Mulai proses return? Seluruh inventory OUT akan menjadi RETURN PENDING.')"
+                    >
+                        Start Return
+                    </button>
+                </form>
+            @endif
+
+            @if (
+                $status === 'delivered'
+                && $allReturned
+                && bouncer()->hasPermission('delivery-orders.returned')
+            )
+                <form
+                    method="POST"
+                    action="{{ route(
+                        'admin.delivery-orders.returned',
+                        $deliveryOrder->id
+                    ) }}"
+                >
+                    @csrf
+                    @method('PUT')
+
+                    <button
+                        type="submit"
+                        class="primary-button"
+                        onclick="return confirm('Seluruh inventory sudah selesai Check-In. Tandai Surat Jalan sebagai RETURNED?')"
+                    >
+                        Mark as Returned
+                    </button>
+                </form>
+            @endif
+        </div>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+        <strong>Return Pending</strong> berarti barang sedang dalam proses kembali dan belum selesai diperiksa.
+        Check-In adalah titik saat kondisi fisik dicatat dan stok benar-benar dikembalikan.
+    </div>
+
+    <div class="mt-4 grid grid-cols-3 gap-4 max-lg:grid-cols-1">
+        <div class="rounded-lg border border-purple-200 bg-purple-50 p-4">
+            <p class="text-xs font-semibold uppercase text-purple-600">
+                Out
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-purple-800">
+                {{ $summary['out'] }}
+            </p>
+        </div>
+
+        <div class="rounded-lg border border-orange-200 bg-orange-50 p-4">
+            <p class="text-xs font-semibold uppercase text-orange-600">
+                Return Pending
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-orange-800">
+                {{ $summary['return_pending'] }}
+            </p>
+        </div>
+
+        <div class="rounded-lg border border-green-200 bg-green-50 p-4">
+            <p class="text-xs font-semibold uppercase text-green-600">
+                Checked In
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-green-800">
+                {{ $summary['returned'] }}
+            </p>
+        </div>
+    </div>
+
+    <div class="mt-4 grid gap-4">
+        @forelse ($allocations as $allocation)
+            <div class="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+                <div class="flex items-start justify-between gap-4 max-sm:flex-wrap">
+                    <div>
+                        <p class="text-base font-semibold text-gray-800 dark:text-white">
+                            {{ $allocation->deliveryOrderItem?->name ?: '-' }}
+                        </p>
+
+                        @if ($allocation->deliveryOrderItem?->description)
+                            <p class="mt-1 text-sm text-gray-500">
+                                {{ $allocation->deliveryOrderItem->description }}
+                            </p>
+                        @endif
+
+                        <p class="mt-2 text-xs text-gray-500">
+                            {{ $allocation->inventoryItem?->code ?: '-' }}
+                            &middot;
+                            {{ $allocation->inventoryItem?->name ?: '-' }}
+                        </p>
+                    </div>
+
+                    <span class="rounded-full px-3 py-1 text-xs font-bold {{ $statusClass($allocation->status) }}">
+                        {{ strtoupper(str_replace('_', ' ', $allocation->status)) }}
+                    </span>
+                </div>
+
+                @if ($allocation->tracking_type === 'serialized')
+                    <div class="mt-4 grid grid-cols-4 gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
+                        <div class="rounded-md border border-gray-200 p-3">
+                            <p class="text-xs uppercase text-gray-500">
+                                Asset Code
+                            </p>
+
+                            <p class="mt-1 font-bold text-gray-800">
+                                {{ $allocation->inventoryAsset?->asset_code ?: '-' }}
+                            </p>
+                        </div>
+
+                        <div class="rounded-md border border-gray-200 p-3">
+                            <p class="text-xs uppercase text-gray-500">
+                                Serial Number
+                            </p>
+
+                            <p class="mt-1 text-sm text-gray-800">
+                                {{ $allocation->inventoryAsset?->serial_number ?: '-' }}
+                            </p>
+                        </div>
+
+                        <div class="rounded-md border border-gray-200 p-3">
+                            <p class="text-xs uppercase text-gray-500">
+                                Current Asset Status
+                            </p>
+
+                            <p class="mt-1 text-sm font-semibold uppercase text-gray-800">
+                                {{ $allocation->inventoryAsset?->status ?: '-' }}
+                            </p>
+                        </div>
+
+                        <div class="rounded-md border border-gray-200 p-3">
+                            <p class="text-xs uppercase text-gray-500">
+                                Current Condition
+                            </p>
+
+                            <p class="mt-1 text-sm font-semibold uppercase text-gray-800">
+                                {{ $allocation->inventoryAsset?->condition ?: '-' }}
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (
+                        $canOperate
+                        && $allocation->status === 'return_pending'
+                        && bouncer()->hasPermission('delivery-orders.return.check-in')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.return.check-in',
+                                [
+                                    $deliveryOrder->id,
+                                    $allocation->id,
+                                ]
+                            ) }}"
+                            class="mt-4 grid grid-cols-3 gap-3 max-lg:grid-cols-1"
+                        >
+                            @csrf
+                            @method('PUT')
+
+                            <div>
+                                <label class="mb-1.5 block text-sm font-medium text-gray-800">
+                                    Return Condition
+                                </label>
+
+                                <select
+                                    name="condition"
+                                    required
+                                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                                >
+                                    <option value="good">Good</option>
+                                    <option value="fair">Fair</option>
+                                    <option value="damaged">Damaged</option>
+                                    <option value="missing">Missing</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="mb-1.5 block text-sm font-medium text-gray-800">
+                                    Notes
+                                </label>
+
+                                <input
+                                    type="text"
+                                    name="notes"
+                                    maxlength="2000"
+                                    placeholder="Optional inspection note"
+                                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                                >
+                            </div>
+
+                            <div class="flex items-end">
+                                <button
+                                    type="submit"
+                                    class="primary-button w-full justify-center"
+                                    onclick="return confirm('Check-In asset ini dengan kondisi yang dipilih?')"
+                                >
+                                    Check-In Asset
+                                </button>
+                            </div>
+                        </form>
+                    @elseif ($allocation->status === 'returned')
+                        <div class="mt-4 rounded-md bg-green-50 p-4 text-sm text-green-700">
+                            <strong>Check-In selesai.</strong>
+                            Condition:
+                            {{ strtoupper(str_replace('_', ' ', $allocation->return_condition ?: '-')) }}
+
+                            @if ($allocation->checked_in_at)
+                                &middot;
+                                {{ $allocation->checked_in_at->format('d M Y H:i') }}
+                            @endif
+
+                            @if ($allocation->checkedInBy)
+                                &middot;
+                                {{ $allocation->checkedInBy->name }}
+                            @endif
+
+                            @if ($allocation->return_notes)
+                                <div class="mt-2">
+                                    {{ $allocation->return_notes }}
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+                @else
+                    @php
+                        $outQuantity = (float) $allocation->quantity;
+                        $returnedQuantity = $allocation->returned_quantity !== null
+                            ? (float) $allocation->returned_quantity
+                            : null;
+
+                        $consumedQuantity = $returnedQuantity !== null
+                            ? max($outQuantity - $returnedQuantity, 0)
+                            : null;
+                    @endphp
+
+                    <div class="mt-4 grid grid-cols-3 gap-3 max-lg:grid-cols-1">
+                        <div class="rounded-md border border-gray-200 p-3">
+                            <p class="text-xs uppercase text-gray-500">
+                                Quantity OUT
+                            </p>
+
+                            <p class="mt-1 text-lg font-bold text-gray-800">
+                                {{ $formatQty($outQuantity) }}
+                                {{ $allocation->inventoryItem?->unit ?: '-' }}
+                            </p>
+                        </div>
+
+                        <div class="rounded-md border border-gray-200 p-3">
+                            <p class="text-xs uppercase text-gray-500">
+                                Current Warehouse Stock
+                            </p>
+
+                            <p class="mt-1 text-lg font-bold text-gray-800">
+                                {{ $formatQty($allocation->inventoryItem?->quantity_on_hand ?: 0) }}
+                                {{ $allocation->inventoryItem?->unit ?: '-' }}
+                            </p>
+                        </div>
+
+                        <div class="rounded-md border border-gray-200 p-3">
+                            <p class="text-xs uppercase text-gray-500">
+                                Return Rule
+                            </p>
+
+                            <p class="mt-1 text-sm text-gray-600">
+                                Masukkan hanya jumlah fisik yang benar-benar kembali.
+                                Sisanya dianggap terpakai / consumed.
+                            </p>
+                        </div>
+                    </div>
+
+                    @if (
+                        $canOperate
+                        && $allocation->status === 'return_pending'
+                        && bouncer()->hasPermission('delivery-orders.return.check-in')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.return.check-in',
+                                [
+                                    $deliveryOrder->id,
+                                    $allocation->id,
+                                ]
+                            ) }}"
+                            class="mt-4 grid grid-cols-3 gap-3 max-lg:grid-cols-1"
+                        >
+                            @csrf
+                            @method('PUT')
+
+                            <div>
+                                <label class="mb-1.5 block text-sm font-medium text-gray-800">
+                                    Returned Quantity
+                                </label>
+
+                                <input
+                                    type="number"
+                                    name="returned_quantity"
+                                    value="0"
+                                    min="0"
+                                    max="{{ $formatQty($outQuantity) }}"
+                                    step="0.01"
+                                    required
+                                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                                >
+
+                                <p class="mt-1 text-xs text-gray-500">
+                                    Maximum:
+                                    {{ $formatQty($outQuantity) }}
+                                    {{ $allocation->inventoryItem?->unit ?: '-' }}
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="mb-1.5 block text-sm font-medium text-gray-800">
+                                    Notes
+                                </label>
+
+                                <input
+                                    type="text"
+                                    name="notes"
+                                    maxlength="2000"
+                                    placeholder="Contoh: 1 roll unused returned"
+                                    class="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm"
+                                >
+                            </div>
+
+                            <div class="flex items-end">
+                                <button
+                                    type="submit"
+                                    class="primary-button w-full justify-center"
+                                    onclick="return confirm('Check-In quantity ini? Pastikan Returned Quantity sesuai barang fisik yang benar-benar kembali.')"
+                                >
+                                    Check-In Quantity
+                                </button>
+                            </div>
+                        </form>
+                    @elseif ($allocation->status === 'returned')
+                        <div class="mt-4 rounded-md bg-green-50 p-4 text-sm text-green-700">
+                            <strong>Check-In selesai.</strong>
+
+                            Returned:
+                            {{ $formatQty($returnedQuantity) }}
+                            {{ $allocation->inventoryItem?->unit ?: '-' }}
+
+                            &middot;
+
+                            Consumed:
+                            {{ $formatQty($consumedQuantity) }}
+                            {{ $allocation->inventoryItem?->unit ?: '-' }}
+
+                            @if ($allocation->checked_in_at)
+                                &middot;
+                                {{ $allocation->checked_in_at->format('d M Y H:i') }}
+                            @endif
+
+                            @if ($allocation->checkedInBy)
+                                &middot;
+                                {{ $allocation->checkedInBy->name }}
+                            @endif
+
+                            @if ($allocation->return_notes)
+                                <div class="mt-2">
+                                    {{ $allocation->return_notes }}
+                                </div>
+                            @endif
+                        </div>
+                    @endif
+                @endif
+
+                @if ($allocation->status === 'out')
+                    <div class="mt-4 rounded-md border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-700">
+                        Inventory masih OUT. Klik <strong>Start Return</strong> di bagian atas sebelum Check-In.
+                    </div>
+                @endif
+            </div>
+        @empty
+            <div class="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">
+                Tidak ada allocation OUT / RETURN PENDING / RETURNED untuk Surat Jalan ini.
+            </div>
+        @endforelse
+    </div>
+
+    @if ($allReturned)
+        <div class="mt-4 rounded-lg border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-700">
+            Seluruh inventory sudah selesai Check-In.
+            Surat Jalan dapat diubah menjadi RETURNED.
+        </div>
+    @endif
+</x-admin::layouts>
+
+==================================================
+PICKING CONTROLLER
+==================================================
+<?php
+
+namespace Webkul\Admin\Http\Controllers\DeliveryOrder;
+
+use Illuminate\Http\RedirectResponse;
+use Illuminate\View\View;
+use Webkul\Admin\Http\Controllers\Controller;
+use Webkul\Invoice\Models\DeliveryOrder;
+use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
+use Webkul\Invoice\Services\DeliveryOrderPickingService;
+
+class DeliveryOrderPickingController extends Controller
+{
+    public function __construct(
+        protected DeliveryOrderPickingService $pickingService
+    ) {
+    }
+
+    public function show(int $id): View
+    {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $allocations = DeliveryOrderInventoryAllocation::query()
+            ->with([
+                'deliveryOrderItem',
+                'inventoryItem',
+                'inventoryAsset',
+                'allocatedBy',
+                'pickedBy',
+                'outBy',
+            ])
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->whereIn(
+                'status',
+                DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+            )
+            ->orderBy('delivery_order_item_id')
+            ->orderBy('id')
+            ->get();
+
+        $summary = [
+            'allocated' => $allocations
+                ->where('status', 'allocated')
+                ->count(),
+
+            'picked' => $allocations
+                ->where('status', 'picked')
+                ->count(),
+
+            'out' => $allocations
+                ->where('status', 'out')
+                ->count(),
+
+            'return_pending' => $allocations
+                ->where('status', 'return_pending')
+                ->count(),
+        ];
+
+        $canOperate = strtolower(
+            $deliveryOrder->status ?: 'draft'
+        ) === 'issued';
+
+        $allPicked = $allocations->isNotEmpty()
+            && $allocations->every(
+                fn ($allocation) => $allocation->status === 'picked'
+            );
+
+        $allOut = $allocations->isNotEmpty()
+            && $allocations->every(
+                fn ($allocation) => $allocation->status === 'out'
+            );
+
+        return view(
+            'admin::delivery-orders.picking',
+            compact(
+                'deliveryOrder',
+                'allocations',
+                'summary',
+                'canOperate',
+                'allPicked',
+                'allOut'
+            )
+        );
+    }
+
+    public function markPicked(
+        int $id,
+        int $allocationId
+    ): RedirectResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $allocation = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->findOrFail($allocationId);
+
+        $this->pickingService->markPicked(
+            $deliveryOrder,
+            $allocation,
+            auth()->guard('user')->id()
+        );
+
+        session()->flash(
+            'success',
+            'Inventory berhasil ditandai PICKED.'
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.picking.show',
+            $deliveryOrder->id
+        );
+    }
+
+    public function markAllPicked(
+        int $id
+    ): RedirectResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $this->pickingService->markAllPicked(
+            $deliveryOrder,
+            auth()->guard('user')->id()
+        );
+
+        session()->flash(
+            'success',
+            'Seluruh inventory allocation berhasil ditandai PICKED.'
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.picking.show',
+            $deliveryOrder->id
+        );
+    }
+
+    public function confirmOut(
+        int $id
+    ): RedirectResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $this->pickingService->confirmOut(
+            $deliveryOrder,
+            auth()->guard('user')->id()
+        );
+
+        session()->flash(
+            'success',
+            'Seluruh inventory berhasil dikonfirmasi OUT dari warehouse.'
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.picking.show',
+            $deliveryOrder->id
+        );
+    }
+
+    private function findDeliveryOrder(
+        int $id
+    ): DeliveryOrder {
+        return DeliveryOrder::with([
+            'items.inventoryItem',
+            'items.allocations.inventoryAsset',
+        ])->findOrFail($id);
+    }
+}
+
+==================================================
+RETURN CONTROLLER
+==================================================
+<?php
+
+namespace Webkul\Admin\Http\Controllers\DeliveryOrder;
+
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
+use Webkul\Admin\Http\Controllers\Controller;
+use Webkul\Invoice\Models\DeliveryOrder;
+use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
+use Webkul\Invoice\Services\DeliveryOrderReturnService;
+
+class DeliveryOrderReturnController extends Controller
+{
+    public function __construct(
+        protected DeliveryOrderReturnService $returnService
+    ) {
+    }
+
+    public function show(int $id): View
+    {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $allocations = DeliveryOrderInventoryAllocation::query()
+            ->with([
+                'deliveryOrderItem',
+                'inventoryItem',
+                'inventoryAsset',
+                'returnPendingBy',
+                'checkedInBy',
+            ])
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->whereIn('status', [
+                'out',
+                'return_pending',
+                'returned',
+            ])
+            ->orderBy('delivery_order_item_id')
+            ->orderBy('id')
+            ->get();
+
+        $summary = [
+            'out' => $allocations
+                ->where('status', 'out')
+                ->count(),
+
+            'return_pending' => $allocations
+                ->where('status', 'return_pending')
+                ->count(),
+
+            'returned' => $allocations
+                ->where('status', 'returned')
+                ->count(),
+        ];
+
+        $canOperate = strtolower(
+            $deliveryOrder->status ?: 'draft'
+        ) === 'delivered';
+
+        $allReturned = $this->returnService
+            ->allReturned($deliveryOrder);
+
+        return view(
+            'admin::delivery-orders.return',
+            compact(
+                'deliveryOrder',
+                'allocations',
+                'summary',
+                'canOperate',
+                'allReturned'
+            )
+        );
+    }
+
+    public function start(int $id): RedirectResponse
+    {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $this->returnService->startReturn(
+            $deliveryOrder,
+            auth()->guard('user')->id()
+        );
+
+        session()->flash(
+            'success',
+            'Proses return dimulai. Inventory sekarang berstatus RETURN PENDING.'
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.return.show',
+            $deliveryOrder->id
+        );
+    }
+
+    public function checkIn(
+        Request $request,
+        int $id,
+        int $allocationId
+    ): RedirectResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $allocation = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->findOrFail($allocationId);
+
+        if ($allocation->tracking_type === 'serialized') {
+            $validated = $request->validate([
+                'condition' => [
+                    'required',
+                    Rule::in([
+                        'good',
+                        'fair',
+                        'damaged',
+                        'missing',
+                    ]),
+                ],
+                'notes' => [
+                    'nullable',
+                    'string',
+                    'max:2000',
+                ],
+            ]);
+
+            $this->returnService->checkInSerialized(
+                $deliveryOrder,
+                $allocation,
+                $validated['condition'],
+                $validated['notes'] ?? null,
+                auth()->guard('user')->id()
+            );
+        } elseif ($allocation->tracking_type === 'quantity') {
+            $validated = $request->validate([
+                'returned_quantity' => [
+                    'required',
+                    'numeric',
+                    'min:0',
+                    'max:'.(float) $allocation->quantity,
+                ],
+                'notes' => [
+                    'nullable',
+                    'string',
+                    'max:2000',
+                ],
+            ]);
+
+            $this->returnService->checkInQuantity(
+                $deliveryOrder,
+                $allocation,
+                (float) $validated['returned_quantity'],
+                $validated['notes'] ?? null,
+                auth()->guard('user')->id()
+            );
+        } else {
+            throw ValidationException::withMessages([
+                'inventory' => 'Tracking type allocation tidak dikenali.',
+            ]);
+        }
+
+        session()->flash(
+            'success',
+            'Inventory berhasil di-Check-In.'
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.return.show',
+            $deliveryOrder->id
+        );
+    }
+
+    private function findDeliveryOrder(
+        int $id
+    ): DeliveryOrder {
+        return DeliveryOrder::with([
+            'items.inventoryItem',
+            'items.allocations.inventoryAsset',
+        ])->findOrFail($id);
+    }
+}
+
+==================================================
+PICKING SERVICE
+==================================================
+<?php
+
+namespace Webkul\Invoice\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Webkul\Invoice\Models\DeliveryOrder;
+use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
+use Webkul\Warehouse\Models\InventoryAsset;
+use Webkul\Warehouse\Models\InventoryItem;
+use Webkul\Warehouse\Models\InventoryStockMovement;
+
+class DeliveryOrderPickingService
+{
+    /**
+     * Mark satu allocation sebagai PICKED.
+     */
+    public function markPicked(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderInventoryAllocation $allocation,
+        ?int $performedBy = null
+    ): void {
+        $this->assertIssued($deliveryOrder);
+
+        if ($allocation->delivery_order_id !== $deliveryOrder->id) {
+            throw ValidationException::withMessages([
+                'allocation' => 'Allocation tidak termasuk Surat Jalan ini.',
+            ]);
+        }
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $allocation,
+            $performedBy
+        ) {
+            $lockedAllocation = DeliveryOrderInventoryAllocation::query()
+                ->lockForUpdate()
+                ->findOrFail($allocation->id);
+
+            if ($lockedAllocation->status === 'picked') {
+                return;
+            }
+
+            if ($lockedAllocation->status !== 'allocated') {
+                throw ValidationException::withMessages([
+                    'allocation' => sprintf(
+                        'Allocation hanya dapat dipick dari status ALLOCATED. Status saat ini: %s.',
+                        strtoupper($lockedAllocation->status)
+                    ),
+                ]);
+            }
+
+            $inventoryItem = InventoryItem::query()
+                ->findOrFail($lockedAllocation->inventory_item_id);
+
+            $inventoryAsset = null;
+
+            if ($lockedAllocation->tracking_type === 'serialized') {
+                $inventoryAsset = InventoryAsset::query()
+                    ->lockForUpdate()
+                    ->findOrFail($lockedAllocation->inventory_asset_id);
+
+                if ($inventoryAsset->status !== 'allocated') {
+                    throw ValidationException::withMessages([
+                        'allocation' => sprintf(
+                            'Asset %s harus berstatus ALLOCATED sebelum dipick. Status saat ini: %s.',
+                            $inventoryAsset->asset_code,
+                            strtoupper($inventoryAsset->status)
+                        ),
+                    ]);
+                }
+
+                $inventoryAsset->update([
+                    'status' => 'picked',
+                ]);
+            }
+
+            $lockedAllocation->update([
+                'status'    => 'picked',
+                'picked_by' => $performedBy,
+                'picked_at' => now(),
+            ]);
+
+            $this->recordMovement(
+                $deliveryOrder,
+                $inventoryItem,
+                $inventoryAsset,
+                'picked',
+                (float) $lockedAllocation->quantity,
+                'allocated',
+                'picked',
+                $performedBy,
+                sprintf(
+                    'Picked for %s.',
+                    $deliveryOrder->delivery_order_number
+                )
+            );
+        });
+    }
+
+    /**
+     * Mark semua allocation ALLOCATED menjadi PICKED.
+     */
+    public function markAllPicked(
+        DeliveryOrder $deliveryOrder,
+        ?int $performedBy = null
+    ): void {
+        $this->assertIssued($deliveryOrder);
+
+        $allocationIds = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->where('status', 'allocated')
+            ->orderBy('id')
+            ->pluck('id');
+
+        if ($allocationIds->isEmpty()) {
+            return;
+        }
+
+        foreach ($allocationIds as $allocationId) {
+            $allocation = DeliveryOrderInventoryAllocation::findOrFail(
+                $allocationId
+            );
+
+            $this->markPicked(
+                $deliveryOrder,
+                $allocation,
+                $performedBy
+            );
+        }
+    }
+
+    /**
+     * Confirm seluruh PICKED inventory benar-benar OUT dari warehouse.
+     *
+     * Serialized:
+     * PICKED -> OUT
+     *
+     * Quantity:
+     * PICKED -> OUT dan quantity_on_hand berkurang.
+     */
+    public function confirmOut(
+        DeliveryOrder $deliveryOrder,
+        ?int $performedBy = null
+    ): void {
+        $this->assertIssued($deliveryOrder);
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $performedBy
+        ) {
+            $allocations = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->whereIn(
+                    'status',
+                    DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                )
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($allocations->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'inventory' => 'Surat Jalan tidak memiliki inventory allocation aktif.',
+                ]);
+            }
+
+            $notPicked = $allocations
+                ->where('status', '!=', 'picked');
+
+            if ($notPicked->isNotEmpty()) {
+                $statuses = $notPicked
+                    ->pluck('status')
+                    ->map(fn ($status) => strtoupper($status))
+                    ->unique()
+                    ->implode(', ');
+
+                throw ValidationException::withMessages([
+                    'inventory' => 'Semua inventory harus berstatus PICKED sebelum Confirm OUT. Status yang masih ditemukan: '
+                        .$statuses.'.',
+                ]);
+            }
+
+            foreach ($allocations as $allocation) {
+                $inventoryItem = InventoryItem::query()
+                    ->lockForUpdate()
+                    ->findOrFail($allocation->inventory_item_id);
+
+                $inventoryAsset = null;
+                $notes = sprintf(
+                    'Confirmed OUT for %s.',
+                    $deliveryOrder->delivery_order_number
+                );
+
+                if ($allocation->tracking_type === 'serialized') {
+                    $inventoryAsset = InventoryAsset::query()
+                        ->lockForUpdate()
+                        ->findOrFail($allocation->inventory_asset_id);
+
+                    if ($inventoryAsset->status !== 'picked') {
+                        throw ValidationException::withMessages([
+                            'inventory' => sprintf(
+                                'Asset %s belum berstatus PICKED.',
+                                $inventoryAsset->asset_code
+                            ),
+                        ]);
+                    }
+
+                    $inventoryAsset->update([
+                        'status' => 'out',
+                    ]);
+                } else {
+                    $quantity = (float) $allocation->quantity;
+                    $before = (float) $inventoryItem->quantity_on_hand;
+                    $after = $before - $quantity;
+
+                    if ($after < -0.0001) {
+                        throw ValidationException::withMessages([
+                            'inventory' => sprintf(
+                                'Stock %s tidak cukup untuk OUT %s %s. Stock saat ini %s %s.',
+                                $inventoryItem->name,
+                                $this->formatQuantity($quantity),
+                                $inventoryItem->unit,
+                                $this->formatQuantity($before),
+                                $inventoryItem->unit
+                            ),
+                        ]);
+                    }
+
+                    $after = max($after, 0);
+
+                    $inventoryItem->update([
+                        'quantity_on_hand' => $after,
+                    ]);
+
+                    $notes = sprintf(
+                        'Confirmed OUT for %s. Stock %s %s -> %s %s.',
+                        $deliveryOrder->delivery_order_number,
+                        $this->formatQuantity($before),
+                        $inventoryItem->unit,
+                        $this->formatQuantity($after),
+                        $inventoryItem->unit
+                    );
+                }
+
+                $allocation->update([
+                    'status' => 'out',
+                    'out_by' => $performedBy,
+                    'out_at' => now(),
+                ]);
+
+                $this->recordMovement(
+                    $deliveryOrder,
+                    $inventoryItem,
+                    $inventoryAsset,
+                    'out',
+                    (float) $allocation->quantity,
+                    'picked',
+                    'out',
+                    $performedBy,
+                    $notes
+                );
+            }
+        });
+    }
+
+    /**
+     * True bila seluruh allocation aktif sudah OUT.
+     */
+    public function allOut(
+        DeliveryOrder $deliveryOrder
+    ): bool {
+        $active = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->whereIn(
+                'status',
+                DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+            );
+
+        if (! (clone $active)->exists()) {
+            return false;
+        }
+
+        return ! (clone $active)
+            ->where('status', '!=', 'out')
+            ->exists();
+    }
+
+    private function assertIssued(
+        DeliveryOrder $deliveryOrder
+    ): void {
+        if (
+            strtolower($deliveryOrder->status ?: 'draft')
+            !== 'issued'
+        ) {
+            throw ValidationException::withMessages([
+                'delivery_order' => 'Picking / OUT hanya dapat diproses ketika Surat Jalan berstatus ISSUED.',
+            ]);
+        }
+    }
+
+    private function recordMovement(
+        DeliveryOrder $deliveryOrder,
+        InventoryItem $inventoryItem,
+        ?InventoryAsset $inventoryAsset,
+        string $movementType,
+        float $quantity,
+        ?string $fromStatus,
+        ?string $toStatus,
+        ?int $performedBy,
+        string $notes
+    ): InventoryStockMovement {
+        return InventoryStockMovement::create([
+            'inventory_item_id'     => $inventoryItem->id,
+            'inventory_asset_id'    => $inventoryAsset?->id,
+            'warehouse_id'          => $inventoryAsset?->warehouse_id
+                ?? $inventoryItem->warehouse_id,
+            'warehouse_location_id' => $inventoryAsset?->warehouse_location_id
+                ?? $inventoryItem->warehouse_location_id,
+            'movement_type'         => $movementType,
+            'quantity'              => $quantity,
+            'from_status'           => $fromStatus,
+            'to_status'             => $toStatus,
+            'reference_type'        => 'delivery_order',
+            'reference_id'          => $deliveryOrder->id,
+            'reference_number'      => $deliveryOrder->delivery_order_number,
+            'performed_by'          => $performedBy,
+            'notes'                 => $notes,
+            'occurred_at'           => now(),
+        ]);
+    }
+
+    private function formatQuantity(float $value): string
+    {
+        return rtrim(
+            rtrim(
+                number_format($value, 2, '.', ''),
+                '0'
+            ),
+            '.'
+        );
+    }
+}
+
+==================================================
+RETURN SERVICE
+==================================================
+<?php
+
+namespace Webkul\Invoice\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Webkul\Invoice\Models\DeliveryOrder;
+use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
+use Webkul\Warehouse\Models\InventoryAsset;
+use Webkul\Warehouse\Models\InventoryItem;
+use Webkul\Warehouse\Models\InventoryStockMovement;
+
+class DeliveryOrderReturnService
+{
+    /**
+     * Memulai proses return untuk seluruh allocation yang masih OUT.
+     *
+     * Serialized asset:
+     * OUT -> RETURN_PENDING
+     *
+     * Quantity:
+     * allocation OUT -> RETURN_PENDING
+     * quantity_on_hand belum berubah.
+     */
+    public function startReturn(
+        DeliveryOrder $deliveryOrder,
+        ?int $performedBy = null
+    ): void {
+        $this->assertDelivered($deliveryOrder);
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $performedBy
+        ) {
+            $allocations = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->whereIn(
+                    'status',
+                    DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                )
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($allocations->isEmpty()) {
+                if ($this->allReturned($deliveryOrder)) {
+                    return;
+                }
+
+                throw ValidationException::withMessages([
+                    'inventory' => 'Tidak ada inventory aktif yang dapat diproses return.',
+                ]);
+            }
+
+            $invalid = $allocations
+                ->whereIn('status', [
+                    'allocated',
+                    'picked',
+                ]);
+
+            if ($invalid->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'inventory' => 'Return hanya dapat dimulai setelah seluruh inventory berstatus OUT.',
+                ]);
+            }
+
+            foreach ($allocations as $allocation) {
+                if ($allocation->status === 'return_pending') {
+                    continue;
+                }
+
+                if ($allocation->status !== 'out') {
+                    throw ValidationException::withMessages([
+                        'inventory' => sprintf(
+                            'Allocation ID %d tidak dapat masuk RETURN PENDING dari status %s.',
+                            $allocation->id,
+                            strtoupper($allocation->status)
+                        ),
+                    ]);
+                }
+
+                $inventoryItem = InventoryItem::query()
+                    ->findOrFail($allocation->inventory_item_id);
+
+                $inventoryAsset = null;
+
+                if ($allocation->tracking_type === 'serialized') {
+                    $inventoryAsset = InventoryAsset::query()
+                        ->lockForUpdate()
+                        ->findOrFail($allocation->inventory_asset_id);
+
+                    if ($inventoryAsset->status !== 'out') {
+                        throw ValidationException::withMessages([
+                            'inventory' => sprintf(
+                                'Asset %s harus berstatus OUT sebelum Return Pending. Status saat ini: %s.',
+                                $inventoryAsset->asset_code,
+                                strtoupper($inventoryAsset->status)
+                            ),
+                        ]);
+                    }
+
+                    $inventoryAsset->update([
+                        'status' => 'return_pending',
+                    ]);
+                }
+
+                $allocation->update([
+                    'status'             => 'return_pending',
+                    'return_pending_by'  => $performedBy,
+                    'return_pending_at'  => now(),
+                ]);
+
+                $this->recordMovement(
+                    $deliveryOrder,
+                    $inventoryItem,
+                    $inventoryAsset,
+                    'return_pending',
+                    (float) $allocation->quantity,
+                    'out',
+                    'return_pending',
+                    $performedBy,
+                    sprintf(
+                        'Return process started for %s.',
+                        $deliveryOrder->delivery_order_number
+                    )
+                );
+            }
+        });
+    }
+
+    /**
+     * Check-In satu serialized asset.
+     */
+    public function checkInSerialized(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderInventoryAllocation $allocation,
+        string $condition,
+        ?string $notes = null,
+        ?int $performedBy = null
+    ): void {
+        $this->assertDelivered($deliveryOrder);
+
+        $allowedConditions = [
+            'good',
+            'fair',
+            'damaged',
+            'missing',
+        ];
+
+        if (! in_array($condition, $allowedConditions, true)) {
+            throw ValidationException::withMessages([
+                'condition' => 'Return condition tidak valid.',
+            ]);
+        }
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $allocation,
+            $condition,
+            $notes,
+            $performedBy
+        ) {
+            $lockedAllocation = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->lockForUpdate()
+                ->findOrFail($allocation->id);
+
+            if ($lockedAllocation->tracking_type !== 'serialized') {
+                throw ValidationException::withMessages([
+                    'condition' => 'Allocation ini bukan serialized asset.',
+                ]);
+            }
+
+            if ($lockedAllocation->status !== 'return_pending') {
+                throw ValidationException::withMessages([
+                    'condition' => sprintf(
+                        'Serialized asset hanya dapat di-Check-In dari RETURN PENDING. Status saat ini: %s.',
+                        strtoupper($lockedAllocation->status)
+                    ),
+                ]);
+            }
+
+            $inventoryItem = InventoryItem::query()
+                ->findOrFail($lockedAllocation->inventory_item_id);
+
+            $inventoryAsset = InventoryAsset::query()
+                ->lockForUpdate()
+                ->findOrFail($lockedAllocation->inventory_asset_id);
+
+            if ($inventoryAsset->status !== 'return_pending') {
+                throw ValidationException::withMessages([
+                    'condition' => sprintf(
+                        'Asset %s harus berstatus RETURN PENDING. Status saat ini: %s.',
+                        $inventoryAsset->asset_code,
+                        strtoupper($inventoryAsset->status)
+                    ),
+                ]);
+            }
+
+            $targetStatus = match ($condition) {
+                'damaged' => 'damaged',
+                'missing' => 'missing',
+                default   => 'available',
+            };
+
+            $assetData = [
+                'status' => $targetStatus,
+            ];
+
+            if ($condition !== 'missing') {
+                $assetData['condition'] = $condition;
+            }
+
+            $inventoryAsset->update($assetData);
+
+            $returnedQuantity = $condition === 'missing'
+                ? 0
+                : 1;
+
+            $lockedAllocation->update([
+                'status'            => 'returned',
+                'checked_in_by'     => $performedBy,
+                'checked_in_at'     => now(),
+                'return_condition'  => $condition,
+                'returned_quantity' => $returnedQuantity,
+                'return_notes'      => $notes,
+            ]);
+
+            $movementType = match ($condition) {
+                'damaged' => 'damaged',
+                'missing' => 'missing',
+                default   => 'returned',
+            };
+
+            $this->recordMovement(
+                $deliveryOrder,
+                $inventoryItem,
+                $inventoryAsset,
+                $movementType,
+                1,
+                'return_pending',
+                $targetStatus,
+                $performedBy,
+                sprintf(
+                    'Check-In %s from %s. Condition: %s.%s',
+                    $inventoryAsset->asset_code,
+                    $deliveryOrder->delivery_order_number,
+                    strtoupper($condition),
+                    $notes ? ' '.$notes : ''
+                )
+            );
+        });
+    }
+
+    /**
+     * Check-In quantity stock.
+     *
+     * returnedQuantity = jumlah fisik yang benar-benar kembali.
+     * Sisa quantity dianggap terpakai / consumed dan tidak ditambahkan
+     * kembali ke quantity_on_hand.
+     */
+    public function checkInQuantity(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderInventoryAllocation $allocation,
+        float $returnedQuantity,
+        ?string $notes = null,
+        ?int $performedBy = null
+    ): void {
+        $this->assertDelivered($deliveryOrder);
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $allocation,
+            $returnedQuantity,
+            $notes,
+            $performedBy
+        ) {
+            $lockedAllocation = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->lockForUpdate()
+                ->findOrFail($allocation->id);
+
+            if ($lockedAllocation->tracking_type !== 'quantity') {
+                throw ValidationException::withMessages([
+                    'returned_quantity' => 'Allocation ini bukan quantity stock.',
+                ]);
+            }
+
+            if ($lockedAllocation->status !== 'return_pending') {
+                throw ValidationException::withMessages([
+                    'returned_quantity' => sprintf(
+                        'Quantity hanya dapat di-Check-In dari RETURN PENDING. Status saat ini: %s.',
+                        strtoupper($lockedAllocation->status)
+                    ),
+                ]);
+            }
+
+            $outQuantity = (float) $lockedAllocation->quantity;
+            $returnedQuantity = round($returnedQuantity, 2);
+
+            if (
+                $returnedQuantity < 0
+                || $returnedQuantity > $outQuantity + 0.0001
+            ) {
+                throw ValidationException::withMessages([
+                    'returned_quantity' => sprintf(
+                        'Jumlah kembali harus antara 0 dan %s.',
+                        $this->formatQuantity($outQuantity)
+                    ),
+                ]);
+            }
+
+            $returnedQuantity = min(
+                $returnedQuantity,
+                $outQuantity
+            );
+
+            $inventoryItem = InventoryItem::query()
+                ->lockForUpdate()
+                ->findOrFail($lockedAllocation->inventory_item_id);
+
+            $before = (float) $inventoryItem->quantity_on_hand;
+            $after = $before + $returnedQuantity;
+            $consumedQuantity = max(
+                $outQuantity - $returnedQuantity,
+                0
+            );
+
+            if ($returnedQuantity > 0) {
+                $inventoryItem->update([
+                    'quantity_on_hand' => $after,
+                ]);
+            }
+
+            $returnCondition = match (true) {
+                $returnedQuantity <= 0.0001 => 'consumed',
+                $consumedQuantity <= 0.0001 => 'full_return',
+                default                    => 'partial_return',
+            };
+
+            $lockedAllocation->update([
+                'status'            => 'returned',
+                'checked_in_by'     => $performedBy,
+                'checked_in_at'     => now(),
+                'return_condition'  => $returnCondition,
+                'returned_quantity' => $returnedQuantity,
+                'return_notes'      => $notes,
+            ]);
+
+            $this->recordMovement(
+                $deliveryOrder,
+                $inventoryItem,
+                null,
+                'returned',
+                $returnedQuantity,
+                'return_pending',
+                'available',
+                $performedBy,
+                sprintf(
+                    'Quantity Check-In for %s. Returned %s %s, consumed %s %s. Stock %s %s -> %s %s.%s',
+                    $deliveryOrder->delivery_order_number,
+                    $this->formatQuantity($returnedQuantity),
+                    $inventoryItem->unit,
+                    $this->formatQuantity($consumedQuantity),
+                    $inventoryItem->unit,
+                    $this->formatQuantity($before),
+                    $inventoryItem->unit,
+                    $this->formatQuantity($after),
+                    $inventoryItem->unit,
+                    $notes ? ' '.$notes : ''
+                )
+            );
+        });
+    }
+
+    /**
+     * Return dianggap complete bila ada allocation RETURNED dan
+     * sudah tidak ada allocation operational yang aktif.
+     *
+     * History RELEASED dari proses re-allocation lama diabaikan.
+     */
+    public function allReturned(
+        DeliveryOrder $deliveryOrder
+    ): bool {
+        $hasReturned = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->where('status', 'returned')
+            ->exists();
+
+        if (! $hasReturned) {
+            return false;
+        }
+
+        return ! DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->whereIn(
+                'status',
+                DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+            )
+            ->exists();
+    }
+
+    private function assertDelivered(
+        DeliveryOrder $deliveryOrder
+    ): void {
+        if (
+            strtolower($deliveryOrder->status ?: 'draft')
+            !== 'delivered'
+        ) {
+            throw ValidationException::withMessages([
+                'delivery_order' => 'Return / Check-In hanya dapat diproses ketika Surat Jalan berstatus DELIVERED.',
+            ]);
+        }
+    }
+
+    private function recordMovement(
+        DeliveryOrder $deliveryOrder,
+        InventoryItem $inventoryItem,
+        ?InventoryAsset $inventoryAsset,
+        string $movementType,
+        float $quantity,
+        ?string $fromStatus,
+        ?string $toStatus,
+        ?int $performedBy,
+        string $notes
+    ): InventoryStockMovement {
+        return InventoryStockMovement::create([
+            'inventory_item_id'     => $inventoryItem->id,
+            'inventory_asset_id'    => $inventoryAsset?->id,
+            'warehouse_id'          => $inventoryAsset?->warehouse_id
+                ?? $inventoryItem->warehouse_id,
+            'warehouse_location_id' => $inventoryAsset?->warehouse_location_id
+                ?? $inventoryItem->warehouse_location_id,
+            'movement_type'         => $movementType,
+            'quantity'              => $quantity,
+            'from_status'           => $fromStatus,
+            'to_status'             => $toStatus,
+            'reference_type'        => 'delivery_order',
+            'reference_id'          => $deliveryOrder->id,
+            'reference_number'      => $deliveryOrder->delivery_order_number,
+            'performed_by'          => $performedBy,
+            'notes'                 => $notes,
+            'occurred_at'           => now(),
+        ]);
+    }
+
+    private function formatQuantity(float $value): string
+    {
+        return rtrim(
+            rtrim(
+                number_format($value, 2, '.', ''),
+                '0'
+            ),
+            '.'
+        );
+    }
+}
+
+==================================================
+INVENTORY ASSET CONTROLLER
+==================================================
+<?php
+
+namespace Webkul\Admin\Http\Controllers\Inventory;
+
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\View\View;
+use Webkul\Admin\DataGrids\Inventory\InventoryAssetDataGrid;
+use Webkul\Admin\Http\Controllers\Controller;
+use Webkul\Warehouse\Models\InventoryAsset;
+use Webkul\Warehouse\Models\InventoryItem;
+use Webkul\Warehouse\Models\InventoryStockMovement;
+
+class InventoryAssetController extends Controller
+{
+    public function index()
+    {
+        if (request()->ajax() || request()->expectsJson()) {
+            return app(InventoryAssetDataGrid::class)->toJson();
+        }
+
+        $selectedItem = null;
+
+        if (request()->filled('inventory_item_id')) {
+            $selectedItem = InventoryItem::query()
+                ->where('tracking_type', 'serialized')
+                ->find(request()->integer('inventory_item_id'));
+        }
+
+        return view('admin::inventory.assets.index', compact('selectedItem'));
+    }
+
+    public function create(): View
+    {
+        $items = InventoryItem::query()
+            ->where('tracking_type', 'serialized')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        $selectedItemId = request()->integer('inventory_item_id') ?: null;
+
+        return view(
+            'admin::inventory.assets.create',
+            compact('items', 'selectedItemId')
+        );
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'inventory_item_id' => [
+                'required',
+                'integer',
+                Rule::exists('inventory_items', 'id')
+                    ->where(fn ($query) => $query
+                        ->where('tracking_type', 'serialized')
+                        ->where('is_active', true)),
+            ],
+            'asset_code' => [
+                'required',
+                'string',
+                'max:50',
+                'unique:inventory_assets,asset_code',
+            ],
+            'barcode_value' => [
+                'nullable',
+                'string',
+                'max:100',
+                'unique:inventory_assets,barcode_value',
+            ],
+            'serial_number' => [
+                'nullable',
+                'string',
+                'max:150',
+                'unique:inventory_assets,serial_number',
+            ],
+            'condition' => [
+                'required',
+                Rule::in(['good', 'fair', 'damaged']),
+            ],
+            'purchase_date'  => ['nullable', 'date'],
+            'purchase_price' => ['nullable', 'numeric', 'min:0'],
+            'notes'          => ['nullable', 'string'],
+        ]);
+
+        $item = InventoryItem::query()
+            ->where('tracking_type', 'serialized')
+            ->where('is_active', true)
+            ->findOrFail($validated['inventory_item_id']);
+
+        $asset = DB::transaction(function () use ($validated, $item) {
+            $assetCode = trim($validated['asset_code']);
+
+            $barcodeValue = trim((string) ($validated['barcode_value'] ?? ''));
+
+            if ($barcodeValue === '') {
+                $barcodeValue = $assetCode;
+            }
+
+            $condition = $validated['condition'];
+
+            $status = $condition === 'damaged'
+                ? 'damaged'
+                : 'available';
+
+            $asset = InventoryAsset::create([
+                'inventory_item_id'     => $item->id,
+                'asset_code'            => $assetCode,
+                'barcode_value'         => $barcodeValue,
+                'serial_number'         => ! empty($validated['serial_number'])
+                    ? trim($validated['serial_number'])
+                    : null,
+                'warehouse_id'          => $item->warehouse_id,
+                'warehouse_location_id' => $item->warehouse_location_id,
+                'status'                => $status,
+                'condition'             => $condition,
+                'purchase_date'         => $validated['purchase_date'] ?? null,
+                'purchase_price'        => $validated['purchase_price'] ?? null,
+                'notes'                 => $validated['notes'] ?? null,
+            ]);
+
+            InventoryStockMovement::create([
+                'inventory_item_id'     => $item->id,
+                'inventory_asset_id'    => $asset->id,
+                'warehouse_id'          => $asset->warehouse_id,
+                'warehouse_location_id' => $asset->warehouse_location_id,
+                'movement_type'         => 'opening',
+                'quantity'              => 1,
+                'from_status'           => null,
+                'to_status'             => $status,
+                'reference_type'        => 'asset_registration',
+                'reference_id'          => $asset->id,
+                'reference_number'      => $asset->asset_code,
+                'performed_by'          => auth()->guard('user')->id(),
+                'notes'                 => 'Initial asset registration.',
+                'occurred_at'            => now(),
+            ]);
+
+            return $asset;
+        });
+
+        session()->flash(
+            'success',
+            'Asset '.$asset->asset_code.' berhasil dibuat.'
+        );
+
+        return redirect()->route(
+            'admin.inventory.assets.edit',
+            $asset->id
+        );
+    }
+
+    public function edit(int $id): View
+    {
+        $asset = InventoryAsset::with([
+            'item',
+            'warehouse',
+            'location',
+        ])->findOrFail($id);
+
+        return view('admin::inventory.assets.edit', compact('asset'));
+    }
+
+    public function update(Request $request, int $id): RedirectResponse
+    {
+        $asset = InventoryAsset::findOrFail($id);
+
+        $validated = $request->validate([
+            'asset_code' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('inventory_assets', 'asset_code')
+                    ->ignore($asset->id),
+            ],
+            'barcode_value' => [
+                'nullable',
+                'string',
+                'max:100',
+                Rule::unique('inventory_assets', 'barcode_value')
+                    ->ignore($asset->id),
+            ],
+            'serial_number' => [
+                'nullable',
+                'string',
+                'max:150',
+                Rule::unique('inventory_assets', 'serial_number')
+                    ->ignore($asset->id),
+            ],
+            'purchase_date'  => ['nullable', 'date'],
+            'purchase_price' => ['nullable', 'numeric', 'min:0'],
+            'notes'          => ['nullable', 'string'],
+        ]);
+
+        $assetCode = trim($validated['asset_code']);
+
+        $barcodeValue = trim((string) ($validated['barcode_value'] ?? ''));
+
+        if ($barcodeValue === '') {
+            $barcodeValue = $assetCode;
+        }
+
+        $asset->update([
+            'asset_code'     => $assetCode,
+            'barcode_value'  => $barcodeValue,
+            'serial_number'  => ! empty($validated['serial_number'])
+                ? trim($validated['serial_number'])
+                : null,
+            'purchase_date'  => $validated['purchase_date'] ?? null,
+            'purchase_price' => $validated['purchase_price'] ?? null,
+            'notes'          => $validated['notes'] ?? null,
+        ]);
+
+        session()->flash(
+            'success',
+            'Asset '.$asset->asset_code.' berhasil diperbarui.'
+        );
+
+        return redirect()->route(
+            'admin.inventory.assets.edit',
+            $asset->id
+        );
+    }
+}
+
+==================================================
+INVENTORY ASSET MODEL
+==================================================
+<?php
+
+namespace Webkul\Warehouse\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class InventoryAsset extends Model
+{
+    protected $table = 'inventory_assets';
+
+    protected $fillable = [
+        'inventory_item_id',
+        'asset_code',
+        'barcode_value',
+        'serial_number',
+        'warehouse_id',
+        'warehouse_location_id',
+        'status',
+        'condition',
+        'purchase_date',
+        'purchase_price',
+        'notes',
+    ];
+
+    protected $casts = [
+        'purchase_date' => 'date',
+        'purchase_price' => 'decimal:2',
+    ];
+
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(InventoryItem::class, 'inventory_item_id');
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(WarehouseProxy::modelClass(), 'warehouse_id');
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(LocationProxy::modelClass(), 'warehouse_location_id');
+    }
+
+    public function movements(): HasMany
+    {
+        return $this->hasMany(InventoryStockMovement::class, 'inventory_asset_id');
+    }
+
+    public function scopeAvailable($query)
+    {
+        return $query->where('status', 'available');
+    }
+
+    public function scopeAllocated($query)
+    {
+        return $query->where('status', 'allocated');
+    }
+
+    public function scopeOut($query)
+    {
+        return $query->where('status', 'out');
+    }
+
+    public function isAvailable(): bool
+    {
+        return $this->status === 'available';
+    }
+}
+
+==================================================
+ASSET ROUTES
+==================================================
+<?php
+
+use Illuminate\Support\Facades\Route;
+use Webkul\Admin\Http\Controllers\Inventory\InventoryAssetController;
+use Webkul\Admin\Http\Controllers\Inventory\InventoryDashboardController;
+use Webkul\Admin\Http\Controllers\Inventory\InventoryItemController;
+use Webkul\Admin\Http\Controllers\Inventory\InventoryMovementController;
+
+Route::prefix('inventory')
+    ->group(function () {
+        Route::get('/', [InventoryDashboardController::class, 'index'])
+            ->name('admin.inventory.dashboard');
+
+        Route::controller(InventoryItemController::class)
+            ->prefix('items')
+            ->group(function () {
+                Route::get('/', 'index')
+                    ->name('admin.inventory.items.index');
+
+                Route::get('create', 'create')
+                    ->name('admin.inventory.items.create');
+
+                Route::post('/', 'store')
+                    ->name('admin.inventory.items.store');
+
+                Route::get('{id}/edit', 'edit')
+                    ->name('admin.inventory.items.edit');
+
+                Route::put('{id}', 'update')
+                    ->name('admin.inventory.items.update');
+            });
+
+        Route::controller(InventoryAssetController::class)
+            ->prefix('assets')
+            ->group(function () {
+                Route::get('/', 'index')
+                    ->name('admin.inventory.assets.index');
+
+                Route::get('create', 'create')
+                    ->name('admin.inventory.assets.create');
+
+                Route::post('/', 'store')
+                    ->name('admin.inventory.assets.store');
+
+                Route::get('{id}/edit', 'edit')
+                    ->name('admin.inventory.assets.edit');
+
+                Route::put('{id}', 'update')
+                    ->name('admin.inventory.assets.update');
+            });
+
+        Route::controller(InventoryMovementController::class)
+            ->prefix('movements')
+            ->group(function () {
+                Route::get('/', 'index')
+                    ->name('admin.inventory.movements.index');
+
+                Route::get('adjust-stock', 'createStockAdjustment')
+                    ->name('admin.inventory.movements.adjust-stock.create');
+
+                Route::post('adjust-stock', 'storeStockAdjustment')
+                    ->name('admin.inventory.movements.adjust-stock.store');
+            });
+    });
+
+==================================================
+COMPOSER BARCODE PACKAGES
+==================================================
+
+  composer.lock:3551:            },
+  composer.lock:3552:            "suggest": {
+> composer.lock:3553:                "ext-bcmath": "Needed for generation of some types of barcodes",
+  composer.lock:3554:                "ext-imagick": "Needed if developing the Mpdf library",
+  composer.lock:3555:                "ext-xml": "Needed mainly for SVG manipulation",
+
+
+
+==================================================
+ASSET BARCODE DATA
+==================================================
+array:6 [
+  0 => {#7397
+    +"id": 1
+    +"asset_code": "CAM-0001"
+    +"barcode_value": "CAM-0001"
+    +"serial_number": null
+    +"status": "available"
+    +"condition": "good"
+  }
+  1 => {#7396
+    +"id": 2
+    +"asset_code": "CAM-002"
+    +"barcode_value": "CAM-0002"
+    +"serial_number": null
+    +"status": "available"
+    +"condition": "good"
+  }
+  2 => {#7395
+    +"id": 4
+    +"asset_code": "LGT-0001"
+    +"barcode_value": "LGT-0001"
+    +"serial_number": null
+    +"status": "available"
+    +"condition": "good"
+  }
+  3 => {#7394
+    +"id": 5
+    +"asset_code": "LGT-0002"
+    +"barcode_value": "LGT-0002"
+    +"serial_number": null
+    +"status": "available"
+    +"condition": "good"
+  }
+  4 => {#7393
+    +"id": 3
+    +"asset_code": "MP-0001"
+    +"barcode_value": "MP-0001"
+    +"serial_number": null
+    +"status": "available"
+    +"condition": "good"
+  }
+  5 => {#7392
+    +"id": 6
+    +"asset_code": "PRN-0001"
+    +"barcode_value": "PRN-0001"
+    +"serial_number": null
+    +"status": "available"
+    +"condition": "good"
+  }
+] // vendor\psy\psysh\src\ExecutionClosure.php(41) : eval()'d code:1
+

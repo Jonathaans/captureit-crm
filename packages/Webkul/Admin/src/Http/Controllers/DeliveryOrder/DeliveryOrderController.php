@@ -16,6 +16,7 @@ use Webkul\Invoice\Models\DeliveryOrderItem;
 use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
 use Webkul\Invoice\Services\DeliveryOrderInventoryAllocationService;
 use Webkul\Invoice\Services\DeliveryOrderPickingService;
+use Webkul\Invoice\Services\DeliveryOrderReturnService;
 
 class DeliveryOrderController extends Controller
 {
@@ -173,15 +174,12 @@ class DeliveryOrderController extends Controller
      */
     public function markReturned(int $id): RedirectResponse
     {
-        $hasInventoryOutsideWarehouse = DeliveryOrderInventoryAllocation::query()
-            ->where('delivery_order_id', $id)
-            ->whereIn('status', [
-                'out',
-                'return_pending',
-            ])
-            ->exists();
+        $deliveryOrder = $this->findDeliveryOrder($id);
 
-        if ($hasInventoryOutsideWarehouse) {
+        if (
+            ! app(DeliveryOrderReturnService::class)
+                ->allReturned($deliveryOrder)
+        ) {
             return redirect()
                 ->route(
                     'admin.delivery-orders.show',
@@ -189,7 +187,7 @@ class DeliveryOrderController extends Controller
                 )
                 ->with(
                     'error',
-                    'Inventory masih OUT / RETURN PENDING. Selesaikan proses Return / Check-In terlebih dahulu.'
+                    'Surat Jalan belum dapat ditandai Returned. Selesaikan Return / Check-In seluruh inventory terlebih dahulu.'
                 );
         }
 
@@ -197,7 +195,7 @@ class DeliveryOrderController extends Controller
             $id,
             'returned',
             ['delivered'],
-            'Barang ditandai sudah returned.'
+            'Seluruh inventory sudah selesai Check-In dan Surat Jalan ditandai returned.'
         );
     }
 

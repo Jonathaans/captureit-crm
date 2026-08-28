@@ -279,6 +279,26 @@ return [
     'route' => 'admin.delivery-orders.picking.out',
     'sort'  => 11,
 ],
+ [
+    /*
+     * Start return and view return workflow.
+     */
+    'key'   => 'delivery-orders.return',
+    'name'  => 'Return Inventory',
+    'route' => [
+        'admin.delivery-orders.return.show',
+        'admin.delivery-orders.return.start',
+    ],
+    'sort'  => 12,
+], [
+    /*
+     * Physical Check-In after inventory becomes RETURN PENDING.
+     */
+    'key'   => 'delivery-orders.return.check-in',
+    'name'  => 'Check-In Inventory',
+    'route' => 'admin.delivery-orders.return.check-in',
+    'sort'  => 1,
+],
 
 /*
 |--------------------------------------------------------------------------

@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderController;
 use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderInventoryController;
 use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderPickingController;
+use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderReturnController;
 
 Route::controller(DeliveryOrderController::class)
     ->prefix('delivery-orders')
@@ -110,4 +111,23 @@ Route::controller(DeliveryOrderPickingController::class)
 
         Route::put('{id}/picking/confirm-out', 'confirmOut')
             ->name('admin.delivery-orders.picking.out');
+    });
+
+
+/*
+|--------------------------------------------------------------------------
+| Delivery Order > Return / Check-In
+|--------------------------------------------------------------------------
+*/
+Route::controller(DeliveryOrderReturnController::class)
+    ->prefix('delivery-orders')
+    ->group(function () {
+        Route::get('{id}/return', 'show')
+            ->name('admin.delivery-orders.return.show');
+
+        Route::put('{id}/return/start', 'start')
+            ->name('admin.delivery-orders.return.start');
+
+        Route::put('{id}/return/{allocationId}/check-in', 'checkIn')
+            ->name('admin.delivery-orders.return.check-in');
     });

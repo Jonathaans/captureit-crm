@@ -62,10 +62,10 @@
 
             <p class="mt-1 text-sm text-gray-500">
                 {{ $deliveryOrder->delivery_order_number }}
-                · {{ $deliveryOrder->project_code ?: '-' }}
+                &middot; {{ $deliveryOrder->project_code ?: '-' }}
 
                 @if ($deliveryOrder->project_name)
-                    · {{ $deliveryOrder->project_name }}
+                    &middot; {{ $deliveryOrder->project_name }}
                 @endif
             </p>
         </div>

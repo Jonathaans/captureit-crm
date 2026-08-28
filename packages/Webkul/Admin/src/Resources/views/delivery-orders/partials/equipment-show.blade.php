@@ -80,6 +80,9 @@
                                     \Webkul\Invoice\Models\DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
                                 );
 
+                            $displayAllocations = $item->allocations
+                                ->where('status', '!=', 'released');
+
                             $allocated = 0;
                             $freeAvailable = null;
                             $capacity = null;
@@ -121,15 +124,16 @@
                                 ? null
                                 : max($need - $capacity, 0);
 
-                            $serializedAllocations = $activeAllocations
+                            $serializedAllocations = $displayAllocations
                                 ->where('tracking_type', 'serialized')
                                 ->filter(
                                     fn ($allocation) => $allocation->inventoryAsset
                                 )
                                 ->values();
 
-                            $quantityAllocation = $activeAllocations
+                            $quantityAllocation = $displayAllocations
                                 ->where('tracking_type', 'quantity')
+                                ->sortByDesc('id')
                                 ->first();
                         @endphp
 
@@ -158,7 +162,7 @@
 
                                     <p class="mt-1 text-xs text-gray-500">
                                         {{ $inventoryItem->name }}
-                                        · {{ ucfirst($inventoryItem->tracking_type) }}
+                                        &middot; {{ ucfirst($inventoryItem->tracking_type) }}
                                     </p>
                                 @else
                                     <span class="rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-semibold text-yellow-700">
@@ -184,16 +188,29 @@
                                             @foreach ($serializedAllocations as $allocation)
                                                 <span class="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
                                                     {{ $allocation->inventoryAsset->asset_code }}
-                                                    · {{ strtoupper($allocation->status) }}
+                                                    &middot; {{ strtoupper($allocation->status) }}
+
+                                                    @if (
+                                                        $allocation->status === 'returned'
+                                                        && $allocation->return_condition
+                                                    )
+                                                        &middot; {{ strtoupper($allocation->return_condition) }}
+                                                    @endif
                                                 </span>
                                             @endforeach
                                         </div>
                                     @endif
                                 @else
-                                    @if ($allocated > 0)
+                                    @if ($quantityAllocation)
                                         <span class="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
-                                            {{ $formatQty($allocated) }} {{ $inventoryItem->unit }}
-                                            {{ strtoupper($quantityAllocation?->status ?: 'allocated') }}
+                                            {{ $formatQty($quantityAllocation->quantity) }} {{ $inventoryItem->unit }}
+                                            {{ strtoupper($quantityAllocation->status) }}
+
+                                            @if ($quantityAllocation->status === 'returned')
+                                                &middot;
+                                                {{ $formatQty($quantityAllocation->returned_quantity ?: 0) }}
+                                                RETURNED
+                                            @endif
                                         </span>
                                     @else
                                         <span class="rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-bold text-yellow-700">
@@ -238,8 +255,8 @@
         </div>
 
         <div class="mt-4 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-950">
-            Serialized menampilkan Asset Code aktual, misalnya CAM-002.
-            Quantity menampilkan jumlah yang di-reserve. Allocation belum berarti barang OUT.
+            Serialized menampilkan Asset Code aktual beserta status terakhir.
+            Quantity menampilkan jumlah outbound dan hasil return jika workflow sudah selesai.
         </div>
     @endif
 </div>

@@ -44,6 +44,13 @@ class DeliveryOrderInventoryAllocation extends Model
         'picked_at',
         'out_by',
         'out_at',
+        'return_pending_by',
+        'return_pending_at',
+        'checked_in_by',
+        'checked_in_at',
+        'return_condition',
+        'returned_quantity',
+        'return_notes',
         'released_by',
         'released_at',
         'notes',
@@ -58,10 +65,15 @@ class DeliveryOrderInventoryAllocation extends Model
         'allocated_by'           => 'integer',
         'picked_by'              => 'integer',
         'out_by'                 => 'integer',
+        'return_pending_by'      => 'integer',
+        'checked_in_by'          => 'integer',
         'released_by'            => 'integer',
+        'returned_quantity'      => 'decimal:2',
         'allocated_at'           => 'datetime',
         'picked_at'              => 'datetime',
         'out_at'                 => 'datetime',
+        'return_pending_at'      => 'datetime',
+        'checked_in_at'          => 'datetime',
         'released_at'            => 'datetime',
     ];
 
@@ -118,6 +130,22 @@ class DeliveryOrderInventoryAllocation extends Model
         return $this->belongsTo(
             UserProxy::modelClass(),
             'out_by'
+        );
+    }
+
+    public function returnPendingBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            UserProxy::modelClass(),
+            'return_pending_by'
+        );
+    }
+
+    public function checkedInBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            UserProxy::modelClass(),
+            'checked_in_by'
         );
     }
 

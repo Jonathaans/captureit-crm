@@ -24,6 +24,25 @@
             default =>
                 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
         };
+
+        $inventoryAllocationHistory = $deliveryOrder->items
+            ->flatMap(
+                fn ($item) => $item->allocations
+            );
+
+        $hasReturnOutstanding = $inventoryAllocationHistory
+            ->whereIn(
+                'status',
+                [
+                    'out',
+                    'return_pending',
+                ]
+            )
+            ->isNotEmpty();
+
+        $hasReturnedInventory = $inventoryAllocationHistory
+            ->where('status', 'returned')
+            ->isNotEmpty();
     @endphp
 
     {{-- ========================================================= --}}
@@ -111,6 +130,21 @@
             @endif
 
             @if (
+                in_array($status, ['delivered', 'returned'], true)
+                && bouncer()->hasPermission('delivery-orders.return')
+            )
+                <a
+                    href="{{ route(
+                        'admin.delivery-orders.return.show',
+                        $deliveryOrder->id
+                    ) }}"
+                    class="secondary-button"
+                >
+                    Return / Check-In
+                </a>
+            @endif
+
+            @if (
                 bouncer()->hasPermission('delivery-orders.print')
             )
                 <a
@@ -140,7 +174,7 @@
                 </p>
 
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Workflow: Draft -> Issued -> Picking -> OUT -> Delivered -> Returned
+                    Workflow: Draft -> Issued -> Picking -> OUT -> Delivered -> Return Pending -> Check-In -> Returned
                 </p>
             </div>
 
@@ -239,7 +273,23 @@
                     @endif
                 @elseif ($status === 'delivered')
                     @if (
-                        bouncer()->hasPermission('delivery-orders.returned')
+                        bouncer()->hasPermission('delivery-orders.return')
+                    )
+                        <a
+                            href="{{ route(
+                                'admin.delivery-orders.return.show',
+                                $deliveryOrder->id
+                            ) }}"
+                            class="secondary-button"
+                        >
+                            Return / Check-In
+                        </a>
+                    @endif
+
+                    @if (
+                        ! $hasReturnOutstanding
+                        && $hasReturnedInventory
+                        && bouncer()->hasPermission('delivery-orders.returned')
                     )
                         <form
                             method="POST"
@@ -254,7 +304,7 @@
                             <button
                                 type="submit"
                                 class="primary-button"
-                                onclick="return confirm('Tandai seluruh barang sudah kembali ke warehouse?')"
+                                onclick="return confirm('Seluruh inventory sudah selesai Check-In. Tandai Surat Jalan sebagai RETURNED?')"
                             >
                                 Mark as Returned
                             </button>
