@@ -28,6 +28,20 @@
                 </a>
             @endif
 
+            @if (bouncer()->hasPermission('inventory.assets.barcodes'))
+                <a
+                    href="{{ route(
+                        'admin.inventory.assets.qr-labels.index',
+                        $selectedItem
+                            ? ['inventory_item_id' => $selectedItem->id]
+                            : []
+                    ) }}"
+                    class="secondary-button"
+                >
+                    QR Labels
+                </a>
+            @endif
+
             @if (bouncer()->hasPermission('inventory.assets.create'))
                 <a
                     href="{{ route('admin.inventory.assets.create', $selectedItem ? ['inventory_item_id' => $selectedItem->id] : []) }}"

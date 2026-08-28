@@ -4,6 +4,7 @@ namespace Webkul\Admin\Http\Controllers\Inventory;
 
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -12,6 +13,7 @@ use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\Warehouse\Models\InventoryAsset;
 use Webkul\Warehouse\Models\InventoryItem;
 use Webkul\Warehouse\Models\InventoryStockMovement;
+use Webkul\Warehouse\Services\QrCodeService;
 
 class InventoryAssetController extends Controller
 {
@@ -30,6 +32,74 @@ class InventoryAssetController extends Controller
         }
 
         return view('admin::inventory.assets.index', compact('selectedItem'));
+    }
+
+    /**
+     * Printable Code 39 barcode labels.
+     *
+     * Optional query:
+     * ?ids=1,4,5
+     * ?inventory_item_id=1
+     */
+    public function qrLabels(Request $request): View
+    {
+        $query = InventoryAsset::query()
+            ->with('item')
+            ->orderBy('asset_code');
+
+        if ($request->filled('inventory_item_id')) {
+            $query->where(
+                'inventory_item_id',
+                $request->integer('inventory_item_id')
+            );
+        }
+
+        if ($request->filled('ids')) {
+            $ids = collect(
+                explode(
+                    ',',
+                    (string) $request->input('ids')
+                )
+            )
+                ->map(fn ($id) => (int) trim($id))
+                ->filter(fn ($id) => $id > 0)
+                ->unique()
+                ->values();
+
+            if ($ids->isNotEmpty()) {
+                $query->whereIn('id', $ids->all());
+            }
+        }
+
+        $assets = $query->get();
+
+        return view(
+            'admin::inventory.assets.qr-labels',
+            compact('assets')
+        );
+    }
+
+    /**
+     * Raw SVG used by barcode label pages.
+     */
+    public function qrSvg(
+        int $id,
+        QrCodeService $qrCodeService
+    ): Response {
+        $asset = InventoryAsset::findOrFail($id);
+
+        $qrPayload = trim(
+            (string) $asset->asset_code
+        );
+
+        return response(
+            $qrCodeService->svg($qrPayload),
+            200,
+            [
+                'Content-Type'  => 'image/svg+xml; charset=UTF-8',
+                'Cache-Control' => 'private, no-store, max-age=0',
+            ]
+        );
     }
 
     public function create(): View

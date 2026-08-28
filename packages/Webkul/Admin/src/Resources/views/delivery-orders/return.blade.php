@@ -125,6 +125,90 @@
         Check-In adalah titik saat kondisi fisik dicatat dan stok benar-benar dikembalikan.
     </div>
 
+    @if (
+        $canOperate
+        && $summary['return_pending'] > 0
+        && bouncer()->hasPermission('delivery-orders.return.check-in')
+    )
+        <div class="mt-4 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div class="flex items-start justify-between gap-4 max-sm:flex-wrap">
+                <div>
+                    <p class="text-base font-semibold text-green-900">
+                        Scan Serialized Check-In
+                    </p>
+
+                    <p class="mt-1 text-xs text-green-700">
+                        Default GOOD. Ubah condition terlebih dahulu untuk FAIR / DAMAGED, lalu scan.
+                        Asset MISSING tetap diproses dari kartu asset karena tidak ada barang fisik untuk discan.
+                    </p>
+                </div>
+            </div>
+
+            <form
+                method="POST"
+                action="{{ route(
+                    'admin.delivery-orders.return.scan-check-in',
+                    $deliveryOrder->id
+                ) }}"
+                class="mt-3 grid grid-cols-4 gap-3 max-lg:grid-cols-1"
+            >
+                @csrf
+                @method('PUT')
+
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-green-900">
+                        Condition
+                    </label>
+
+                    <select
+                        name="condition"
+                        class="w-full rounded-md border border-green-300 bg-white px-3 py-3 text-sm"
+                    >
+                        <option value="good">Good</option>
+                        <option value="fair">Fair</option>
+                        <option value="damaged">Damaged</option>
+                    </select>
+                </div>
+
+                <div class="lg:col-span-2">
+                    <label class="mb-1.5 block text-sm font-medium text-green-900">
+                        Barcode / Asset Code
+                    </label>
+
+                    <input
+                        type="text"
+                        name="barcode"
+                        autocomplete="off"
+                        maxlength="100"
+                        placeholder="Scan asset untuk Check-In..."
+                        class="w-full rounded-md border border-green-300 bg-white px-3 py-3 text-base font-semibold outline-none focus:border-green-600"
+                        autofocus
+                    >
+                </div>
+
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-green-900">
+                        Notes
+                    </label>
+
+                    <input
+                        type="text"
+                        name="notes"
+                        maxlength="2000"
+                        placeholder="Optional"
+                        class="w-full rounded-md border border-green-300 bg-white px-3 py-3 text-sm"
+                    >
+                </div>
+            </form>
+
+            @error('barcode')
+                <div class="mt-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                    {{ $message }}
+                </div>
+            @enderror
+        </div>
+    @endif
+
     <div class="mt-4 grid grid-cols-3 gap-4 max-lg:grid-cols-1">
         <div class="rounded-lg border border-purple-200 bg-purple-50 p-4">
             <p class="text-xs font-semibold uppercase text-purple-600">

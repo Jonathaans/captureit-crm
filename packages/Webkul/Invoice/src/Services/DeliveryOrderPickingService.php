@@ -131,6 +131,97 @@ class DeliveryOrderPickingService
     }
 
     /**
+     * Scan / mark satu serialized asset sebagai OUT.
+     *
+     * Quantity stock tetap diproses oleh Confirm OUT.
+     */
+    public function markOutSerialized(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderInventoryAllocation $allocation,
+        ?int $performedBy = null
+    ): void {
+        $this->assertIssued($deliveryOrder);
+
+        if ($allocation->delivery_order_id !== $deliveryOrder->id) {
+            throw ValidationException::withMessages([
+                'barcode' => 'Allocation tidak termasuk Surat Jalan ini.',
+            ]);
+        }
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $allocation,
+            $performedBy
+        ) {
+            $lockedAllocation = DeliveryOrderInventoryAllocation::query()
+                ->lockForUpdate()
+                ->findOrFail($allocation->id);
+
+            if ($lockedAllocation->tracking_type !== 'serialized') {
+                throw ValidationException::withMessages([
+                    'barcode' => 'Scan OUT hanya digunakan untuk serialized asset.',
+                ]);
+            }
+
+            if ($lockedAllocation->status === 'out') {
+                return;
+            }
+
+            if ($lockedAllocation->status !== 'picked') {
+                throw ValidationException::withMessages([
+                    'barcode' => sprintf(
+                        'Asset hanya dapat OUT dari status PICKED. Status allocation saat ini: %s.',
+                        strtoupper($lockedAllocation->status)
+                    ),
+                ]);
+            }
+
+            $inventoryItem = InventoryItem::query()
+                ->findOrFail($lockedAllocation->inventory_item_id);
+
+            $inventoryAsset = InventoryAsset::query()
+                ->lockForUpdate()
+                ->findOrFail($lockedAllocation->inventory_asset_id);
+
+            if ($inventoryAsset->status !== 'picked') {
+                throw ValidationException::withMessages([
+                    'barcode' => sprintf(
+                        'Asset %s harus berstatus PICKED sebelum OUT. Status saat ini: %s.',
+                        $inventoryAsset->asset_code,
+                        strtoupper($inventoryAsset->status)
+                    ),
+                ]);
+            }
+
+            $inventoryAsset->update([
+                'status' => 'out',
+            ]);
+
+            $lockedAllocation->update([
+                'status' => 'out',
+                'out_by' => $performedBy,
+                'out_at' => now(),
+            ]);
+
+            $this->recordMovement(
+                $deliveryOrder,
+                $inventoryItem,
+                $inventoryAsset,
+                'out',
+                1,
+                'picked',
+                'out',
+                $performedBy,
+                sprintf(
+                    'Serialized asset %s scanned OUT for %s.',
+                    $inventoryAsset->asset_code,
+                    $deliveryOrder->delivery_order_number
+                )
+            );
+        });
+    }
+
+    /**
      * Confirm seluruh PICKED inventory benar-benar OUT dari warehouse.
      *
      * Serialized:
@@ -165,23 +256,37 @@ class DeliveryOrderPickingService
                 ]);
             }
 
-            $notPicked = $allocations
-                ->where('status', '!=', 'picked');
+            $invalid = $allocations
+                ->whereNotIn(
+                    'status',
+                    [
+                        'picked',
+                        'out',
+                    ]
+                );
 
-            if ($notPicked->isNotEmpty()) {
-                $statuses = $notPicked
+            if ($invalid->isNotEmpty()) {
+                $statuses = $invalid
                     ->pluck('status')
                     ->map(fn ($status) => strtoupper($status))
                     ->unique()
                     ->implode(', ');
 
                 throw ValidationException::withMessages([
-                    'inventory' => 'Semua inventory harus berstatus PICKED sebelum Confirm OUT. Status yang masih ditemukan: '
+                    'inventory' => 'Confirm OUT membutuhkan seluruh inventory minimal berstatus PICKED. Status yang masih ditemukan: '
                         .$statuses.'.',
                 ]);
             }
 
             foreach ($allocations as $allocation) {
+                /*
+                 * Serialized asset yang sudah di-scan OUT tidak boleh
+                 * diproses dua kali.
+                 */
+                if ($allocation->status === 'out') {
+                    continue;
+                }
+
                 $inventoryItem = InventoryItem::query()
                     ->lockForUpdate()
                     ->findOrFail($allocation->inventory_item_id);

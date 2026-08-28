@@ -36,6 +36,15 @@ Route::prefix('inventory')
                 Route::get('/', 'index')
                     ->name('admin.inventory.assets.index');
 
+                /*
+                 * Keep static barcode routes above {id} routes.
+                 */
+                Route::get('qr-labels', 'qrLabels')
+                    ->name('admin.inventory.assets.qr-labels.index');
+
+                Route::get('{id}/qr.svg', 'qrSvg')
+                    ->name('admin.inventory.assets.qr-labels.svg');
+
                 Route::get('create', 'create')
                     ->name('admin.inventory.assets.create');
 

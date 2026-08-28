@@ -203,25 +203,29 @@
         }
 
         .col-item {
-            width: 24%;
+            width: 19%;
         }
 
         .col-description {
-            width: 31%;
+            width: 22%;
+        }
+
+        .col-actual {
+            width: 24%;
         }
 
         .col-qty {
-            width: 9%;
+            width: 8%;
             text-align: center !important;
         }
 
         .col-unit {
-            width: 11%;
+            width: 9%;
             text-align: center !important;
         }
 
         .col-notes {
-            width: 18%;
+            width: 11%;
         }
 
         .empty-equipment {
@@ -320,7 +324,7 @@
         <table class="footer-table">
             <tr>
                 <td>
-                    Capture It Photobooth • Varbel Corps
+                    Capture It Photobooth &bull; Varbel Corps
                 </td>
 
                 <td class="footer-right">
@@ -354,7 +358,7 @@
                 @endif
 
                 <div class="company-name">
-                    Capture It Photobooth • Varbel Corps
+                    Capture It Photobooth &bull; Varbel Corps
                 </div>
             </td>
 
@@ -564,6 +568,7 @@
                     <th class="col-no">No</th>
                     <th class="col-item">Item</th>
                     <th class="col-description">Description</th>
+                    <th class="col-actual">Actual Asset</th>
                     <th class="col-qty">Qty</th>
                     <th class="col-unit">Unit</th>
                     <th class="col-notes">Notes</th>
@@ -572,6 +577,21 @@
 
             <tbody>
                 @forelse ($deliveryOrder->items as $index => $item)
+                    @php
+                        $itemAllocations = $item->allocations
+                            ->where('status', '!=', 'released');
+
+                        $serializedAssetCodes = $itemAllocations
+                            ->where('tracking_type', 'serialized')
+                            ->map(
+                                fn ($allocation) =>
+                                    $allocation->inventoryAsset?->asset_code
+                            )
+                            ->filter()
+                            ->unique()
+                            ->values();
+                    @endphp
+
                     <tr>
                         <td class="col-no">
                             {{ $index + 1 }}
@@ -585,6 +605,20 @@
 
                         <td class="col-description">
                             {{ $item->description ?: '-' }}
+                        </td>
+
+                        <td class="col-actual">
+                            @if ($serializedAssetCodes->isNotEmpty())
+                                @foreach ($serializedAssetCodes as $assetCode)
+                                    <div>
+                                        <strong>{{ $assetCode }}</strong>
+                                    </div>
+                                @endforeach
+                            @elseif ($item->inventoryItem?->isQuantityTracked())
+                                Quantity Stock
+                            @else
+                                -
+                            @endif
                         </td>
 
                         <td class="col-qty">
@@ -615,7 +649,7 @@
                 @empty
                     <tr>
                         <td
-                            colspan="6"
+                            colspan="7"
                             class="empty-equipment"
                         >
                             No equipment items.

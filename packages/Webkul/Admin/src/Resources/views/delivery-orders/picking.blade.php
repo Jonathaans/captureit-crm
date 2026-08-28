@@ -71,6 +71,45 @@
         </div>
 
         <div class="flex flex-wrap gap-2">
+            @php
+                $serializedAssetIds = $allocations
+                    ->where('tracking_type', 'serialized')
+                    ->pluck('inventory_asset_id')
+                    ->filter()
+                    ->unique()
+                    ->implode(',');
+            @endphp
+
+            @if (
+                bouncer()->hasPermission('delivery-orders.picking.print')
+            )
+                <a
+                    href="{{ route(
+                        'admin.delivery-orders.picking.print',
+                        $deliveryOrder->id
+                    ) }}"
+                    class="secondary-button"
+                >
+                    Print Picking List
+                </a>
+            @endif
+
+            @if (
+                $serializedAssetIds
+                && bouncer()->hasPermission('inventory.assets.barcodes')
+            )
+                <a
+                    href="{{ route(
+                        'admin.inventory.assets.qr-labels.index',
+                        ['ids' => $serializedAssetIds]
+                    ) }}"
+                    class="secondary-button"
+                    target="_blank"
+                >
+                    Asset QR Labels
+                </a>
+            @endif
+
             @if (
                 $canOperate
                 && $summary['allocated'] > 0
@@ -98,7 +137,8 @@
 
             @if (
                 $canOperate
-                && $allPicked
+                && $readyForFinalOut
+                && ! $allOut
                 && bouncer()->hasPermission('delivery-orders.out')
             )
                 <form
@@ -122,6 +162,87 @@
             @endif
         </div>
     </div>
+
+    @if ($canOperate)
+        <div class="mt-4 grid grid-cols-2 gap-4 max-lg:grid-cols-1">
+            @if (
+                bouncer()->hasPermission('delivery-orders.picking')
+            )
+                <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                    <p class="text-base font-semibold text-blue-900">
+                        Scan Picking
+                    </p>
+
+                    <p class="mt-1 text-xs text-blue-700">
+                        Scan barcode asset ALLOCATED. Scanner USB biasanya mengirim Enter otomatis.
+                    </p>
+
+                    <form
+                        method="POST"
+                        action="{{ route(
+                            'admin.delivery-orders.picking.scan-pick',
+                            $deliveryOrder->id
+                        ) }}"
+                        class="mt-3"
+                    >
+                        @csrf
+                        @method('PUT')
+
+                        <input
+                            type="text"
+                            name="barcode"
+                            autocomplete="off"
+                            maxlength="100"
+                            placeholder="Scan barcode untuk PICKED..."
+                            class="w-full rounded-md border border-blue-300 bg-white px-3 py-3 text-base font-semibold outline-none focus:border-blue-600"
+                            autofocus
+                        >
+                    </form>
+                </div>
+            @endif
+
+            @if (
+                bouncer()->hasPermission('delivery-orders.out')
+            )
+                <div class="rounded-lg border border-purple-200 bg-purple-50 p-4">
+                    <p class="text-base font-semibold text-purple-900">
+                        Scan Serialized OUT
+                    </p>
+
+                    <p class="mt-1 text-xs text-purple-700">
+                        Asset harus PICKED. Quantity stock tetap difinalkan dengan tombol Confirm OUT.
+                    </p>
+
+                    <form
+                        method="POST"
+                        action="{{ route(
+                            'admin.delivery-orders.picking.scan-out',
+                            $deliveryOrder->id
+                        ) }}"
+                        class="mt-3"
+                    >
+                        @csrf
+                        @method('PUT')
+
+                        <input
+                            type="text"
+                            name="barcode"
+                            autocomplete="off"
+                            maxlength="100"
+                            placeholder="Scan barcode untuk OUT..."
+                            class="w-full rounded-md border border-purple-300 bg-white px-3 py-3 text-base font-semibold outline-none focus:border-purple-600"
+                        >
+                    </form>
+                </div>
+            @endif
+        </div>
+
+        @error('barcode')
+            <div class="mt-3 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                {{ $message }}
+            </div>
+        @enderror
+    @endif
 
     <div class="mt-4 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
         <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
@@ -349,7 +470,8 @@
             && $summary['allocated'] > 0
         )
             <div class="mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
-                Picking belum lengkap. Confirm OUT baru tersedia setelah seluruh allocation berstatus PICKED.
+                Picking belum lengkap. Confirm OUT tersedia setelah tidak ada lagi allocation berstatus ALLOCATED.
+                Serialized asset boleh sudah OUT karena hasil Scan OUT.
             </div>
         @endif
     </div>

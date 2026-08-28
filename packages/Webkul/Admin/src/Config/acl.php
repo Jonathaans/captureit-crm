@@ -268,6 +268,7 @@ return [
         'admin.delivery-orders.picking.show',
         'admin.delivery-orders.picking.mark',
         'admin.delivery-orders.picking.mark-all',
+        'admin.delivery-orders.picking.scan-pick',
     ],
     'sort'  => 10,
 ], [
@@ -276,8 +277,16 @@ return [
      */
     'key'   => 'delivery-orders.out',
     'name'  => 'Confirm Inventory OUT',
-    'route' => 'admin.delivery-orders.picking.out',
+    'route' => [
+        'admin.delivery-orders.picking.out',
+        'admin.delivery-orders.picking.scan-out',
+    ],
     'sort'  => 11,
+], [
+    'key'   => 'delivery-orders.picking.print',
+    'name'  => 'Print Picking List',
+    'route' => 'admin.delivery-orders.picking.print',
+    'sort'  => 12,
 ],
  [
     /*
@@ -296,7 +305,10 @@ return [
      */
     'key'   => 'delivery-orders.return.check-in',
     'name'  => 'Check-In Inventory',
-    'route' => 'admin.delivery-orders.return.check-in',
+    'route' => [
+        'admin.delivery-orders.return.check-in',
+        'admin.delivery-orders.return.scan-check-in',
+    ],
     'sort'  => 1,
 ],
 
@@ -357,6 +369,14 @@ return [
             'admin.inventory.assets.update',
         ],
         'sort'  => 2,
+    ], [
+        'key'   => 'inventory.assets.qr-labels',
+        'name'  => 'Print Asset QR Labels',
+        'route' => [
+            'admin.inventory.assets.qr-labels.index',
+            'admin.inventory.assets.qr-labels.svg',
+        ],
+        'sort'  => 3,
     ], [
         'key'   => 'inventory.movements',
         'name'  => 'Inventory Movements',

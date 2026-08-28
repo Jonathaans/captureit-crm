@@ -11,6 +11,7 @@ use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\Invoice\Models\DeliveryOrder;
 use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
 use Webkul\Invoice\Services\DeliveryOrderReturnService;
+use Webkul\Warehouse\Models\InventoryAsset;
 
 class DeliveryOrderReturnController extends Controller
 {
@@ -93,6 +94,110 @@ class DeliveryOrderReturnController extends Controller
             $deliveryOrder->id
         );
     }
+
+    /**
+     * Scanner Check-In for serialized assets.
+     *
+     * Default condition from UI is GOOD. For damaged/fair, choose the
+     * condition before scanning. Missing assets still use the row form
+     * because naturally there is nothing physical to scan.
+     */
+    public function scanCheckIn(
+        Request $request,
+        int $id
+    ): RedirectResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $validated = $request->validate([
+            'barcode' => [
+                'required',
+                'string',
+                'max:100',
+            ],
+            'condition' => [
+                'required',
+                Rule::in([
+                    'good',
+                    'fair',
+                    'damaged',
+                ]),
+            ],
+            'notes' => [
+                'nullable',
+                'string',
+                'max:2000',
+            ],
+        ]);
+
+        $barcode = trim($validated['barcode']);
+
+        $asset = InventoryAsset::query()
+            ->where(function ($query) use ($barcode) {
+                $query
+                    ->where('barcode_value', $barcode)
+                    ->orWhere('asset_code', $barcode);
+            })
+            ->first();
+
+        if (! $asset) {
+            throw ValidationException::withMessages([
+                'barcode' => 'Barcode / Asset Code tidak ditemukan: '.$barcode,
+            ]);
+        }
+
+        $allocation = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->where('tracking_type', 'serialized')
+            ->where('inventory_asset_id', $asset->id)
+            ->whereIn('status', [
+                'return_pending',
+                'returned',
+            ])
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $allocation) {
+            throw ValidationException::withMessages([
+                'barcode' => sprintf(
+                    'Asset %s tidak berada pada RETURN PENDING untuk %s.',
+                    $asset->asset_code,
+                    $deliveryOrder->delivery_order_number
+                ),
+            ]);
+        }
+
+        if ($allocation->status === 'returned') {
+            session()->flash(
+                'success',
+                'Asset '.$asset->asset_code.' sudah selesai Check-In.'
+            );
+
+            return redirect()->route(
+                'admin.delivery-orders.return.show',
+                $deliveryOrder->id
+            );
+        }
+
+        $this->returnService->checkInSerialized(
+            $deliveryOrder,
+            $allocation,
+            $validated['condition'],
+            $validated['notes'] ?? null,
+            auth()->guard('user')->id()
+        );
+
+        session()->flash(
+            'success',
+            'SCAN CHECK-IN: '.$asset->asset_code
+            .' / '.strtoupper($validated['condition'])
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.return.show',
+            $deliveryOrder->id
+        );
+    }
+
 
     public function checkIn(
         Request $request,

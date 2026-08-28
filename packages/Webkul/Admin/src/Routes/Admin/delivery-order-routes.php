@@ -103,6 +103,15 @@ Route::controller(DeliveryOrderPickingController::class)
         Route::get('{id}/picking', 'show')
             ->name('admin.delivery-orders.picking.show');
 
+        Route::get('{id}/picking/print', 'print')
+            ->name('admin.delivery-orders.picking.print');
+
+        Route::put('{id}/picking/scan-pick', 'scanPick')
+            ->name('admin.delivery-orders.picking.scan-pick');
+
+        Route::put('{id}/picking/scan-out', 'scanOut')
+            ->name('admin.delivery-orders.picking.scan-out');
+
         Route::put('{id}/picking/{allocationId}/picked', 'markPicked')
             ->name('admin.delivery-orders.picking.mark');
 
@@ -127,6 +136,9 @@ Route::controller(DeliveryOrderReturnController::class)
 
         Route::put('{id}/return/start', 'start')
             ->name('admin.delivery-orders.return.start');
+
+        Route::put('{id}/return/scan-check-in', 'scanCheckIn')
+            ->name('admin.delivery-orders.return.scan-check-in');
 
         Route::put('{id}/return/{allocationId}/check-in', 'checkIn')
             ->name('admin.delivery-orders.return.check-in');
