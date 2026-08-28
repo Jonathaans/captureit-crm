@@ -15,6 +15,7 @@ use Webkul\Invoice\Models\DeliveryOrder;
 use Webkul\Invoice\Models\DeliveryOrderItem;
 use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
 use Webkul\Invoice\Services\DeliveryOrderInventoryAllocationService;
+use Webkul\Invoice\Services\DeliveryOrderPickingService;
 
 class DeliveryOrderController extends Controller
 {
@@ -139,12 +140,12 @@ class DeliveryOrderController extends Controller
      */
     public function markDelivered(int $id): RedirectResponse
     {
-        $hasAllocatedInventory = DeliveryOrderInventoryAllocation::query()
-            ->where('delivery_order_id', $id)
-            ->where('status', 'allocated')
-            ->exists();
+        $deliveryOrder = $this->findDeliveryOrder($id);
 
-        if ($hasAllocatedInventory) {
+        if (
+            ! app(DeliveryOrderPickingService::class)
+                ->allOut($deliveryOrder)
+        ) {
             return redirect()
                 ->route(
                     'admin.delivery-orders.show',
@@ -152,7 +153,7 @@ class DeliveryOrderController extends Controller
                 )
                 ->with(
                     'error',
-                    'Barang masih berstatus ALLOCATED. Selesaikan Picking / OUT sebelum menandai Surat Jalan sebagai delivered.'
+                    'Surat Jalan belum dapat ditandai Delivered. Seluruh inventory harus selesai PICKED dan OUT dari warehouse.'
                 );
         }
 
@@ -172,6 +173,26 @@ class DeliveryOrderController extends Controller
      */
     public function markReturned(int $id): RedirectResponse
     {
+        $hasInventoryOutsideWarehouse = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $id)
+            ->whereIn('status', [
+                'out',
+                'return_pending',
+            ])
+            ->exists();
+
+        if ($hasInventoryOutsideWarehouse) {
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $id
+                )
+                ->with(
+                    'error',
+                    'Inventory masih OUT / RETURN PENDING. Selesaikan proses Return / Check-In terlebih dahulu.'
+                );
+        }
+
         return $this->transitionStatus(
             $id,
             'returned',
@@ -188,6 +209,27 @@ class DeliveryOrderController extends Controller
      */
     public function cancel(int $id): RedirectResponse
     {
+        $hasPickedOrOutInventory = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $id)
+            ->whereIn('status', [
+                'picked',
+                'out',
+                'return_pending',
+            ])
+            ->exists();
+
+        if ($hasPickedOrOutInventory) {
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $id
+                )
+                ->with(
+                    'error',
+                    'Surat Jalan tidak dapat dibatalkan karena inventory sudah PICKED / OUT. Selesaikan workflow inventory terlebih dahulu.'
+                );
+        }
+
         return $this->transitionStatus(
             $id,
             'cancelled',

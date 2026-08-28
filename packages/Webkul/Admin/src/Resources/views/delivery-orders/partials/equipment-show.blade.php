@@ -103,7 +103,7 @@
                                         ->where('tracking_type', 'quantity')
                                         ->whereIn(
                                             'status',
-                                            \Webkul\Invoice\Models\DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                                            \Webkul\Invoice\Models\DeliveryOrderInventoryAllocation::RESERVATION_STATUSES
                                         )
                                         ->sum('quantity');
 
@@ -121,11 +121,16 @@
                                 ? null
                                 : max($need - $capacity, 0);
 
-                            $assetCodes = $activeAllocations
+                            $serializedAllocations = $activeAllocations
                                 ->where('tracking_type', 'serialized')
-                                ->map(fn ($allocation) => $allocation->inventoryAsset?->asset_code)
-                                ->filter()
+                                ->filter(
+                                    fn ($allocation) => $allocation->inventoryAsset
+                                )
                                 ->values();
+
+                            $quantityAllocation = $activeAllocations
+                                ->where('tracking_type', 'quantity')
+                                ->first();
                         @endphp
 
                         <tr class="border-b border-gray-100 dark:border-gray-800">
@@ -170,15 +175,16 @@
                                 @if (! $inventoryItem)
                                     <span class="text-sm text-gray-400">-</span>
                                 @elseif ($inventoryItem->isSerialized())
-                                    @if ($assetCodes->isEmpty())
+                                    @if ($serializedAllocations->isEmpty())
                                         <span class="rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-bold text-yellow-700">
                                             NOT ALLOCATED
                                         </span>
                                     @else
-                                        <div class="flex max-w-[320px] flex-wrap gap-1.5">
-                                            @foreach ($assetCodes as $assetCode)
+                                        <div class="flex max-w-[360px] flex-wrap gap-1.5">
+                                            @foreach ($serializedAllocations as $allocation)
                                                 <span class="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
-                                                    {{ $assetCode }}
+                                                    {{ $allocation->inventoryAsset->asset_code }}
+                                                    · {{ strtoupper($allocation->status) }}
                                                 </span>
                                             @endforeach
                                         </div>
@@ -186,7 +192,8 @@
                                 @else
                                     @if ($allocated > 0)
                                         <span class="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
-                                            {{ $formatQty($allocated) }} {{ $inventoryItem->unit }} RESERVED
+                                            {{ $formatQty($allocated) }} {{ $inventoryItem->unit }}
+                                            {{ strtoupper($quantityAllocation?->status ?: 'allocated') }}
                                         </span>
                                     @else
                                         <span class="rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-bold text-yellow-700">

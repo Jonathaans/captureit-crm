@@ -258,6 +258,27 @@ return [
     ],
     'sort'  => 9,
 ],
+ [
+    /*
+     * Warehouse picking after Surat Jalan is issued.
+     */
+    'key'   => 'delivery-orders.picking',
+    'name'  => 'Picking Inventory',
+    'route' => [
+        'admin.delivery-orders.picking.show',
+        'admin.delivery-orders.picking.mark',
+        'admin.delivery-orders.picking.mark-all',
+    ],
+    'sort'  => 10,
+], [
+    /*
+     * Confirm picked inventory physically leaves warehouse.
+     */
+    'key'   => 'delivery-orders.out',
+    'name'  => 'Confirm Inventory OUT',
+    'route' => 'admin.delivery-orders.picking.out',
+    'sort'  => 11,
+],
 
 /*
 |--------------------------------------------------------------------------

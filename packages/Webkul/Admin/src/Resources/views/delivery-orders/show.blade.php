@@ -39,7 +39,7 @@
                     href="{{ route('admin.delivery-orders.index') }}"
                     class="text-sm text-gray-600 hover:text-brandColor dark:text-gray-300"
                 >
-                    ← Back
+                    &larr; Back
                 </a>
             </div>
 
@@ -59,8 +59,8 @@
                 {{ $deliveryOrder->project_code ?: '-' }}
 
                 @if ($deliveryOrder->project_name)
-                    • {{ $deliveryOrder->project_name }}
-                @endif
+                 &bull; {{ $deliveryOrder->project_name }}
+            @endif
             </p>
         </div>
 
@@ -89,6 +89,24 @@
                     class="secondary-button"
                 >
                     Edit Surat Jalan
+                </a>
+            @endif
+
+            @if (
+                in_array($status, ['issued', 'delivered'], true)
+                && (
+                    bouncer()->hasPermission('delivery-orders.picking')
+                    || bouncer()->hasPermission('delivery-orders.out')
+                )
+            )
+                <a
+                    href="{{ route(
+                        'admin.delivery-orders.picking.show',
+                        $deliveryOrder->id
+                    ) }}"
+                    class="secondary-button"
+                >
+                    Picking / OUT
                 </a>
             @endif
 
@@ -122,7 +140,7 @@
                 </p>
 
                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Workflow: Draft → Issued → Delivered → Returned
+                    Workflow: Draft -> Issued -> Picking -> OUT -> Delivered -> Returned
                 </p>
             </div>
 

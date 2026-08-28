@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderController;
 use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderInventoryController;
+use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderPickingController;
 
 Route::controller(DeliveryOrderController::class)
     ->prefix('delivery-orders')
@@ -87,4 +88,26 @@ Route::controller(DeliveryOrderInventoryController::class)
 
         Route::delete('{id}/inventory-allocation/{itemId}', 'release')
             ->name('admin.delivery-orders.inventory-allocation.release');
+    });
+
+
+/*
+|--------------------------------------------------------------------------
+| Delivery Order > Picking / OUT
+|--------------------------------------------------------------------------
+*/
+Route::controller(DeliveryOrderPickingController::class)
+    ->prefix('delivery-orders')
+    ->group(function () {
+        Route::get('{id}/picking', 'show')
+            ->name('admin.delivery-orders.picking.show');
+
+        Route::put('{id}/picking/{allocationId}/picked', 'markPicked')
+            ->name('admin.delivery-orders.picking.mark');
+
+        Route::put('{id}/picking/mark-all-picked', 'markAllPicked')
+            ->name('admin.delivery-orders.picking.mark-all');
+
+        Route::put('{id}/picking/confirm-out', 'confirmOut')
+            ->name('admin.delivery-orders.picking.out');
     });

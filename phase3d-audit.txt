@@ -1,0 +1,4738 @@
+﻿
+==================================================
+DELIVERY ORDER CONTROLLER
+==================================================
+<?php
+
+namespace Webkul\Admin\Http\Controllers\DeliveryOrder;
+
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Webkul\Admin\DataGrids\DeliveryOrder\DeliveryOrderDataGrid;
+use Webkul\Admin\Http\Controllers\Controller;
+use Webkul\Core\Traits\PDFHandler;
+use Webkul\Invoice\Models\DeliveryOrder;
+use Webkul\Invoice\Models\DeliveryOrderItem;
+use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
+use Webkul\Invoice\Services\DeliveryOrderInventoryAllocationService;
+use Webkul\Invoice\Services\DeliveryOrderPickingService;
+
+class DeliveryOrderController extends Controller
+{
+    use PDFHandler;
+
+    /**
+     * Delivery Order listing.
+     */
+    public function index()
+    {
+        if (
+            request()->ajax()
+            || request()->expectsJson()
+        ) {
+            return app(
+                DeliveryOrderDataGrid::class
+            )->toJson();
+        }
+
+        return view(
+            'admin::delivery-orders.index'
+        );
+    }
+
+    /**
+     * Delivery Order detail.
+     */
+    public function show(int $id): View
+    {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        return view(
+            'admin::delivery-orders.show',
+            compact('deliveryOrder')
+        );
+    }
+
+    /**
+     * Edit Delivery Order.
+     */
+    public function edit(int $id): View
+    {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        return view(
+            'admin::delivery-orders.edit',
+            compact('deliveryOrder')
+        );
+    }
+
+    /**
+     * Download / Print Surat Jalan as A4 PDF.
+     */
+    public function print(
+        int $id
+    ): Response|StreamedResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $fileName = 'Surat_Jalan_'
+            .str_replace(
+                ['/', '\\', ' '],
+                ['-', '-', '_'],
+                $deliveryOrder->delivery_order_number
+            );
+
+        return $this->downloadPDF(
+            view(
+                'admin::delivery-orders.print',
+                compact('deliveryOrder')
+            )->render(),
+            $fileName
+        );
+    }
+
+    /**
+     * Issue Surat Jalan.
+     *
+     * Allowed transition:
+     * draft -> issued
+     */
+    public function issue(int $id): RedirectResponse
+    {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $allocationService = app(
+            DeliveryOrderInventoryAllocationService::class
+        );
+
+        if (! $allocationService->isComplete($deliveryOrder)) {
+            $incomplete = $allocationService
+                ->incompleteItemNames($deliveryOrder);
+
+            $suffix = empty($incomplete)
+                ? ''
+                : ' Belum lengkap: '.implode(', ', $incomplete).'.';
+
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $deliveryOrder->id
+                )
+                ->with(
+                    'error',
+                    'Surat Jalan belum dapat di-issue karena inventory allocation belum lengkap.'
+                    .$suffix
+                );
+        }
+
+        return $this->transitionStatus(
+            $id,
+            'issued',
+            ['draft'],
+            'Surat Jalan berhasil di-issue.'
+        );
+    }
+
+    /**
+     * Mark Surat Jalan as delivered.
+     *
+     * Allowed transition:
+     * issued -> delivered
+     */
+    public function markDelivered(int $id): RedirectResponse
+    {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        if (
+            ! app(DeliveryOrderPickingService::class)
+                ->allOut($deliveryOrder)
+        ) {
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $id
+                )
+                ->with(
+                    'error',
+                    'Surat Jalan belum dapat ditandai Delivered. Seluruh inventory harus selesai PICKED dan OUT dari warehouse.'
+                );
+        }
+
+        return $this->transitionStatus(
+            $id,
+            'delivered',
+            ['issued'],
+            'Surat Jalan ditandai sebagai delivered.'
+        );
+    }
+
+    /**
+     * Mark all equipment as returned.
+     *
+     * Allowed transition:
+     * delivered -> returned
+     */
+    public function markReturned(int $id): RedirectResponse
+    {
+        $hasInventoryOutsideWarehouse = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $id)
+            ->whereIn('status', [
+                'out',
+                'return_pending',
+            ])
+            ->exists();
+
+        if ($hasInventoryOutsideWarehouse) {
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $id
+                )
+                ->with(
+                    'error',
+                    'Inventory masih OUT / RETURN PENDING. Selesaikan proses Return / Check-In terlebih dahulu.'
+                );
+        }
+
+        return $this->transitionStatus(
+            $id,
+            'returned',
+            ['delivered'],
+            'Barang ditandai sudah returned.'
+        );
+    }
+
+    /**
+     * Cancel Surat Jalan.
+     *
+     * Allowed transition:
+     * draft / issued -> cancelled
+     */
+    public function cancel(int $id): RedirectResponse
+    {
+        $hasPickedOrOutInventory = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $id)
+            ->whereIn('status', [
+                'picked',
+                'out',
+                'return_pending',
+            ])
+            ->exists();
+
+        if ($hasPickedOrOutInventory) {
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $id
+                )
+                ->with(
+                    'error',
+                    'Surat Jalan tidak dapat dibatalkan karena inventory sudah PICKED / OUT. Selesaikan workflow inventory terlebih dahulu.'
+                );
+        }
+
+        return $this->transitionStatus(
+            $id,
+            'cancelled',
+            [
+                'draft',
+                'issued',
+            ],
+            'Surat Jalan dibatalkan.'
+        );
+    }
+
+    /**
+     * Shared Delivery Order status transition.
+     *
+     * Permission enforcement is handled by the route ACL.
+     * Each transition has its own route name, so roles can be
+     * configured independently from Settings -> Roles.
+     */
+    protected function transitionStatus(
+        int $id,
+        string $nextStatus,
+        array $allowedCurrentStatuses,
+        string $successMessage
+    ): RedirectResponse {
+        $deliveryOrder = DeliveryOrder::findOrFail($id);
+
+        $currentStatus = strtolower(
+            $deliveryOrder->status ?: 'draft'
+        );
+
+        if (
+            ! in_array(
+                $currentStatus,
+                $allowedCurrentStatuses,
+                true
+            )
+        ) {
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $deliveryOrder->id
+                )
+                ->with(
+                    'error',
+                    "Status tidak dapat diubah dari {$currentStatus} ke {$nextStatus}."
+                );
+        }
+
+        DB::transaction(
+            function () use (
+                $deliveryOrder,
+                $nextStatus
+            ) {
+                $data = [
+                    'status' => $nextStatus,
+                ];
+
+                if (
+                    $nextStatus === 'issued'
+                    && ! $deliveryOrder->issued_at
+                ) {
+                    $data['issued_at'] = now();
+                }
+
+                if (
+                    $nextStatus === 'delivered'
+                    && ! $deliveryOrder->delivered_at
+                ) {
+                    $data['delivered_at'] = now();
+                }
+
+                if (
+                    $nextStatus === 'returned'
+                    && ! $deliveryOrder->returned_at
+                ) {
+                    $data['returned_at'] = now();
+                }
+
+                if ($nextStatus === 'cancelled') {
+                    app(
+                        DeliveryOrderInventoryAllocationService::class
+                    )->releaseAll(
+                        $deliveryOrder,
+                        auth()->guard('user')->id()
+                    );
+                }
+
+                $deliveryOrder->update($data);
+            }
+        );
+
+        session()->flash(
+            'success',
+            $successMessage
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.show',
+            $deliveryOrder->id
+        );
+    }
+
+    /**
+     * Update Delivery Order data.
+     */
+    public function update(
+        Request $request,
+        int $id
+    ): RedirectResponse {
+        $deliveryOrder = DeliveryOrder::findOrFail($id);
+
+        $hasActiveAllocations = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->whereIn(
+                'status',
+                DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+            )
+            ->exists();
+
+        if ($hasActiveAllocations) {
+            return redirect()
+                ->route(
+                    'admin.delivery-orders.show',
+                    $deliveryOrder->id
+                )
+                ->with(
+                    'error',
+                    'Surat Jalan memiliki inventory allocation aktif. Release allocation terlebih dahulu sebelum mengubah Equipment / Items.'
+                );
+        }
+
+        $validated = $request->validate([
+            'recipient_name' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'recipient_phone' => [
+                'nullable',
+                'string',
+                'max:50',
+            ],
+
+            'pic_name' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'pic_phone' => [
+                'nullable',
+                'string',
+                'max:50',
+            ],
+
+            'event_date' => [
+                'nullable',
+                'date',
+            ],
+
+            'event_time' => [
+                'nullable',
+                'date_format:H:i',
+            ],
+
+            'location' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'delivery_address' => [
+                'nullable',
+                'string',
+            ],
+
+            'delivery_date' => [
+                'nullable',
+                'date',
+            ],
+
+            'delivery_time' => [
+                'nullable',
+                'date_format:H:i',
+            ],
+
+            'notes' => [
+                'nullable',
+                'string',
+            ],
+
+            'items' => [
+                'nullable',
+                'array',
+            ],
+
+            'items.*.inventory_item_id' => [
+                'nullable',
+                'integer',
+                'exists:inventory_items,id',
+            ],
+
+            'items.*.name' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+
+            'items.*.description' => [
+                'nullable',
+                'string',
+            ],
+
+            'items.*.quantity' => [
+                'nullable',
+                'numeric',
+                'min:0.01',
+            ],
+
+            'items.*.unit' => [
+                'nullable',
+                'string',
+                'max:30',
+            ],
+
+            'items.*.notes' => [
+                'nullable',
+                'string',
+            ],
+        ]);
+
+        DB::transaction(
+            function () use (
+                $deliveryOrder,
+                $validated
+            ) {
+                $deliveryOrder->update([
+                    'recipient_name' =>
+                        $validated['recipient_name'] ?? null,
+
+                    'recipient_phone' =>
+                        $validated['recipient_phone'] ?? null,
+
+                    'pic_name' =>
+                        $validated['pic_name'] ?? null,
+
+                    'pic_phone' =>
+                        $validated['pic_phone'] ?? null,
+
+                    'event_date' =>
+                        $validated['event_date'] ?? null,
+
+                    'event_time' =>
+                        $validated['event_time'] ?? null,
+
+                    'location' =>
+                        $validated['location'] ?? null,
+
+                    'delivery_address' =>
+                        $validated['delivery_address'] ?? null,
+
+                    'delivery_date' =>
+                        $validated['delivery_date'] ?? null,
+
+                    'delivery_time' =>
+                        $validated['delivery_time'] ?? null,
+
+                    'notes' =>
+                        $validated['notes'] ?? null,
+                ]);
+
+                /*
+                |--------------------------------------------------------------------------
+                | Rebuild Equipment Items
+                |--------------------------------------------------------------------------
+                */
+
+                $deliveryOrder
+                    ->items()
+                    ->delete();
+
+                $items = $validated['items'] ?? [];
+
+                $sortOrder = 0;
+
+                foreach ($items as $item) {
+                    $name = trim(
+                        (string) ($item['name'] ?? '')
+                    );
+
+                    if ($name === '') {
+                        continue;
+                    }
+
+                    DeliveryOrderItem::create([
+                        'delivery_order_id' =>
+                            $deliveryOrder->id,
+
+                        'inventory_item_id' =>
+                            ! empty($item['inventory_item_id'])
+                                ? (int) $item['inventory_item_id']
+                                : null,
+
+                        'name' =>
+                            $name,
+
+                        'description' =>
+                            $item['description'] ?? null,
+
+                        'quantity' =>
+                            $item['quantity'] ?? 1,
+
+                        'unit' =>
+                            ! empty($item['unit'])
+                                ? $item['unit']
+                                : 'unit',
+
+                        'notes' =>
+                            $item['notes'] ?? null,
+
+                        'sort_order' =>
+                            $sortOrder++,
+                    ]);
+                }
+            }
+        );
+
+        session()->flash(
+            'success',
+            'Surat Jalan berhasil diperbarui.'
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.show',
+            $deliveryOrder->id
+        );
+    }
+
+    /**
+     * Shared Delivery Order loader.
+     */
+    private function findDeliveryOrder(
+        int $id
+    ): DeliveryOrder {
+        return DeliveryOrder::with([
+            'invoice',
+            'quote',
+            'person',
+            'user',
+            'creator',
+            'items.inventoryItem',
+            'items.allocations.inventoryAsset',
+        ])->findOrFail($id);
+    }
+}
+
+==================================================
+PICKING CONTROLLER
+==================================================
+<?php
+
+namespace Webkul\Admin\Http\Controllers\DeliveryOrder;
+
+use Illuminate\Http\RedirectResponse;
+use Illuminate\View\View;
+use Webkul\Admin\Http\Controllers\Controller;
+use Webkul\Invoice\Models\DeliveryOrder;
+use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
+use Webkul\Invoice\Services\DeliveryOrderPickingService;
+
+class DeliveryOrderPickingController extends Controller
+{
+    public function __construct(
+        protected DeliveryOrderPickingService $pickingService
+    ) {
+    }
+
+    public function show(int $id): View
+    {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $allocations = DeliveryOrderInventoryAllocation::query()
+            ->with([
+                'deliveryOrderItem',
+                'inventoryItem',
+                'inventoryAsset',
+                'allocatedBy',
+                'pickedBy',
+                'outBy',
+            ])
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->whereIn(
+                'status',
+                DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+            )
+            ->orderBy('delivery_order_item_id')
+            ->orderBy('id')
+            ->get();
+
+        $summary = [
+            'allocated' => $allocations
+                ->where('status', 'allocated')
+                ->count(),
+
+            'picked' => $allocations
+                ->where('status', 'picked')
+                ->count(),
+
+            'out' => $allocations
+                ->where('status', 'out')
+                ->count(),
+
+            'return_pending' => $allocations
+                ->where('status', 'return_pending')
+                ->count(),
+        ];
+
+        $canOperate = strtolower(
+            $deliveryOrder->status ?: 'draft'
+        ) === 'issued';
+
+        $allPicked = $allocations->isNotEmpty()
+            && $allocations->every(
+                fn ($allocation) => $allocation->status === 'picked'
+            );
+
+        $allOut = $allocations->isNotEmpty()
+            && $allocations->every(
+                fn ($allocation) => $allocation->status === 'out'
+            );
+
+        return view(
+            'admin::delivery-orders.picking',
+            compact(
+                'deliveryOrder',
+                'allocations',
+                'summary',
+                'canOperate',
+                'allPicked',
+                'allOut'
+            )
+        );
+    }
+
+    public function markPicked(
+        int $id,
+        int $allocationId
+    ): RedirectResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $allocation = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->findOrFail($allocationId);
+
+        $this->pickingService->markPicked(
+            $deliveryOrder,
+            $allocation,
+            auth()->guard('user')->id()
+        );
+
+        session()->flash(
+            'success',
+            'Inventory berhasil ditandai PICKED.'
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.picking.show',
+            $deliveryOrder->id
+        );
+    }
+
+    public function markAllPicked(
+        int $id
+    ): RedirectResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $this->pickingService->markAllPicked(
+            $deliveryOrder,
+            auth()->guard('user')->id()
+        );
+
+        session()->flash(
+            'success',
+            'Seluruh inventory allocation berhasil ditandai PICKED.'
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.picking.show',
+            $deliveryOrder->id
+        );
+    }
+
+    public function confirmOut(
+        int $id
+    ): RedirectResponse {
+        $deliveryOrder = $this->findDeliveryOrder($id);
+
+        $this->pickingService->confirmOut(
+            $deliveryOrder,
+            auth()->guard('user')->id()
+        );
+
+        session()->flash(
+            'success',
+            'Seluruh inventory berhasil dikonfirmasi OUT dari warehouse.'
+        );
+
+        return redirect()->route(
+            'admin.delivery-orders.picking.show',
+            $deliveryOrder->id
+        );
+    }
+
+    private function findDeliveryOrder(
+        int $id
+    ): DeliveryOrder {
+        return DeliveryOrder::with([
+            'items.inventoryItem',
+            'items.allocations.inventoryAsset',
+        ])->findOrFail($id);
+    }
+}
+
+==================================================
+PICKING SERVICE
+==================================================
+<?php
+
+namespace Webkul\Invoice\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Webkul\Invoice\Models\DeliveryOrder;
+use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
+use Webkul\Warehouse\Models\InventoryAsset;
+use Webkul\Warehouse\Models\InventoryItem;
+use Webkul\Warehouse\Models\InventoryStockMovement;
+
+class DeliveryOrderPickingService
+{
+    /**
+     * Mark satu allocation sebagai PICKED.
+     */
+    public function markPicked(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderInventoryAllocation $allocation,
+        ?int $performedBy = null
+    ): void {
+        $this->assertIssued($deliveryOrder);
+
+        if ($allocation->delivery_order_id !== $deliveryOrder->id) {
+            throw ValidationException::withMessages([
+                'allocation' => 'Allocation tidak termasuk Surat Jalan ini.',
+            ]);
+        }
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $allocation,
+            $performedBy
+        ) {
+            $lockedAllocation = DeliveryOrderInventoryAllocation::query()
+                ->lockForUpdate()
+                ->findOrFail($allocation->id);
+
+            if ($lockedAllocation->status === 'picked') {
+                return;
+            }
+
+            if ($lockedAllocation->status !== 'allocated') {
+                throw ValidationException::withMessages([
+                    'allocation' => sprintf(
+                        'Allocation hanya dapat dipick dari status ALLOCATED. Status saat ini: %s.',
+                        strtoupper($lockedAllocation->status)
+                    ),
+                ]);
+            }
+
+            $inventoryItem = InventoryItem::query()
+                ->findOrFail($lockedAllocation->inventory_item_id);
+
+            $inventoryAsset = null;
+
+            if ($lockedAllocation->tracking_type === 'serialized') {
+                $inventoryAsset = InventoryAsset::query()
+                    ->lockForUpdate()
+                    ->findOrFail($lockedAllocation->inventory_asset_id);
+
+                if ($inventoryAsset->status !== 'allocated') {
+                    throw ValidationException::withMessages([
+                        'allocation' => sprintf(
+                            'Asset %s harus berstatus ALLOCATED sebelum dipick. Status saat ini: %s.',
+                            $inventoryAsset->asset_code,
+                            strtoupper($inventoryAsset->status)
+                        ),
+                    ]);
+                }
+
+                $inventoryAsset->update([
+                    'status' => 'picked',
+                ]);
+            }
+
+            $lockedAllocation->update([
+                'status'    => 'picked',
+                'picked_by' => $performedBy,
+                'picked_at' => now(),
+            ]);
+
+            $this->recordMovement(
+                $deliveryOrder,
+                $inventoryItem,
+                $inventoryAsset,
+                'picked',
+                (float) $lockedAllocation->quantity,
+                'allocated',
+                'picked',
+                $performedBy,
+                sprintf(
+                    'Picked for %s.',
+                    $deliveryOrder->delivery_order_number
+                )
+            );
+        });
+    }
+
+    /**
+     * Mark semua allocation ALLOCATED menjadi PICKED.
+     */
+    public function markAllPicked(
+        DeliveryOrder $deliveryOrder,
+        ?int $performedBy = null
+    ): void {
+        $this->assertIssued($deliveryOrder);
+
+        $allocationIds = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->where('status', 'allocated')
+            ->orderBy('id')
+            ->pluck('id');
+
+        if ($allocationIds->isEmpty()) {
+            return;
+        }
+
+        foreach ($allocationIds as $allocationId) {
+            $allocation = DeliveryOrderInventoryAllocation::findOrFail(
+                $allocationId
+            );
+
+            $this->markPicked(
+                $deliveryOrder,
+                $allocation,
+                $performedBy
+            );
+        }
+    }
+
+    /**
+     * Confirm seluruh PICKED inventory benar-benar OUT dari warehouse.
+     *
+     * Serialized:
+     * PICKED -> OUT
+     *
+     * Quantity:
+     * PICKED -> OUT dan quantity_on_hand berkurang.
+     */
+    public function confirmOut(
+        DeliveryOrder $deliveryOrder,
+        ?int $performedBy = null
+    ): void {
+        $this->assertIssued($deliveryOrder);
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $performedBy
+        ) {
+            $allocations = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->whereIn(
+                    'status',
+                    DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                )
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($allocations->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'inventory' => 'Surat Jalan tidak memiliki inventory allocation aktif.',
+                ]);
+            }
+
+            $notPicked = $allocations
+                ->where('status', '!=', 'picked');
+
+            if ($notPicked->isNotEmpty()) {
+                $statuses = $notPicked
+                    ->pluck('status')
+                    ->map(fn ($status) => strtoupper($status))
+                    ->unique()
+                    ->implode(', ');
+
+                throw ValidationException::withMessages([
+                    'inventory' => 'Semua inventory harus berstatus PICKED sebelum Confirm OUT. Status yang masih ditemukan: '
+                        .$statuses.'.',
+                ]);
+            }
+
+            foreach ($allocations as $allocation) {
+                $inventoryItem = InventoryItem::query()
+                    ->lockForUpdate()
+                    ->findOrFail($allocation->inventory_item_id);
+
+                $inventoryAsset = null;
+                $notes = sprintf(
+                    'Confirmed OUT for %s.',
+                    $deliveryOrder->delivery_order_number
+                );
+
+                if ($allocation->tracking_type === 'serialized') {
+                    $inventoryAsset = InventoryAsset::query()
+                        ->lockForUpdate()
+                        ->findOrFail($allocation->inventory_asset_id);
+
+                    if ($inventoryAsset->status !== 'picked') {
+                        throw ValidationException::withMessages([
+                            'inventory' => sprintf(
+                                'Asset %s belum berstatus PICKED.',
+                                $inventoryAsset->asset_code
+                            ),
+                        ]);
+                    }
+
+                    $inventoryAsset->update([
+                        'status' => 'out',
+                    ]);
+                } else {
+                    $quantity = (float) $allocation->quantity;
+                    $before = (float) $inventoryItem->quantity_on_hand;
+                    $after = $before - $quantity;
+
+                    if ($after < -0.0001) {
+                        throw ValidationException::withMessages([
+                            'inventory' => sprintf(
+                                'Stock %s tidak cukup untuk OUT %s %s. Stock saat ini %s %s.',
+                                $inventoryItem->name,
+                                $this->formatQuantity($quantity),
+                                $inventoryItem->unit,
+                                $this->formatQuantity($before),
+                                $inventoryItem->unit
+                            ),
+                        ]);
+                    }
+
+                    $after = max($after, 0);
+
+                    $inventoryItem->update([
+                        'quantity_on_hand' => $after,
+                    ]);
+
+                    $notes = sprintf(
+                        'Confirmed OUT for %s. Stock %s %s -> %s %s.',
+                        $deliveryOrder->delivery_order_number,
+                        $this->formatQuantity($before),
+                        $inventoryItem->unit,
+                        $this->formatQuantity($after),
+                        $inventoryItem->unit
+                    );
+                }
+
+                $allocation->update([
+                    'status' => 'out',
+                    'out_by' => $performedBy,
+                    'out_at' => now(),
+                ]);
+
+                $this->recordMovement(
+                    $deliveryOrder,
+                    $inventoryItem,
+                    $inventoryAsset,
+                    'out',
+                    (float) $allocation->quantity,
+                    'picked',
+                    'out',
+                    $performedBy,
+                    $notes
+                );
+            }
+        });
+    }
+
+    /**
+     * True bila seluruh allocation aktif sudah OUT.
+     */
+    public function allOut(
+        DeliveryOrder $deliveryOrder
+    ): bool {
+        $active = DeliveryOrderInventoryAllocation::query()
+            ->where('delivery_order_id', $deliveryOrder->id)
+            ->whereIn(
+                'status',
+                DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+            );
+
+        if (! (clone $active)->exists()) {
+            return false;
+        }
+
+        return ! (clone $active)
+            ->where('status', '!=', 'out')
+            ->exists();
+    }
+
+    private function assertIssued(
+        DeliveryOrder $deliveryOrder
+    ): void {
+        if (
+            strtolower($deliveryOrder->status ?: 'draft')
+            !== 'issued'
+        ) {
+            throw ValidationException::withMessages([
+                'delivery_order' => 'Picking / OUT hanya dapat diproses ketika Surat Jalan berstatus ISSUED.',
+            ]);
+        }
+    }
+
+    private function recordMovement(
+        DeliveryOrder $deliveryOrder,
+        InventoryItem $inventoryItem,
+        ?InventoryAsset $inventoryAsset,
+        string $movementType,
+        float $quantity,
+        ?string $fromStatus,
+        ?string $toStatus,
+        ?int $performedBy,
+        string $notes
+    ): InventoryStockMovement {
+        return InventoryStockMovement::create([
+            'inventory_item_id'     => $inventoryItem->id,
+            'inventory_asset_id'    => $inventoryAsset?->id,
+            'warehouse_id'          => $inventoryAsset?->warehouse_id
+                ?? $inventoryItem->warehouse_id,
+            'warehouse_location_id' => $inventoryAsset?->warehouse_location_id
+                ?? $inventoryItem->warehouse_location_id,
+            'movement_type'         => $movementType,
+            'quantity'              => $quantity,
+            'from_status'           => $fromStatus,
+            'to_status'             => $toStatus,
+            'reference_type'        => 'delivery_order',
+            'reference_id'          => $deliveryOrder->id,
+            'reference_number'      => $deliveryOrder->delivery_order_number,
+            'performed_by'          => $performedBy,
+            'notes'                 => $notes,
+            'occurred_at'           => now(),
+        ]);
+    }
+
+    private function formatQuantity(float $value): string
+    {
+        return rtrim(
+            rtrim(
+                number_format($value, 2, '.', ''),
+                '0'
+            ),
+            '.'
+        );
+    }
+}
+
+==================================================
+ALLOCATION SERVICE
+==================================================
+<?php
+
+namespace Webkul\Invoice\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+use Webkul\Invoice\Models\DeliveryOrder;
+use Webkul\Invoice\Models\DeliveryOrderInventoryAllocation;
+use Webkul\Invoice\Models\DeliveryOrderItem;
+use Webkul\Warehouse\Models\InventoryAsset;
+use Webkul\Warehouse\Models\InventoryItem;
+use Webkul\Warehouse\Models\InventoryStockMovement;
+
+class DeliveryOrderInventoryAllocationService
+{
+    public function syncSerialized(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderItem $deliveryOrderItem,
+        array $assetIds,
+        ?int $performedBy = null
+    ): void {
+        $this->assertDraft($deliveryOrder);
+
+        $inventoryItem = $this->getMappedInventoryItem(
+            $deliveryOrderItem
+        );
+
+        if (! $inventoryItem->isSerialized()) {
+            throw ValidationException::withMessages([
+                'asset_ids' => 'Inventory Item ini bukan serialized asset.',
+            ]);
+        }
+
+        $need = (float) $deliveryOrderItem->quantity;
+
+        if (floor($need) !== $need) {
+            throw ValidationException::withMessages([
+                'asset_ids' => 'Requirement serialized harus menggunakan quantity bilangan bulat.',
+            ]);
+        }
+
+        $requiredCount = (int) $need;
+
+        $assetIds = collect($assetIds)
+            ->filter(fn ($id) => is_numeric($id))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        if (count($assetIds) > $requiredCount) {
+            throw ValidationException::withMessages([
+                'asset_ids' => sprintf(
+                    'Maksimal %d asset dapat dialokasikan untuk %s.',
+                    $requiredCount,
+                    $deliveryOrderItem->name
+                ),
+            ]);
+        }
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $deliveryOrderItem,
+            $inventoryItem,
+            $assetIds,
+            $performedBy
+        ) {
+            $currentAllocations = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->where('delivery_order_item_id', $deliveryOrderItem->id)
+                ->where('tracking_type', 'serialized')
+                ->whereIn(
+                    'status',
+                    DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                )
+                ->lockForUpdate()
+                ->get();
+
+            $currentAssetIds = $currentAllocations
+                ->pluck('inventory_asset_id')
+                ->filter()
+                ->map(fn ($id) => (int) $id)
+                ->values()
+                ->all();
+
+            $toRelease = array_values(
+                array_diff($currentAssetIds, $assetIds)
+            );
+
+            $toAllocate = array_values(
+                array_diff($assetIds, $currentAssetIds)
+            );
+
+            foreach ($toRelease as $assetId) {
+                $allocation = $currentAllocations
+                    ->firstWhere('inventory_asset_id', $assetId);
+
+                if (! $allocation) {
+                    continue;
+                }
+
+                $asset = InventoryAsset::query()
+                    ->lockForUpdate()
+                    ->find($assetId);
+
+                if (
+                    $asset
+                    && $asset->status === 'allocated'
+                ) {
+                    $asset->update([
+                        'status' => 'available',
+                    ]);
+
+                    $this->recordMovement(
+                        $deliveryOrder,
+                        $inventoryItem,
+                        $asset,
+                        'released',
+                        1,
+                        'allocated',
+                        'available',
+                        $performedBy,
+                        sprintf(
+                            'Released from %s / %s.',
+                            $deliveryOrder->delivery_order_number,
+                            $deliveryOrderItem->name
+                        )
+                    );
+                }
+
+                $allocation->update([
+                    'status'      => 'released',
+                    'released_by' => $performedBy,
+                    'released_at' => now(),
+                ]);
+            }
+
+            foreach ($toAllocate as $assetId) {
+                $asset = InventoryAsset::query()
+                    ->where('inventory_item_id', $inventoryItem->id)
+                    ->lockForUpdate()
+                    ->find($assetId);
+
+                if (! $asset) {
+                    throw ValidationException::withMessages([
+                        'asset_ids' => "Asset ID {$assetId} tidak cocok dengan Inventory Item.",
+                    ]);
+                }
+
+                if ($asset->status !== 'available') {
+                    throw ValidationException::withMessages([
+                        'asset_ids' => sprintf(
+                            'Asset %s tidak AVAILABLE. Status saat ini: %s.',
+                            $asset->asset_code,
+                            strtoupper($asset->status)
+                        ),
+                    ]);
+                }
+
+                $asset->update([
+                    'status' => 'allocated',
+                ]);
+
+                DeliveryOrderInventoryAllocation::create([
+                    'delivery_order_id'      => $deliveryOrder->id,
+                    'delivery_order_item_id' => $deliveryOrderItem->id,
+                    'inventory_item_id'      => $inventoryItem->id,
+                    'inventory_asset_id'     => $asset->id,
+                    'tracking_type'          => 'serialized',
+                    'quantity'               => 1,
+                    'status'                 => 'allocated',
+                    'allocated_by'           => $performedBy,
+                    'allocated_at'           => now(),
+                    'notes'                  => sprintf(
+                        'Allocated for %s / %s.',
+                        $deliveryOrder->delivery_order_number,
+                        $deliveryOrderItem->name
+                    ),
+                ]);
+
+                $this->recordMovement(
+                    $deliveryOrder,
+                    $inventoryItem,
+                    $asset,
+                    'allocated',
+                    1,
+                    'available',
+                    'allocated',
+                    $performedBy,
+                    sprintf(
+                        'Allocated to %s / %s.',
+                        $deliveryOrder->delivery_order_number,
+                        $deliveryOrderItem->name
+                    )
+                );
+            }
+        });
+    }
+
+    public function syncQuantity(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderItem $deliveryOrderItem,
+        float $quantity,
+        ?int $performedBy = null
+    ): void {
+        $this->assertDraft($deliveryOrder);
+
+        $inventoryItem = $this->getMappedInventoryItem(
+            $deliveryOrderItem
+        );
+
+        if (! $inventoryItem->isQuantityTracked()) {
+            throw ValidationException::withMessages([
+                'quantity' => 'Inventory Item ini bukan quantity tracked item.',
+            ]);
+        }
+
+        $need = (float) $deliveryOrderItem->quantity;
+        $quantity = round($quantity, 2);
+
+        if ($quantity < 0) {
+            throw ValidationException::withMessages([
+                'quantity' => 'Allocation quantity tidak boleh negatif.',
+            ]);
+        }
+
+        if ($quantity > $need) {
+            throw ValidationException::withMessages([
+                'quantity' => sprintf(
+                    'Allocation maksimal %s %s sesuai requirement Surat Jalan.',
+                    $this->formatQuantity($need),
+                    $inventoryItem->unit
+                ),
+            ]);
+        }
+
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $deliveryOrderItem,
+            $inventoryItem,
+            $quantity,
+            $performedBy
+        ) {
+            $lockedItem = InventoryItem::query()
+                ->lockForUpdate()
+                ->findOrFail($inventoryItem->id);
+
+            $currentAllocations = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->where('delivery_order_item_id', $deliveryOrderItem->id)
+                ->where('tracking_type', 'quantity')
+                ->whereIn(
+                    'status',
+                    DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                )
+                ->lockForUpdate()
+                ->get();
+
+            $currentQuantity = (float) $currentAllocations->sum('quantity');
+
+            $reservedOther = (float) DeliveryOrderInventoryAllocation::query()
+                ->where('inventory_item_id', $lockedItem->id)
+                ->where('tracking_type', 'quantity')
+                ->whereIn(
+                    'status',
+                    DeliveryOrderInventoryAllocation::RESERVATION_STATUSES
+                )
+                ->where(function ($query) use (
+                    $deliveryOrder,
+                    $deliveryOrderItem
+                ) {
+                    $query
+                        ->where('delivery_order_id', '!=', $deliveryOrder->id)
+                        ->orWhere('delivery_order_item_id', '!=', $deliveryOrderItem->id);
+                })
+                ->sum('quantity');
+
+            $maxForThisItem = max(
+                (float) $lockedItem->quantity_on_hand - $reservedOther,
+                0
+            );
+
+            if ($quantity > $maxForThisItem) {
+                throw ValidationException::withMessages([
+                    'quantity' => sprintf(
+                        'Stock bebas tidak cukup. Maksimal allocation saat ini %s %s.',
+                        $this->formatQuantity($maxForThisItem),
+                        $lockedItem->unit
+                    ),
+                ]);
+            }
+
+            if (abs($currentQuantity - $quantity) < 0.0001) {
+                return;
+            }
+
+            if ($currentQuantity > 0) {
+                foreach ($currentAllocations as $allocation) {
+                    $allocation->update([
+                        'status'      => 'released',
+                        'released_by' => $performedBy,
+                        'released_at' => now(),
+                    ]);
+                }
+
+                $this->recordMovement(
+                    $deliveryOrder,
+                    $lockedItem,
+                    null,
+                    'released',
+                    $currentQuantity,
+                    'allocated',
+                    'available',
+                    $performedBy,
+                    sprintf(
+                        'Released quantity reservation from %s / %s.',
+                        $deliveryOrder->delivery_order_number,
+                        $deliveryOrderItem->name
+                    )
+                );
+            }
+
+            if ($quantity <= 0) {
+                return;
+            }
+
+            DeliveryOrderInventoryAllocation::create([
+                'delivery_order_id'      => $deliveryOrder->id,
+                'delivery_order_item_id' => $deliveryOrderItem->id,
+                'inventory_item_id'      => $lockedItem->id,
+                'inventory_asset_id'     => null,
+                'tracking_type'          => 'quantity',
+                'quantity'               => $quantity,
+                'status'                 => 'allocated',
+                'allocated_by'           => $performedBy,
+                'allocated_at'           => now(),
+                'notes'                  => sprintf(
+                    'Reserved for %s / %s.',
+                    $deliveryOrder->delivery_order_number,
+                    $deliveryOrderItem->name
+                ),
+            ]);
+
+            $this->recordMovement(
+                $deliveryOrder,
+                $lockedItem,
+                null,
+                'allocated',
+                $quantity,
+                'available',
+                'allocated',
+                $performedBy,
+                sprintf(
+                    'Reserved %s %s for %s / %s.',
+                    $this->formatQuantity($quantity),
+                    $lockedItem->unit,
+                    $deliveryOrder->delivery_order_number,
+                    $deliveryOrderItem->name
+                )
+            );
+        });
+    }
+
+    public function releaseItem(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderItem $deliveryOrderItem,
+        ?int $performedBy = null
+    ): void {
+        $inventoryItem = $deliveryOrderItem->inventoryItem;
+
+        if (! $inventoryItem) {
+            return;
+        }
+
+        if ($inventoryItem->isSerialized()) {
+            $this->syncSerialized(
+                $deliveryOrder,
+                $deliveryOrderItem,
+                [],
+                $performedBy
+            );
+
+            return;
+        }
+
+        $this->syncQuantity(
+            $deliveryOrder,
+            $deliveryOrderItem,
+            0,
+            $performedBy
+        );
+    }
+
+    public function releaseAll(
+        DeliveryOrder $deliveryOrder,
+        ?int $performedBy = null
+    ): void {
+        $deliveryOrder->loadMissing([
+            'items.inventoryItem',
+        ]);
+
+        foreach ($deliveryOrder->items as $item) {
+            if (! $item->inventoryItem) {
+                continue;
+            }
+
+            if ($item->inventoryItem->isSerialized()) {
+                $this->releaseSerializedWithoutDraftGuard(
+                    $deliveryOrder,
+                    $item,
+                    $performedBy
+                );
+
+                continue;
+            }
+
+            $this->releaseQuantityWithoutDraftGuard(
+                $deliveryOrder,
+                $item,
+                $performedBy
+            );
+        }
+    }
+
+    public function isComplete(
+        DeliveryOrder $deliveryOrder
+    ): bool {
+        $deliveryOrder->loadMissing([
+            'items.inventoryItem',
+        ]);
+
+        $mappedItems = $deliveryOrder->items
+            ->filter(fn ($item) => $item->inventoryItem);
+
+        if ($mappedItems->isEmpty()) {
+            return true;
+        }
+
+        foreach ($mappedItems as $item) {
+            $need = (float) $item->quantity;
+
+            if ($item->inventoryItem->isSerialized()) {
+                if (floor($need) !== $need) {
+                    return false;
+                }
+
+                $allocated = DeliveryOrderInventoryAllocation::query()
+                    ->where('delivery_order_item_id', $item->id)
+                    ->where('tracking_type', 'serialized')
+                    ->whereIn(
+                        'status',
+                        DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                    )
+                    ->count();
+
+                if ($allocated < (int) $need) {
+                    return false;
+                }
+
+                continue;
+            }
+
+            $allocated = (float) DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_item_id', $item->id)
+                ->where('tracking_type', 'quantity')
+                ->whereIn(
+                    'status',
+                    DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                )
+                ->sum('quantity');
+
+            if ($allocated + 0.0001 < $need) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function incompleteItemNames(
+        DeliveryOrder $deliveryOrder
+    ): array {
+        $deliveryOrder->loadMissing([
+            'items.inventoryItem',
+        ]);
+
+        $names = [];
+
+        foreach ($deliveryOrder->items as $item) {
+            if (! $item->inventoryItem) {
+                continue;
+            }
+
+            $need = (float) $item->quantity;
+
+            if ($item->inventoryItem->isSerialized()) {
+                $allocated = DeliveryOrderInventoryAllocation::query()
+                    ->where('delivery_order_item_id', $item->id)
+                    ->where('tracking_type', 'serialized')
+                    ->whereIn(
+                        'status',
+                        DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                    )
+                    ->count();
+
+                if (
+                    floor($need) !== $need
+                    || $allocated < (int) $need
+                ) {
+                    $names[] = $item->name;
+                }
+
+                continue;
+            }
+
+            $allocated = (float) DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_item_id', $item->id)
+                ->where('tracking_type', 'quantity')
+                ->whereIn(
+                    'status',
+                    DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                )
+                ->sum('quantity');
+
+            if ($allocated + 0.0001 < $need) {
+                $names[] = $item->name;
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    private function getMappedInventoryItem(
+        DeliveryOrderItem $deliveryOrderItem
+    ): InventoryItem {
+        $inventoryItem = $deliveryOrderItem->inventoryItem;
+
+        if (! $inventoryItem) {
+            throw ValidationException::withMessages([
+                'inventory_item_id' => 'Delivery Order item belum terhubung ke Inventory Item.',
+            ]);
+        }
+
+        return $inventoryItem;
+    }
+
+    private function assertDraft(
+        DeliveryOrder $deliveryOrder
+    ): void {
+        if (
+            strtolower($deliveryOrder->status ?: 'draft')
+            !== 'draft'
+        ) {
+            throw ValidationException::withMessages([
+                'delivery_order' => 'Allocation hanya dapat diubah ketika Surat Jalan masih DRAFT.',
+            ]);
+        }
+    }
+
+    private function releaseSerializedWithoutDraftGuard(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderItem $deliveryOrderItem,
+        ?int $performedBy
+    ): void {
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $deliveryOrderItem,
+            $performedBy
+        ) {
+            $allocations = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->where('delivery_order_item_id', $deliveryOrderItem->id)
+                ->where('tracking_type', 'serialized')
+                ->where('status', 'allocated')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($allocations as $allocation) {
+                $asset = InventoryAsset::query()
+                    ->lockForUpdate()
+                    ->find($allocation->inventory_asset_id);
+
+                if ($asset && $asset->status === 'allocated') {
+                    $asset->update([
+                        'status' => 'available',
+                    ]);
+
+                    $this->recordMovement(
+                        $deliveryOrder,
+                        $deliveryOrderItem->inventoryItem,
+                        $asset,
+                        'released',
+                        1,
+                        'allocated',
+                        'available',
+                        $performedBy,
+                        "Released because {$deliveryOrder->delivery_order_number} was cancelled."
+                    );
+                }
+
+                $allocation->update([
+                    'status'      => 'released',
+                    'released_by' => $performedBy,
+                    'released_at' => now(),
+                ]);
+            }
+        });
+    }
+
+    private function releaseQuantityWithoutDraftGuard(
+        DeliveryOrder $deliveryOrder,
+        DeliveryOrderItem $deliveryOrderItem,
+        ?int $performedBy
+    ): void {
+        DB::transaction(function () use (
+            $deliveryOrder,
+            $deliveryOrderItem,
+            $performedBy
+        ) {
+            $allocations = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
+                ->where('delivery_order_item_id', $deliveryOrderItem->id)
+                ->where('tracking_type', 'quantity')
+                ->where('status', 'allocated')
+                ->lockForUpdate()
+                ->get();
+
+            $quantity = (float) $allocations->sum('quantity');
+
+            if ($quantity <= 0) {
+                return;
+            }
+
+            foreach ($allocations as $allocation) {
+                $allocation->update([
+                    'status'      => 'released',
+                    'released_by' => $performedBy,
+                    'released_at' => now(),
+                ]);
+            }
+
+            $this->recordMovement(
+                $deliveryOrder,
+                $deliveryOrderItem->inventoryItem,
+                null,
+                'released',
+                $quantity,
+                'allocated',
+                'available',
+                $performedBy,
+                "Released because {$deliveryOrder->delivery_order_number} was cancelled."
+            );
+        });
+    }
+
+    private function recordMovement(
+        DeliveryOrder $deliveryOrder,
+        InventoryItem $inventoryItem,
+        ?InventoryAsset $inventoryAsset,
+        string $movementType,
+        float $quantity,
+        ?string $fromStatus,
+        ?string $toStatus,
+        ?int $performedBy,
+        string $notes
+    ): InventoryStockMovement {
+        return InventoryStockMovement::create([
+            'inventory_item_id'     => $inventoryItem->id,
+            'inventory_asset_id'    => $inventoryAsset?->id,
+            'warehouse_id'          => $inventoryAsset?->warehouse_id
+                ?? $inventoryItem->warehouse_id,
+            'warehouse_location_id' => $inventoryAsset?->warehouse_location_id
+                ?? $inventoryItem->warehouse_location_id,
+            'movement_type'         => $movementType,
+            'quantity'              => $quantity,
+            'from_status'           => $fromStatus,
+            'to_status'             => $toStatus,
+            'reference_type'        => 'delivery_order',
+            'reference_id'          => $deliveryOrder->id,
+            'reference_number'      => $deliveryOrder->delivery_order_number,
+            'performed_by'          => $performedBy,
+            'notes'                 => $notes,
+            'occurred_at'           => now(),
+        ]);
+    }
+
+    private function formatQuantity(float $value): string
+    {
+        return rtrim(
+            rtrim(
+                number_format($value, 2, '.', ''),
+                '0'
+            ),
+            '.'
+        );
+    }
+}
+
+==================================================
+ALLOCATION MODEL
+==================================================
+<?php
+
+namespace Webkul\Invoice\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Webkul\User\Models\UserProxy;
+use Webkul\Warehouse\Models\InventoryAsset;
+use Webkul\Warehouse\Models\InventoryItem;
+
+class DeliveryOrderInventoryAllocation extends Model
+{
+    public const ACTIVE_STATUSES = [
+        'allocated',
+        'picked',
+        'out',
+        'return_pending',
+    ];
+
+    /**
+     * Status yang masih mencadangkan stok fisik di warehouse.
+     *
+     * OUT dan RETURN_PENDING tidak termasuk karena quantity_on_hand
+     * sudah berkurang ketika barang benar-benar keluar.
+     */
+    public const RESERVATION_STATUSES = [
+        'allocated',
+        'picked',
+    ];
+
+    protected $table = 'delivery_order_inventory_allocations';
+
+    protected $fillable = [
+        'delivery_order_id',
+        'delivery_order_item_id',
+        'inventory_item_id',
+        'inventory_asset_id',
+        'tracking_type',
+        'quantity',
+        'status',
+        'allocated_by',
+        'allocated_at',
+        'picked_by',
+        'picked_at',
+        'out_by',
+        'out_at',
+        'released_by',
+        'released_at',
+        'notes',
+    ];
+
+    protected $casts = [
+        'delivery_order_id'      => 'integer',
+        'delivery_order_item_id' => 'integer',
+        'inventory_item_id'      => 'integer',
+        'inventory_asset_id'     => 'integer',
+        'quantity'               => 'decimal:2',
+        'allocated_by'           => 'integer',
+        'picked_by'              => 'integer',
+        'out_by'                 => 'integer',
+        'released_by'            => 'integer',
+        'allocated_at'           => 'datetime',
+        'picked_at'              => 'datetime',
+        'out_at'                 => 'datetime',
+        'released_at'            => 'datetime',
+    ];
+
+    public function deliveryOrder(): BelongsTo
+    {
+        return $this->belongsTo(
+            DeliveryOrder::class,
+            'delivery_order_id'
+        );
+    }
+
+    public function deliveryOrderItem(): BelongsTo
+    {
+        return $this->belongsTo(
+            DeliveryOrderItem::class,
+            'delivery_order_item_id'
+        );
+    }
+
+    public function inventoryItem(): BelongsTo
+    {
+        return $this->belongsTo(
+            InventoryItem::class,
+            'inventory_item_id'
+        );
+    }
+
+    public function inventoryAsset(): BelongsTo
+    {
+        return $this->belongsTo(
+            InventoryAsset::class,
+            'inventory_asset_id'
+        );
+    }
+
+    public function allocatedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            UserProxy::modelClass(),
+            'allocated_by'
+        );
+    }
+
+    public function pickedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            UserProxy::modelClass(),
+            'picked_by'
+        );
+    }
+
+    public function outBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            UserProxy::modelClass(),
+            'out_by'
+        );
+    }
+
+    public function releasedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            UserProxy::modelClass(),
+            'released_by'
+        );
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->whereIn(
+            'status',
+            self::ACTIVE_STATUSES
+        );
+    }
+}
+
+==================================================
+INVENTORY ASSET MODEL
+==================================================
+<?php
+
+namespace Webkul\Warehouse\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class InventoryAsset extends Model
+{
+    protected $table = 'inventory_assets';
+
+    protected $fillable = [
+        'inventory_item_id',
+        'asset_code',
+        'barcode_value',
+        'serial_number',
+        'warehouse_id',
+        'warehouse_location_id',
+        'status',
+        'condition',
+        'purchase_date',
+        'purchase_price',
+        'notes',
+    ];
+
+    protected $casts = [
+        'purchase_date' => 'date',
+        'purchase_price' => 'decimal:2',
+    ];
+
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(InventoryItem::class, 'inventory_item_id');
+    }
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(WarehouseProxy::modelClass(), 'warehouse_id');
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(LocationProxy::modelClass(), 'warehouse_location_id');
+    }
+
+    public function movements(): HasMany
+    {
+        return $this->hasMany(InventoryStockMovement::class, 'inventory_asset_id');
+    }
+
+    public function scopeAvailable($query)
+    {
+        return $query->where('status', 'available');
+    }
+
+    public function scopeAllocated($query)
+    {
+        return $query->where('status', 'allocated');
+    }
+
+    public function scopeOut($query)
+    {
+        return $query->where('status', 'out');
+    }
+
+    public function isAvailable(): bool
+    {
+        return $this->status === 'available';
+    }
+}
+
+==================================================
+INVENTORY ITEM MODEL
+==================================================
+<?php
+
+namespace Webkul\Warehouse\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class InventoryItem extends Model
+{
+    protected $table = 'inventory_items';
+
+    protected $fillable = [
+        'code',
+        'name',
+        'category',
+        'description',
+        'tracking_type',
+        'unit',
+        'quantity_on_hand',
+        'minimum_stock',
+        'warehouse_id',
+        'warehouse_location_id',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'quantity_on_hand' => 'decimal:2',
+        'minimum_stock' => 'decimal:2',
+        'is_active' => 'boolean',
+    ];
+
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(WarehouseProxy::modelClass(), 'warehouse_id');
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(LocationProxy::modelClass(), 'warehouse_location_id');
+    }
+
+    public function assets(): HasMany
+    {
+        return $this->hasMany(InventoryAsset::class, 'inventory_item_id');
+    }
+
+    public function movements(): HasMany
+    {
+        return $this->hasMany(InventoryStockMovement::class, 'inventory_item_id');
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeSerialized($query)
+    {
+        return $query->where('tracking_type', 'serialized');
+    }
+
+    public function scopeQuantity($query)
+    {
+        return $query->where('tracking_type', 'quantity');
+    }
+
+    public function isSerialized(): bool
+    {
+        return $this->tracking_type === 'serialized';
+    }
+
+    public function isQuantityTracked(): bool
+    {
+        return $this->tracking_type === 'quantity';
+    }
+}
+
+==================================================
+INVENTORY DASHBOARD CONTROLLER
+==================================================
+<?php
+
+namespace Webkul\Admin\Http\Controllers\Inventory;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+use Webkul\Admin\Http\Controllers\Controller;
+
+class InventoryDashboardController extends Controller
+{
+    public function index(): View
+    {
+        $assetStatus = DB::table('inventory_assets')
+            ->select('status', DB::raw('COUNT(*) as total'))
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $summary = [
+            'total_assets'    => (int) $assetStatus->sum(),
+            'available'       => (int) ($assetStatus['available'] ?? 0),
+            'allocated'       => (int) ($assetStatus['allocated'] ?? 0),
+            'picked'          => (int) ($assetStatus['picked'] ?? 0),
+            'out'             => (int) ($assetStatus['out'] ?? 0),
+            'return_pending'  => (int) ($assetStatus['return_pending'] ?? 0),
+            'maintenance'     => (int) ($assetStatus['maintenance'] ?? 0),
+            'damaged'         => (int) ($assetStatus['damaged'] ?? 0),
+            'missing'         => (int) ($assetStatus['missing'] ?? 0),
+            'retired'         => (int) ($assetStatus['retired'] ?? 0),
+            'quantity_items'  => DB::table('inventory_items')
+                ->where('tracking_type', 'quantity')
+                ->where('is_active', true)
+                ->count(),
+            'low_stock_items' => DB::table('inventory_items')
+                ->where('tracking_type', 'quantity')
+                ->where('is_active', true)
+                ->where('minimum_stock', '>', 0)
+                ->whereColumn('quantity_on_hand', '<=', 'minimum_stock')
+                ->count(),
+        ];
+
+        $lowStockItems = DB::table('inventory_items')
+            ->where('tracking_type', 'quantity')
+            ->where('is_active', true)
+            ->where('minimum_stock', '>', 0)
+            ->whereColumn('quantity_on_hand', '<=', 'minimum_stock')
+            ->orderByRaw('(quantity_on_hand / NULLIF(minimum_stock, 0)) asc')
+            ->orderBy('name')
+            ->limit(10)
+            ->get();
+
+        $attentionAssets = DB::table('inventory_assets')
+            ->join(
+                'inventory_items',
+                'inventory_assets.inventory_item_id',
+                '=',
+                'inventory_items.id'
+            )
+            ->select(
+                'inventory_assets.id',
+                'inventory_assets.asset_code',
+                'inventory_assets.status',
+                'inventory_assets.condition',
+                'inventory_items.code as item_code',
+                'inventory_items.name as item_name'
+            )
+            ->whereIn('inventory_assets.status', [
+                'out',
+                'return_pending',
+                'maintenance',
+                'damaged',
+                'missing',
+            ])
+            ->orderByRaw("
+                CASE inventory_assets.status
+                    WHEN 'missing' THEN 1
+                    WHEN 'damaged' THEN 2
+                    WHEN 'return_pending' THEN 3
+                    WHEN 'maintenance' THEN 4
+                    WHEN 'out' THEN 5
+                    ELSE 6
+                END
+            ")
+            ->orderBy('inventory_assets.updated_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        $recentMovements = DB::table('inventory_stock_movements')
+            ->join(
+                'inventory_items',
+                'inventory_stock_movements.inventory_item_id',
+                '=',
+                'inventory_items.id'
+            )
+            ->leftJoin(
+                'inventory_assets',
+                'inventory_stock_movements.inventory_asset_id',
+                '=',
+                'inventory_assets.id'
+            )
+            ->leftJoin(
+                'users',
+                'inventory_stock_movements.performed_by',
+                '=',
+                'users.id'
+            )
+            ->select(
+                'inventory_stock_movements.id',
+                'inventory_stock_movements.movement_type',
+                'inventory_stock_movements.quantity',
+                'inventory_stock_movements.from_status',
+                'inventory_stock_movements.to_status',
+                'inventory_stock_movements.reference_number',
+                'inventory_stock_movements.occurred_at',
+                'inventory_items.code as item_code',
+                'inventory_items.name as item_name',
+                'inventory_items.unit',
+                'inventory_assets.asset_code',
+                'users.name as performed_by_name'
+            )
+            ->orderByDesc('inventory_stock_movements.occurred_at')
+            ->orderByDesc('inventory_stock_movements.id')
+            ->limit(10)
+            ->get();
+
+        return view(
+            'admin::inventory.dashboard.index',
+            compact(
+                'summary',
+                'lowStockItems',
+                'attentionAssets',
+                'recentMovements'
+            )
+        );
+    }
+}
+
+==================================================
+DELIVERY ORDER SHOW
+==================================================
+<x-admin::layouts>
+    <x-slot:title>
+        {{ $deliveryOrder->delivery_order_number }}
+    </x-slot>
+
+    @php
+        $status = strtolower(
+            $deliveryOrder->status ?: 'draft'
+        );
+
+        $statusClasses = match ($status) {
+            'issued' =>
+                'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+
+            'delivered' =>
+                'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+
+            'returned' =>
+                'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+
+            'cancelled' =>
+                'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+
+            default =>
+                'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+        };
+    @endphp
+
+    {{-- ========================================================= --}}
+    {{-- PAGE HEADER --}}
+    {{-- ========================================================= --}}
+
+    <div
+        class="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white p-4 max-sm:flex-wrap dark:border-gray-800 dark:bg-gray-900"
+    >
+        <div class="grid gap-2">
+            <div>
+                <a
+                    href="{{ route('admin.delivery-orders.index') }}"
+                    class="text-sm text-gray-600 hover:text-brandColor dark:text-gray-300"
+                >
+                    &larr; Back
+                </a>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <p class="text-xl font-bold text-gray-800 dark:text-white">
+                    {{ $deliveryOrder->delivery_order_number }}
+                </p>
+
+                <span
+                    class="rounded-full px-3 py-1 text-xs font-bold uppercase {{ $statusClasses }}"
+                >
+                    {{ $status }}
+                </span>
+            </div>
+
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+                {{ $deliveryOrder->project_code ?: '-' }}
+
+                @if ($deliveryOrder->project_name)
+                 &bull; {{ $deliveryOrder->project_name }}
+            @endif
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            @if ($deliveryOrder->invoice_id)
+                <a
+                    href="{{ route(
+                        'admin.invoices.show',
+                        $deliveryOrder->invoice_id
+                    ) }}"
+                    class="secondary-button"
+                >
+                    View Invoice
+                </a>
+            @endif
+
+            @if (
+                $status === 'draft'
+                && bouncer()->hasPermission('delivery-orders.edit')
+            )
+                <a
+                    href="{{ route(
+                        'admin.delivery-orders.edit',
+                        $deliveryOrder->id
+                    ) }}"
+                    class="secondary-button"
+                >
+                    Edit Surat Jalan
+                </a>
+            @endif
+
+            @if (
+                in_array($status, ['issued', 'delivered'], true)
+                && (
+                    bouncer()->hasPermission('delivery-orders.picking')
+                    || bouncer()->hasPermission('delivery-orders.out')
+                )
+            )
+                <a
+                    href="{{ route(
+                        'admin.delivery-orders.picking.show',
+                        $deliveryOrder->id
+                    ) }}"
+                    class="secondary-button"
+                >
+                    Picking / OUT
+                </a>
+            @endif
+
+            @if (
+                bouncer()->hasPermission('delivery-orders.print')
+            )
+                <a
+                    href="{{ route(
+                        'admin.delivery-orders.print',
+                        $deliveryOrder->id
+                    ) }}"
+                    class="primary-button"
+                >
+                    Print Surat Jalan
+                </a>
+            @endif
+        </div>
+    </div>
+
+    {{-- ========================================================= --}}
+    {{-- STATUS WORKFLOW --}}
+    {{-- ========================================================= --}}
+
+    <div
+        class="mt-4 rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
+    >
+        <div class="flex flex-wrap items-start justify-between gap-5">
+            <div>
+                <p class="text-base font-semibold text-gray-800 dark:text-white">
+                    Delivery Status
+                </p>
+
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Workflow: Draft -> Issued -> Picking -> OUT -> Delivered -> Returned
+                </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                @if ($status === 'draft')
+                    @if (
+                        bouncer()->hasPermission('delivery-orders.issue')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.issue',
+                                $deliveryOrder->id
+                            ) }}"
+                        >
+                            @csrf
+                            @method('PUT')
+
+                            <button
+                                type="submit"
+                                class="primary-button"
+                                onclick="return confirm('Issue Surat Jalan ini? Setelah di-issue, dokumen dianggap resmi.')"
+                            >
+                                Issue Surat Jalan
+                            </button>
+                        </form>
+                    @endif
+
+                    @if (
+                        bouncer()->hasPermission('delivery-orders.cancel')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.cancel',
+                                $deliveryOrder->id
+                            ) }}"
+                        >
+                            @csrf
+                            @method('PUT')
+
+                            <button
+                                type="submit"
+                                class="secondary-button"
+                                onclick="return confirm('Batalkan Surat Jalan ini?')"
+                            >
+                                Cancel
+                            </button>
+                        </form>
+                    @endif
+                @elseif ($status === 'issued')
+                    @if (
+                        bouncer()->hasPermission('delivery-orders.delivered')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.delivered',
+                                $deliveryOrder->id
+                            ) }}"
+                        >
+                            @csrf
+                            @method('PUT')
+
+                            <button
+                                type="submit"
+                                class="primary-button"
+                                onclick="return confirm('Tandai barang sudah delivered ke PIC?')"
+                            >
+                                Mark as Delivered
+                            </button>
+                        </form>
+                    @endif
+
+                    @if (
+                        bouncer()->hasPermission('delivery-orders.cancel')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.cancel',
+                                $deliveryOrder->id
+                            ) }}"
+                        >
+                            @csrf
+                            @method('PUT')
+
+                            <button
+                                type="submit"
+                                class="secondary-button"
+                                onclick="return confirm('Batalkan Surat Jalan ini?')"
+                            >
+                                Cancel
+                            </button>
+                        </form>
+                    @endif
+                @elseif ($status === 'delivered')
+                    @if (
+                        bouncer()->hasPermission('delivery-orders.returned')
+                    )
+                        <form
+                            method="POST"
+                            action="{{ route(
+                                'admin.delivery-orders.returned',
+                                $deliveryOrder->id
+                            ) }}"
+                        >
+                            @csrf
+                            @method('PUT')
+
+                            <button
+                                type="submit"
+                                class="primary-button"
+                                onclick="return confirm('Tandai seluruh barang sudah kembali ke warehouse?')"
+                            >
+                                Mark as Returned
+                            </button>
+                        </form>
+                    @endif
+                @elseif ($status === 'returned')
+                    <span
+                        class="rounded-lg bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-300"
+                    >
+                        Workflow Complete
+                    </span>
+                @elseif ($status === 'cancelled')
+                    <span
+                        class="rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 dark:bg-red-900/20 dark:text-red-300"
+                    >
+                        Surat Jalan Cancelled
+                    </span>
+                @endif
+            </div>
+        </div>
+
+        <div
+            class="mt-5 grid grid-cols-4 gap-4 max-xl:grid-cols-2 max-sm:grid-cols-1"
+        >
+            <div
+                class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950"
+            >
+                <p class="text-xs font-medium uppercase text-gray-500">
+                    Current Status
+                </p>
+
+                <p class="mt-2 text-sm font-semibold uppercase text-gray-800 dark:text-white">
+                    {{ $status }}
+                </p>
+            </div>
+
+            <div
+                class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950"
+            >
+                <p class="text-xs font-medium uppercase text-gray-500">
+                    Issued At
+                </p>
+
+                <p class="mt-2 text-sm text-gray-800 dark:text-white">
+                    {{
+                        $deliveryOrder->issued_at
+                            ? $deliveryOrder->issued_at->format('d M Y H:i')
+                            : '-'
+                    }}
+                </p>
+            </div>
+
+            <div
+                class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950"
+            >
+                <p class="text-xs font-medium uppercase text-gray-500">
+                    Delivered At
+                </p>
+
+                <p class="mt-2 text-sm text-gray-800 dark:text-white">
+                    {{
+                        $deliveryOrder->delivered_at
+                            ? $deliveryOrder->delivered_at->format('d M Y H:i')
+                            : '-'
+                    }}
+                </p>
+            </div>
+
+            <div
+                class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-950"
+            >
+                <p class="text-xs font-medium uppercase text-gray-500">
+                    Returned At
+                </p>
+
+                <p class="mt-2 text-sm text-gray-800 dark:text-white">
+                    {{
+                        $deliveryOrder->returned_at
+                            ? $deliveryOrder->returned_at->format('d M Y H:i')
+                            : '-'
+                    }}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 grid gap-4">
+        {{-- ===================================================== --}}
+        {{-- PROJECT INFORMATION --}}
+        {{-- ===================================================== --}}
+
+        <div
+            class="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
+        >
+            <p class="mb-5 text-base font-semibold text-gray-800 dark:text-white">
+                Project Information
+            </p>
+
+            <div
+                class="grid grid-cols-4 gap-x-8 gap-y-5 max-xl:grid-cols-2 max-sm:grid-cols-1"
+            >
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Surat Jalan
+                    </p>
+
+                    <p class="mt-1 text-sm font-semibold text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->delivery_order_number }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Project Code
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->project_code ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Project Name
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->project_name ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Customer
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->customer_name ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Invoice
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->invoice_number ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Quote
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->quote_number ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Sales Person
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->sales_person_name ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Created By
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->creator?->name ?: '-' }}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        {{-- ===================================================== --}}
+        {{-- EVENT INFORMATION --}}
+        {{-- ===================================================== --}}
+
+        <div
+            class="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
+        >
+            <p class="mb-5 text-base font-semibold text-gray-800 dark:text-white">
+                Event Information
+            </p>
+
+            <div
+                class="grid grid-cols-4 gap-x-8 gap-y-5 max-xl:grid-cols-2 max-sm:grid-cols-1"
+            >
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Event Date
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{
+                            $deliveryOrder->event_date
+                                ? $deliveryOrder->event_date->format('d M Y')
+                                : '-'
+                        }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Event Time
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->event_time ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Location
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->location ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Delivery Date
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{
+                            $deliveryOrder->delivery_date
+                                ? $deliveryOrder->delivery_date->format('d M Y')
+                                : '-'
+                        }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Delivery Time
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->delivery_time ?: '-' }}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        {{-- ===================================================== --}}
+        {{-- RECIPIENT --}}
+        {{-- ===================================================== --}}
+
+        <div
+            class="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
+        >
+            <p class="mb-5 text-base font-semibold text-gray-800 dark:text-white">
+                Delivery / Recipient
+            </p>
+
+            <div
+                class="grid grid-cols-4 gap-x-8 gap-y-5 max-xl:grid-cols-2 max-sm:grid-cols-1"
+            >
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Recipient
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->recipient_name ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Recipient Phone
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->recipient_phone ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        PIC Event
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->pic_name ?: '-' }}
+                    </p>
+                </div>
+
+                <div>
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        PIC Phone
+                    </p>
+
+                    <p class="mt-1 text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->pic_phone ?: '-' }}
+                    </p>
+                </div>
+
+                <div
+                    class="col-span-4 max-xl:col-span-2 max-sm:col-span-1"
+                >
+                    <p class="text-xs font-medium uppercase text-gray-500">
+                        Delivery Address
+                    </p>
+
+                    <p class="mt-1 whitespace-pre-line text-sm text-gray-800 dark:text-white">
+                        {{ $deliveryOrder->delivery_address ?: '-' }}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        {{-- ===================================================== --}}
+        {{-- EQUIPMENT / INVENTORY REQUIREMENT --}}
+        @include('admin::delivery-orders.partials.equipment-show')
+
+
+        {{-- ===================================================== --}}{{-- NOTES --}}
+        {{-- ===================================================== --}}
+
+        <div
+            class="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"
+        >
+            <p class="mb-3 text-base font-semibold text-gray-800 dark:text-white">
+                Notes
+            </p>
+
+            <p class="whitespace-pre-line text-sm text-gray-600 dark:text-gray-300">
+                {{ $deliveryOrder->notes ?: '-' }}
+            </p>
+        </div>
+    </div>
+</x-admin::layouts>
+
+==================================================
+PICKING BLADE
+==================================================
+<x-admin::layouts>
+    <x-slot:title>
+        Picking / OUT - {{ $deliveryOrder->delivery_order_number }}
+    </x-slot>
+
+    @php
+        $status = strtolower(
+            $deliveryOrder->status ?: 'draft'
+        );
+
+        $formatQty = static function ($value) {
+            return rtrim(
+                rtrim(
+                    number_format((float) $value, 2, '.', ''),
+                    '0'
+                ),
+                '.'
+            );
+        };
+
+        $statusClass = static function ($allocationStatus) {
+            return match ($allocationStatus) {
+                'allocated' =>
+                    'bg-blue-100 text-blue-700',
+
+                'picked' =>
+                    'bg-yellow-100 text-yellow-700',
+
+                'out' =>
+                    'bg-purple-100 text-purple-700',
+
+                'return_pending' =>
+                    'bg-orange-100 text-orange-700',
+
+                default =>
+                    'bg-gray-100 text-gray-700',
+            };
+        };
+    @endphp
+
+    <div class="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white p-4 max-sm:flex-wrap dark:border-gray-800 dark:bg-gray-900">
+        <div>
+            <a
+                href="{{ route(
+                    'admin.delivery-orders.show',
+                    $deliveryOrder->id
+                ) }}"
+                class="text-sm text-gray-600 hover:text-brandColor dark:text-gray-300"
+            >
+                &larr; Back to Surat Jalan
+            </a>
+
+            <div class="mt-2 flex items-center gap-3">
+                <p class="text-xl font-bold text-gray-800 dark:text-white">
+                    Picking / OUT
+                </p>
+
+                <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold uppercase text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                    {{ $status }}
+                </span>
+            </div>
+
+            <p class="mt-1 text-sm text-gray-500">
+                {{ $deliveryOrder->delivery_order_number }}
+                Â· {{ $deliveryOrder->project_code ?: '-' }}
+
+                @if ($deliveryOrder->project_name)
+                    Â· {{ $deliveryOrder->project_name }}
+                @endif
+            </p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+            @if (
+                $canOperate
+                && $summary['allocated'] > 0
+                && bouncer()->hasPermission('delivery-orders.picking')
+            )
+                <form
+                    method="POST"
+                    action="{{ route(
+                        'admin.delivery-orders.picking.mark-all',
+                        $deliveryOrder->id
+                    ) }}"
+                >
+                    @csrf
+                    @method('PUT')
+
+                    <button
+                        type="submit"
+                        class="secondary-button"
+                        onclick="return confirm('Tandai seluruh inventory ALLOCATED sebagai PICKED? Pastikan barang sudah benar-benar diambil dari storage.')"
+                    >
+                        Mark All Picked
+                    </button>
+                </form>
+            @endif
+
+            @if (
+                $canOperate
+                && $allPicked
+                && bouncer()->hasPermission('delivery-orders.out')
+            )
+                <form
+                    method="POST"
+                    action="{{ route(
+                        'admin.delivery-orders.picking.out',
+                        $deliveryOrder->id
+                    ) }}"
+                >
+                    @csrf
+                    @method('PUT')
+
+                    <button
+                        type="submit"
+                        class="primary-button"
+                        onclick="return confirm('Confirm seluruh barang OUT dari warehouse? Untuk quantity, physical stock akan dikurangi sekarang.')"
+                    >
+                        Confirm OUT
+                    </button>
+                </form>
+            @endif
+        </div>
+    </div>
+
+    <div class="mt-4 grid grid-cols-4 gap-4 max-lg:grid-cols-2 max-sm:grid-cols-1">
+        <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <p class="text-xs font-semibold uppercase text-blue-600">
+                Allocated
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-blue-800">
+                {{ $summary['allocated'] }}
+            </p>
+        </div>
+
+        <div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+            <p class="text-xs font-semibold uppercase text-yellow-600">
+                Picked
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-yellow-800">
+                {{ $summary['picked'] }}
+            </p>
+        </div>
+
+        <div class="rounded-lg border border-purple-200 bg-purple-50 p-4">
+            <p class="text-xs font-semibold uppercase text-purple-600">
+                Out
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-purple-800">
+                {{ $summary['out'] }}
+            </p>
+        </div>
+
+        <div class="rounded-lg border border-orange-200 bg-orange-50 p-4">
+            <p class="text-xs font-semibold uppercase text-orange-600">
+                Return Pending
+            </p>
+
+            <p class="mt-2 text-2xl font-bold text-orange-800">
+                {{ $summary['return_pending'] }}
+            </p>
+        </div>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+        <div class="mb-5">
+            <p class="text-base font-semibold text-gray-800 dark:text-white">
+                Picking List
+            </p>
+
+            <p class="mt-1 text-xs text-gray-500">
+                PICKED berarti barang sudah diambil dari storage tetapi belum keluar warehouse.
+                OUT berarti barang benar-benar meninggalkan warehouse.
+            </p>
+        </div>
+
+        @if ($allocations->isEmpty())
+            <div class="rounded-lg border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500">
+                Tidak ada inventory allocation aktif.
+            </div>
+        @else
+            <div class="overflow-x-auto">
+                <table class="w-full min-w-[1100px]">
+                    <thead>
+                        <tr class="border-b border-gray-200 dark:border-gray-800">
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                #
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                Equipment
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                Inventory Item
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                Actual Item
+                            </th>
+
+                            <th class="px-3 py-3 text-right text-xs font-semibold text-gray-500">
+                                Qty
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                Status
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                Picked At
+                            </th>
+
+                            <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">
+                                OUT At
+                            </th>
+
+                            <th class="px-3 py-3 text-right text-xs font-semibold text-gray-500">
+                                Action
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach ($allocations as $allocation)
+                            <tr class="border-b border-gray-100 dark:border-gray-800">
+                                <td class="px-3 py-4 text-sm text-gray-500">
+                                    {{ $loop->iteration }}
+                                </td>
+
+                                <td class="px-3 py-4">
+                                    <p class="text-sm font-semibold text-gray-800 dark:text-white">
+                                        {{ $allocation->deliveryOrderItem?->name ?: '-' }}
+                                    </p>
+
+                                    @if ($allocation->deliveryOrderItem?->description)
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            {{ $allocation->deliveryOrderItem->description }}
+                                        </p>
+                                    @endif
+                                </td>
+
+                                <td class="px-3 py-4">
+                                    <p class="text-sm font-semibold text-gray-800 dark:text-white">
+                                        {{ $allocation->inventoryItem?->code ?: '-' }}
+                                    </p>
+
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        {{ $allocation->inventoryItem?->name ?: '-' }}
+                                    </p>
+                                </td>
+
+                                <td class="px-3 py-4 text-sm">
+                                    @if ($allocation->tracking_type === 'serialized')
+                                        <span class="rounded-full bg-gray-100 px-2.5 py-1 font-semibold text-gray-800">
+                                            {{ $allocation->inventoryAsset?->asset_code ?: '-' }}
+                                        </span>
+                                    @else
+                                        <span class="text-gray-600 dark:text-gray-300">
+                                            Quantity Stock
+                                        </span>
+                                    @endif
+                                </td>
+
+                                <td class="px-3 py-4 text-right text-sm font-semibold text-gray-800 dark:text-white">
+                                    {{ $formatQty($allocation->quantity) }}
+                                    {{ $allocation->inventoryItem?->unit ?: $allocation->deliveryOrderItem?->unit }}
+                                </td>
+
+                                <td class="px-3 py-4">
+                                    <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $statusClass($allocation->status) }}">
+                                        {{ strtoupper($allocation->status) }}
+                                    </span>
+                                </td>
+
+                                <td class="px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                    @if ($allocation->picked_at)
+                                        {{ $allocation->picked_at->format('d M Y H:i') }}
+
+                                        <div class="mt-1 text-xs text-gray-500">
+                                            {{ $allocation->pickedBy?->name ?: '-' }}
+                                        </div>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
+
+                                <td class="px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                    @if ($allocation->out_at)
+                                        {{ $allocation->out_at->format('d M Y H:i') }}
+
+                                        <div class="mt-1 text-xs text-gray-500">
+                                            {{ $allocation->outBy?->name ?: '-' }}
+                                        </div>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
+
+                                <td class="px-3 py-4 text-right">
+                                    @if (
+                                        $canOperate
+                                        && $allocation->status === 'allocated'
+                                        && bouncer()->hasPermission('delivery-orders.picking')
+                                    )
+                                        <form
+                                            method="POST"
+                                            action="{{ route(
+                                                'admin.delivery-orders.picking.mark',
+                                                [
+                                                    $deliveryOrder->id,
+                                                    $allocation->id,
+                                                ]
+                                            ) }}"
+                                        >
+                                            @csrf
+                                            @method('PUT')
+
+                                            <button
+                                                type="submit"
+                                                class="secondary-button"
+                                                onclick="return confirm('Tandai item ini sebagai PICKED?')"
+                                            >
+                                                Mark Picked
+                                            </button>
+                                        </form>
+                                    @else
+                                        <span class="text-xs text-gray-400">
+                                            -
+                                        </span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+
+        @if ($allOut)
+            <div class="mt-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+                Semua inventory sudah OUT. Surat Jalan sekarang dapat diproses ke Mark as Delivered.
+            </div>
+        @elseif (
+            $summary['picked'] > 0
+            && $summary['allocated'] > 0
+        )
+            <div class="mt-4 rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-700">
+                Picking belum lengkap. Confirm OUT baru tersedia setelah seluruh allocation berstatus PICKED.
+            </div>
+        @endif
+    </div>
+</x-admin::layouts>
+
+==================================================
+EQUIPMENT SHOW PARTIAL
+==================================================
+<div class="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+    @php
+        $formatQty = static function ($value) {
+            if ($value === null) {
+                return '-';
+            }
+
+            return rtrim(
+                rtrim(
+                    number_format((float) $value, 2, '.', ''),
+                    '0'
+                ),
+                '.'
+            );
+        };
+
+        $deliveryStatus = strtolower(
+            $deliveryOrder->status ?: 'draft'
+        );
+    @endphp
+
+    <div class="mb-5 flex items-start justify-between gap-4 max-sm:flex-wrap">
+        <div>
+            <p class="text-base font-semibold text-gray-800 dark:text-white">
+                Equipment / Inventory Requirement
+            </p>
+
+            <p class="mt-1 text-xs text-gray-500">
+                Need adalah snapshot kebutuhan SJ. Allocated menunjukkan barang
+                yang sudah dicadangkan khusus untuk Surat Jalan ini.
+            </p>
+        </div>
+
+        @if (
+            bouncer()->hasPermission('delivery-orders.inventory-allocation')
+        )
+            <a
+                href="{{ route(
+                    'admin.delivery-orders.inventory-allocation.edit',
+                    $deliveryOrder->id
+                ) }}"
+                class="{{ $deliveryStatus === 'draft' ? 'primary-button' : 'secondary-button' }}"
+            >
+                {{ $deliveryStatus === 'draft' ? 'Manage Inventory Allocation' : 'View Inventory Allocation' }}
+            </a>
+        @endif
+    </div>
+
+    @if ($deliveryOrder->items->isEmpty())
+        <div class="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-700">
+            <p class="text-sm font-medium text-gray-600 dark:text-gray-300">
+                Belum ada equipment.
+            </p>
+        </div>
+    @else
+        <div class="overflow-x-auto">
+            <table class="w-full min-w-[1250px]">
+                <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-800">
+                        <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">#</th>
+                        <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">Equipment</th>
+                        <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">Inventory Mapping</th>
+                        <th class="px-3 py-3 text-right text-xs font-semibold text-gray-500">Need</th>
+                        <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">Actual Allocation</th>
+                        <th class="px-3 py-3 text-right text-xs font-semibold text-gray-500">Free Available</th>
+                        <th class="px-3 py-3 text-right text-xs font-semibold text-gray-500">Shortage</th>
+                        <th class="px-3 py-3 text-left text-xs font-semibold text-gray-500">Notes</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach ($deliveryOrder->items as $item)
+                        @php
+                            $inventoryItem = $item->inventoryItem;
+                            $need = (float) $item->quantity;
+
+                            $activeAllocations = $item->allocations
+                                ->whereIn(
+                                    'status',
+                                    \Webkul\Invoice\Models\DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                                );
+
+                            $allocated = 0;
+                            $freeAvailable = null;
+                            $capacity = null;
+
+                            if ($inventoryItem) {
+                                if ($inventoryItem->isSerialized()) {
+                                    $allocated = $activeAllocations->count();
+
+                                    $freeAvailable = (float) $inventoryItem
+                                        ->assets()
+                                        ->where('status', 'available')
+                                        ->count();
+
+                                    $capacity = $allocated + $freeAvailable;
+                                } else {
+                                    $allocated = (float) $activeAllocations
+                                        ->sum('quantity');
+
+                                    $totalReserved = (float) \Webkul\Invoice\Models\DeliveryOrderInventoryAllocation::query()
+                                        ->where('inventory_item_id', $inventoryItem->id)
+                                        ->where('tracking_type', 'quantity')
+                                        ->whereIn(
+                                            'status',
+                                            \Webkul\Invoice\Models\DeliveryOrderInventoryAllocation::RESERVATION_STATUSES
+                                        )
+                                        ->sum('quantity');
+
+                                    $freeAvailable = max(
+                                        (float) $inventoryItem->quantity_on_hand
+                                        - $totalReserved,
+                                        0
+                                    );
+
+                                    $capacity = $allocated + $freeAvailable;
+                                }
+                            }
+
+                            $shortage = $capacity === null
+                                ? null
+                                : max($need - $capacity, 0);
+
+                            $serializedAllocations = $activeAllocations
+                                ->where('tracking_type', 'serialized')
+                                ->filter(
+                                    fn ($allocation) => $allocation->inventoryAsset
+                                )
+                                ->values();
+
+                            $quantityAllocation = $activeAllocations
+                                ->where('tracking_type', 'quantity')
+                                ->first();
+                        @endphp
+
+                        <tr class="border-b border-gray-100 dark:border-gray-800">
+                            <td class="px-3 py-4 text-sm text-gray-500">
+                                {{ $loop->iteration }}
+                            </td>
+
+                            <td class="px-3 py-4">
+                                <p class="text-sm font-medium text-gray-800 dark:text-white">
+                                    {{ $item->name }}
+                                </p>
+
+                                @if ($item->description)
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        {{ $item->description }}
+                                    </p>
+                                @endif
+                            </td>
+
+                            <td class="px-3 py-4">
+                                @if ($inventoryItem)
+                                    <p class="text-sm font-semibold text-gray-800 dark:text-white">
+                                        {{ $inventoryItem->code }}
+                                    </p>
+
+                                    <p class="mt-1 text-xs text-gray-500">
+                                        {{ $inventoryItem->name }}
+                                        Â· {{ ucfirst($inventoryItem->tracking_type) }}
+                                    </p>
+                                @else
+                                    <span class="rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-semibold text-yellow-700">
+                                        NOT LINKED
+                                    </span>
+                                @endif
+                            </td>
+
+                            <td class="px-3 py-4 text-right text-sm font-semibold text-gray-800 dark:text-white">
+                                {{ $formatQty($need) }} {{ $item->unit }}
+                            </td>
+
+                            <td class="px-3 py-4">
+                                @if (! $inventoryItem)
+                                    <span class="text-sm text-gray-400">-</span>
+                                @elseif ($inventoryItem->isSerialized())
+                                    @if ($serializedAllocations->isEmpty())
+                                        <span class="rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-bold text-yellow-700">
+                                            NOT ALLOCATED
+                                        </span>
+                                    @else
+                                        <div class="flex max-w-[360px] flex-wrap gap-1.5">
+                                            @foreach ($serializedAllocations as $allocation)
+                                                <span class="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
+                                                    {{ $allocation->inventoryAsset->asset_code }}
+                                                    Â· {{ strtoupper($allocation->status) }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                @else
+                                    @if ($allocated > 0)
+                                        <span class="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
+                                            {{ $formatQty($allocated) }} {{ $inventoryItem->unit }}
+                                            {{ strtoupper($quantityAllocation?->status ?: 'allocated') }}
+                                        </span>
+                                    @else
+                                        <span class="rounded-full bg-yellow-100 px-2.5 py-1 text-xs font-bold text-yellow-700">
+                                            NOT ALLOCATED
+                                        </span>
+                                    @endif
+                                @endif
+                            </td>
+
+                            <td class="px-3 py-4 text-right">
+                                @if ($inventoryItem)
+                                    <span class="text-sm font-semibold text-green-700">
+                                        {{ $formatQty($freeAvailable) }}
+                                        {{ $inventoryItem->unit }}
+                                    </span>
+                                @else
+                                    <span class="text-sm text-gray-400">-</span>
+                                @endif
+                            </td>
+
+                            <td class="px-3 py-4 text-right">
+                                @if (! $inventoryItem)
+                                    <span class="text-sm text-gray-400">-</span>
+                                @elseif ($shortage > 0)
+                                    <span class="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700">
+                                        {{ $formatQty($shortage) }} {{ $inventoryItem->unit }}
+                                    </span>
+                                @else
+                                    <span class="rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-700">
+                                        OK
+                                    </span>
+                                @endif
+                            </td>
+
+                            <td class="px-3 py-4 text-sm text-gray-600 dark:text-gray-300">
+                                {{ $item->notes ?: '-' }}
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-4 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-950">
+            Serialized menampilkan Asset Code aktual, misalnya CAM-002.
+            Quantity menampilkan jumlah yang di-reserve. Allocation belum berarti barang OUT.
+        </div>
+    @endif
+</div>
+
+==================================================
+DELIVERY ORDER ROUTES
+==================================================
+<?php
+
+use Illuminate\Support\Facades\Route;
+use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderController;
+use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderInventoryController;
+use Webkul\Admin\Http\Controllers\DeliveryOrder\DeliveryOrderPickingController;
+
+Route::controller(DeliveryOrderController::class)
+    ->prefix('delivery-orders')
+    ->group(function () {
+        /*
+        |--------------------------------------------------------------------------
+        | Listing / View
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('/', 'index')
+            ->name('admin.delivery-orders.index');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Print
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('{id}/print', 'print')
+            ->name('admin.delivery-orders.print');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Status Workflow
+        |--------------------------------------------------------------------------
+        |
+        | IMPORTANT:
+        | Setiap aksi mempunyai route name sendiri supaya ACL Roles
+        | bisa membedakan Head Warehouse, Operations, Staff Warehouse, dll.
+        |
+        */
+
+        Route::put('{id}/issue', 'issue')
+            ->name('admin.delivery-orders.issue');
+
+        Route::put('{id}/delivered', 'markDelivered')
+            ->name('admin.delivery-orders.delivered');
+
+        Route::put('{id}/returned', 'markReturned')
+            ->name('admin.delivery-orders.returned');
+
+        Route::put('{id}/cancel', 'cancel')
+            ->name('admin.delivery-orders.cancel');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Edit
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('{id}/edit', 'edit')
+            ->name('admin.delivery-orders.edit');
+
+        Route::put('{id}', 'update')
+            ->name('admin.delivery-orders.update');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Detail
+        |--------------------------------------------------------------------------
+        */
+
+        Route::get('{id}', 'show')
+            ->name('admin.delivery-orders.show');
+    });
+
+
+/*
+|--------------------------------------------------------------------------
+| Delivery Order > Inventory Allocation
+|--------------------------------------------------------------------------
+*/
+Route::controller(DeliveryOrderInventoryController::class)
+    ->prefix('delivery-orders')
+    ->group(function () {
+        Route::get('{id}/inventory-allocation', 'edit')
+            ->name('admin.delivery-orders.inventory-allocation.edit');
+
+        Route::put('{id}/inventory-allocation/{itemId}', 'update')
+            ->name('admin.delivery-orders.inventory-allocation.update');
+
+        Route::delete('{id}/inventory-allocation/{itemId}', 'release')
+            ->name('admin.delivery-orders.inventory-allocation.release');
+    });
+
+
+/*
+|--------------------------------------------------------------------------
+| Delivery Order > Picking / OUT
+|--------------------------------------------------------------------------
+*/
+Route::controller(DeliveryOrderPickingController::class)
+    ->prefix('delivery-orders')
+    ->group(function () {
+        Route::get('{id}/picking', 'show')
+            ->name('admin.delivery-orders.picking.show');
+
+        Route::put('{id}/picking/{allocationId}/picked', 'markPicked')
+            ->name('admin.delivery-orders.picking.mark');
+
+        Route::put('{id}/picking/mark-all-picked', 'markAllPicked')
+            ->name('admin.delivery-orders.picking.mark-all');
+
+        Route::put('{id}/picking/confirm-out', 'confirmOut')
+            ->name('admin.delivery-orders.picking.out');
+    });
+
+==================================================
+CURRENT ACL
+==================================================
+<?php
+
+return [
+    [
+        'key' => 'dashboard',
+        'name' => 'admin::app.layouts.dashboard',
+        'route' => 'admin.dashboard.index',
+        'sort' => 1,
+    ], [
+        'key' => 'leads',
+        'name' => 'admin::app.acl.leads',
+        'route' => 'admin.leads.index',
+        'sort' => 2,
+    ], [
+        'key' => 'leads.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.leads.create', 'admin.leads.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'leads.create.quick-create',
+        'name' => 'admin::app.acl.quick_add',
+        'route' => ['admin.leads.create', 'admin.leads.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'leads.view',
+        'name' => 'admin::app.acl.view',
+        'route' => 'admin.leads.view',
+        'sort' => 2,
+    ], [
+        'key' => 'leads.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.leads.edit', 'admin.leads.update', 'admin.leads.mass_update'],
+        'sort' => 3,
+    ], [
+        'key' => 'leads.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.leads.delete', 'admin.leads.mass_delete'],
+        'sort' => 4,
+    ], [
+        'key' => 'quotes',
+        'name' => 'admin::app.acl.quotes',
+        'route' => 'admin.quotes.index',
+        'sort' => 3,
+    ], [
+        'key' => 'quotes.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.quotes.create', 'admin.quotes.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'quotes.mail',
+        'name' => 'admin::app.acl.mail',
+        'route' => ['admin.quotes.mail', 'admin.leads.quotes.mail'],
+        'sort' => 2,
+    ], [
+        'key' => 'quotes.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.quotes.edit', 'admin.quotes.update'],
+        'sort' => 3,
+    ], [
+        'key' => 'quotes.print',
+        'name' => 'admin::app.acl.print',
+        'route' => 'admin.quotes.print',
+        'sort' => 4,
+    ], [
+        'key' => 'quotes.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.quotes.delete', 'admin.quotes.mass_delete'],
+        'sort' => 5,
+    ], 
+/**
+ * Invoices.
+ */
+[
+    'key'   => 'invoices',
+    'name'  => 'admin::app.acl.invoices',
+    'route' => 'admin.invoices.index',
+    'sort'  => 4,
+], [
+    /**
+     * View Invoice.
+     */
+    'key'   => 'invoices.view',
+    'name'  => 'admin::app.acl.view',
+    'route' => 'admin.invoices.show',
+    'sort'  => 1,
+], [
+    /**
+     * Generate Invoice from Quote.
+     */
+    'key'   => 'invoices.generate',
+    'name'  => 'admin::app.acl.generate-invoice',
+    'route' => 'admin.invoices.generate',
+    'sort'  => 2,
+], [
+    /**
+     * Add Payment.
+     */
+    'key'   => 'invoices.payment',
+    'name'  => 'admin::app.acl.add-payment',
+    'route' => 'admin.invoices.payments.store',
+    'sort'  => 3,
+], [
+    /**
+     * Update Event Status.
+     *
+     * Prospect / Confirm / Cancel
+     */
+    'key'   => 'invoices.event-status',
+    'name'  => 'admin::app.acl.update-event-status',
+    'route' => 'admin.invoices.event-status.update',
+    'sort'  => 4,
+], [
+    /**
+     * Add Expense.
+     */
+    'key'   => 'invoices.expense',
+    'name'  => 'admin::app.acl.add-expense',
+    'route' => 'admin.invoices.expenses.store',
+    'sort'  => 5,
+], [
+    /**
+     * Edit Expense.
+     */
+    'key'   => 'invoices.expense.edit',
+    'name'  => 'admin::app.acl.edit-expense',
+    'route' => 'admin.invoices.expenses.update',
+    'sort'  => 1,
+], [
+    /**
+     * Delete Expense.
+     */
+    'key'   => 'invoices.expense.delete',
+    'name'  => 'admin::app.acl.delete-expense',
+    'route' => 'admin.invoices.expenses.delete',
+    'sort'  => 2,
+], [
+    /**
+     * Print Invoice.
+     */
+    'key'   => 'invoices.print',
+    'name'  => 'admin::app.acl.print',
+    'route' => 'admin.invoices.print',
+    'sort'  => 6,
+], [
+    /**
+     * Financial Report.
+     *
+     * Permission ini nanti hanya kita aktifkan
+     * untuk Head Finance.
+     */
+    'key'   => 'invoices.financial-report',
+    'name'  => 'admin::app.acl.financial-report',
+    'route' => 'admin.invoices.financial-report',
+    'sort'  => 7,
+], [
+    /**
+     * Export Financial Report.
+     *
+     * Child permission dari Financial Report.
+     */
+    'key'   => 'invoices.financial-report.export',
+    'name'  => 'admin::app.acl.export-financial-report',
+    'route' => 'admin.invoices.financial-report.export',
+    'sort'  => 1,
+],
+
+/*
+|--------------------------------------------------------------------------
+| Delivery Orders
+|--------------------------------------------------------------------------
+|
+| Hak akses Delivery Order dipisah per aksi agar setiap role
+| dapat memiliki kewenangan yang berbeda.
+|
+*/
+[
+    'key'   => 'delivery-orders',
+    'name'  => 'admin::app.acl.delivery-orders',
+    'route' => 'admin.delivery-orders.index',
+    'sort'  => 5,
+], [
+    /*
+     * View Delivery Order.
+     */
+    'key'   => 'delivery-orders.view',
+    'name'  => 'admin::app.acl.view',
+    'route' => 'admin.delivery-orders.show',
+    'sort'  => 1,
+], [
+    /*
+     * Generate Surat Jalan from Invoice.
+     */
+    'key'   => 'delivery-orders.generate',
+    'name'  => 'admin::app.acl.generate-delivery-order',
+    'route' => 'admin.invoices.delivery-order.generate',
+    'sort'  => 2,
+], [
+    /*
+     * Edit Draft Surat Jalan.
+     */
+    'key'   => 'delivery-orders.edit',
+    'name'  => 'admin::app.acl.edit',
+    'route' => [
+        'admin.delivery-orders.edit',
+        'admin.delivery-orders.update',
+    ],
+    'sort'  => 3,
+], [
+    /*
+     * Print Surat Jalan.
+     */
+    'key'   => 'delivery-orders.print',
+    'name'  => 'admin::app.acl.print',
+    'route' => 'admin.delivery-orders.print',
+    'sort'  => 4,
+], [
+    /*
+     * Draft -> Issued.
+     */
+    'key'   => 'delivery-orders.issue',
+    'name'  => 'admin::app.acl.issue-delivery-order',
+    'route' => 'admin.delivery-orders.issue',
+    'sort'  => 5,
+], [
+    /*
+     * Issued -> Delivered.
+     */
+    'key'   => 'delivery-orders.delivered',
+    'name'  => 'admin::app.acl.mark-delivered',
+    'route' => 'admin.delivery-orders.delivered',
+    'sort'  => 6,
+], [
+    /*
+     * Delivered -> Returned.
+     */
+    'key'   => 'delivery-orders.returned',
+    'name'  => 'admin::app.acl.mark-returned',
+    'route' => 'admin.delivery-orders.returned',
+    'sort'  => 7,
+], [
+    /*
+     * Draft / Issued -> Cancelled.
+     */
+    'key'   => 'delivery-orders.cancel',
+    'name'  => 'admin::app.acl.cancel-delivery-order',
+    'route' => 'admin.delivery-orders.cancel',
+    'sort'  => 8,
+], [
+    /*
+     * Allocate / release actual warehouse inventory for a Surat Jalan.
+     */
+    'key'   => 'delivery-orders.inventory-allocation',
+    'name'  => 'Inventory Allocation',
+    'route' => [
+        'admin.delivery-orders.inventory-allocation.edit',
+        'admin.delivery-orders.inventory-allocation.update',
+        'admin.delivery-orders.inventory-allocation.release',
+    ],
+    'sort'  => 9,
+],
+ [
+    /*
+     * Warehouse picking after Surat Jalan is issued.
+     */
+    'key'   => 'delivery-orders.picking',
+    'name'  => 'Picking Inventory',
+    'route' => [
+        'admin.delivery-orders.picking.show',
+        'admin.delivery-orders.picking.mark',
+        'admin.delivery-orders.picking.mark-all',
+    ],
+    'sort'  => 10,
+], [
+    /*
+     * Confirm picked inventory physically leaves warehouse.
+     */
+    'key'   => 'delivery-orders.out',
+    'name'  => 'Confirm Inventory OUT',
+    'route' => 'admin.delivery-orders.picking.out',
+    'sort'  => 11,
+],
+
+/*
+|--------------------------------------------------------------------------
+| Inventory
+|--------------------------------------------------------------------------
+*/
+    [
+        'key'   => 'inventory',
+        'name'  => 'Inventory',
+        'route' => 'admin.inventory.dashboard',
+        'sort'  => 6,
+    ], [
+        'key'   => 'inventory.dashboard',
+        'name'  => 'Inventory Dashboard',
+        'route' => 'admin.inventory.dashboard',
+        'sort'  => 1,
+    ], [
+        'key'   => 'inventory.items',
+        'name'  => 'Inventory Items',
+        'route' => 'admin.inventory.items.index',
+        'sort'  => 2,
+    ], [
+        'key'   => 'inventory.items.create',
+        'name'  => 'Create Inventory Item',
+        'route' => [
+            'admin.inventory.items.create',
+            'admin.inventory.items.store',
+        ],
+        'sort'  => 1,
+    ], [
+        'key'   => 'inventory.items.edit',
+        'name'  => 'Edit Inventory Item',
+        'route' => [
+            'admin.inventory.items.edit',
+            'admin.inventory.items.update',
+        ],
+        'sort'  => 2,
+    ], [
+        'key'   => 'inventory.assets',
+        'name'  => 'Inventory Assets',
+        'route' => 'admin.inventory.assets.index',
+        'sort'  => 3,
+    ], [
+        'key'   => 'inventory.assets.create',
+        'name'  => 'Create Inventory Asset',
+        'route' => [
+            'admin.inventory.assets.create',
+            'admin.inventory.assets.store',
+        ],
+        'sort'  => 1,
+    ], [
+        'key'   => 'inventory.assets.edit',
+        'name'  => 'Edit Inventory Asset',
+        'route' => [
+            'admin.inventory.assets.edit',
+            'admin.inventory.assets.update',
+        ],
+        'sort'  => 2,
+    ], [
+        'key'   => 'inventory.movements',
+        'name'  => 'Inventory Movements',
+        'route' => 'admin.inventory.movements.index',
+        'sort'  => 4,
+    ], [
+        'key'   => 'inventory.movements.adjust-stock',
+        'name'  => 'Adjust Quantity Stock',
+        'route' => [
+            'admin.inventory.movements.adjust-stock.create',
+            'admin.inventory.movements.adjust-stock.store',
+        ],
+        'sort'  => 1,
+    ],
+    [
+        'key' => 'mail',
+        'name' => 'admin::app.acl.mail',
+        'route' => 'admin.mail.index',
+        'sort' => 7,
+], [
+        'key' => 'mail.inbox',
+        'name' => 'admin::app.acl.inbox',
+        'route' => 'admin.mail.index',
+        'sort' => 1,
+    ], [
+        'key' => 'mail.draft',
+        'name' => 'admin::app.acl.draft',
+        'route' => 'admin.mail.index',
+        'sort' => 2,
+    ], [
+        'key' => 'mail.outbox',
+        'name' => 'admin::app.acl.outbox',
+        'route' => 'admin.mail.index',
+        'sort' => 3,
+    ], [
+        'key' => 'mail.sent',
+        'name' => 'admin::app.acl.sent',
+        'route' => 'admin.mail.index',
+        'sort' => 4,
+    ], [
+        'key' => 'mail.trash',
+        'name' => 'admin::app.acl.trash',
+        'route' => 'admin.mail.index',
+        'sort' => 5,
+    ], [
+        'key' => 'mail.compose',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.mail.store'],
+        'sort' => 6,
+    ], [
+        'key' => 'mail.compose.quick-create',
+        'name' => 'admin::app.acl.quick_add',
+        'route' => ['admin.mail.store'],
+        'sort' => 6,
+    ], [
+        'key' => 'mail.view',
+        'name' => 'admin::app.acl.view',
+        'route' => 'admin.mail.view',
+        'sort' => 7,
+    ], [
+        'key' => 'mail.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => 'admin.mail.update',
+        'sort' => 8,
+    ], [
+        'key' => 'mail.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.mail.delete', 'admin.mail.mass_delete'],
+        'sort' => 9,
+    ], [
+        'key' => 'activities',
+        'name' => 'admin::app.acl.activities',
+        'route' => 'admin.activities.index',
+        'sort' => 8,
+    ], [
+        'key' => 'activities.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.activities.create', 'admin.activities.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'activities.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.activities.edit', 'admin.activities.update', 'admin.activities.mass_update'],
+        'sort' => 2,
+    ], [
+        'key' => 'activities.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.activities.delete', 'admin.activities.mass_delete'],
+        'sort' => 3,
+    ], [
+        'key' => 'contacts',
+        'name' => 'admin::app.acl.contacts',
+        'route' => 'admin.contacts.users.index',
+        'sort' => 9,
+    ], [
+        'key' => 'contacts.persons',
+        'name' => 'admin::app.acl.persons',
+        'route' => 'admin.contacts.persons.index',
+        'sort' => 1,
+    ], [
+        'key' => 'contacts.persons.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.contacts.persons.create', 'admin.contacts.persons.store'],
+        'sort' => 2,
+    ], [
+        'key' => 'contacts.persons.create.quick-create',
+        'name' => 'admin::app.acl.quick_add',
+        'route' => ['admin.contacts.persons.create', 'admin.contacts.persons.store'],
+        'sort' => 2,
+    ], [
+        'key' => 'contacts.persons.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.contacts.persons.edit', 'admin.contacts.persons.update'],
+        'sort' => 3,
+    ], [
+        'key' => 'contacts.persons.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.contacts.persons.delete', 'admin.contacts.persons.mass_delete'],
+        'sort' => 4,
+    ], [
+        'key' => 'contacts.persons.view',
+        'name' => 'admin::app.acl.view',
+        'route' => 'admin.contacts.persons.view',
+        'sort' => 5,
+    ], [
+        'key' => 'contacts.organizations',
+        'name' => 'admin::app.acl.organizations',
+        'route' => 'admin.contacts.organizations.index',
+        'sort' => 2,
+    ], [
+        'key' => 'contacts.organizations.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.contacts.organizations.create', 'admin.contacts.organizations.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'contacts.organizations.create.quick-create',
+        'name' => 'admin::app.acl.quick_add',
+        'route' => ['admin.contacts.organizations.create', 'admin.contacts.organizations.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'contacts.organizations.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.contacts.organizations.edit', 'admin.contacts.organizations.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'contacts.organizations.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.contacts.organizations.delete', 'admin.contacts.organizations.mass_delete'],
+        'sort' => 3,
+    ], [
+        'key' => 'products',
+        'name' => 'admin::app.acl.products',
+        'route' => 'admin.products.index',
+        'sort' => 10,
+    ], [
+        'key' => 'products.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.products.create', 'admin.products.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'products.create.quick-create',
+        'name' => 'admin::app.acl.quick_add',
+        'route' => ['admin.products.create', 'admin.products.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'products.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.products.edit', 'admin.products.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'products.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.products.delete', 'admin.products.mass_delete'],
+        'sort' => 3,
+    ], [
+        'key' => 'products.view',
+        'name' => 'admin::app.acl.view',
+        'route' => 'admin.products.view',
+        'sort' => 4,
+    ], [
+        'key' => 'settings',
+        'name' => 'admin::app.acl.settings',
+        'route' => 'admin.settings.index',
+        'sort' => 11,
+    ], [
+        'key' => 'settings.user',
+        'name' => 'admin::app.acl.user',
+        'route' => ['admin.settings.groups.index', 'admin.settings.roles.index', 'admin.settings.users.index'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.user.groups',
+        'name' => 'admin::app.acl.groups',
+        'route' => 'admin.settings.groups.index',
+        'sort' => 1,
+    ], [
+        'key' => 'settings.user.groups.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.groups.create', 'admin.settings.groups.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.user.groups.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.groups.edit', 'admin.settings.groups.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.user.groups.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.groups.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.user.roles',
+        'name' => 'admin::app.acl.roles',
+        'route' => 'admin.settings.roles.index',
+        'sort' => 2,
+    ], [
+        'key' => 'settings.user.roles.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.roles.create', 'admin.settings.roles.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.user.roles.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.roles.edit', 'admin.settings.roles.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.user.roles.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.roles.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.user.users',
+        'name' => 'admin::app.acl.users',
+        'route' => 'admin.settings.users.index',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.user.users.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.users.create', 'admin.settings.users.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.user.users.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.users.edit', 'admin.settings.users.update', 'admin.settings.users.mass_update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.user.users.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.settings.users.delete', 'admin.settings.users.mass_delete'],
+        'sort' => 3,
+    ], [
+        'key' => 'settings.lead',
+        'name' => 'admin::app.acl.lead',
+        'route' => ['admin.settings.pipelines.index', 'admin.settings.sources.index', 'admin.settings.types.index'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.lead.pipelines',
+        'name' => 'admin::app.acl.pipelines',
+        'route' => 'admin.settings.pipelines.index',
+        'sort' => 1,
+    ], [
+        'key' => 'settings.lead.pipelines.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.pipelines.create', 'admin.settings.pipelines.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.lead.pipelines.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.pipelines.edit', 'admin.settings.pipelines.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.lead.pipelines.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.pipelines.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.lead.sources',
+        'name' => 'admin::app.acl.sources',
+        'route' => 'admin.settings.sources.index',
+        'sort' => 2,
+    ], [
+        'key' => 'settings.lead.sources.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.sources.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.lead.sources.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.sources.edit', 'admin.settings.sources.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.lead.sources.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.sources.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.lead.types',
+        'name' => 'admin::app.acl.types',
+        'route' => 'admin.settings.types.index',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.lead.types.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.types.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.lead.types.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.types.edit', 'admin.settings.types.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.lead.types.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.types.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.inventory',
+        'name' => 'admin::app.acl.inventory',
+        'route' => ['admin.settings.warehouse.index'],
+        'sort' => 3,
+    ], [
+        'key' => 'settings.inventory.warehouse',
+        'name' => 'admin::app.acl.warehouses',
+        'route' => ['admin.settings.warehouse.index'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.inventory.warehouse.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.warehouse.create', 'admin.settings.warehouse.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.inventory.warehouse.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.warehouse.edit', 'admin.settings.warehouse.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.inventory.warehouse.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.warehouse.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.automation',
+        'name' => 'admin::app.acl.automation',
+        'route' => ['admin.settings.attributes.index', 'admin.settings.email_templates.index', 'admin.settings.workflows.index'],
+        'sort' => 4,
+    ], [
+        'key' => 'settings.automation.attributes',
+        'name' => 'admin::app.acl.attributes',
+        'route' => 'admin.settings.attributes.index',
+        'sort' => 1,
+    ], [
+        'key' => 'settings.automation.attributes.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.attributes.create', 'admin.settings.attributes.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.automation.attributes.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.attributes.edit', 'admin.settings.attributes.update', 'admin.settings.attributes.mass_update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.automation.attributes.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.attributes.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.automation.email_templates',
+        'name' => 'admin::app.acl.email-templates',
+        'route' => 'admin.settings.email_templates.index',
+        'sort' => 2,
+    ], [
+        'key' => 'settings.automation.email_templates.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.email_templates.create', 'admin.settings.email_templates.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.automation.email_templates.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.email_templates.edit', 'admin.settings.email_templates.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.automation.email_templates.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.email_templates.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.automation.workflows',
+        'name' => 'admin::app.acl.workflows',
+        'route' => 'admin.settings.workflows.index',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.automation.workflows.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.workflows.create', 'admin.settings.workflows.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.automation.workflows.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.workflows.edit', 'admin.settings.workflows.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.automation.workflows.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.workflows.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.automation.events',
+        'name' => 'admin::app.acl.event',
+        'route' => 'admin.settings.marketing.events.index',
+        'sort' => 4,
+    ], [
+        'key' => 'settings.automation.events.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.marketing.events.create', 'admin.settings.marketing.events.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.automation.events.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.marketing.events.edit', 'admin.settings.marketing.events.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.automation.events.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.settings.marketing.events.delete', 'admin.settings.marketing.events.mass_delete'],
+        'sort' => 3,
+    ], [
+        'key' => 'settings.automation.campaigns',
+        'name' => 'admin::app.acl.campaigns',
+        'route' => 'admin.settings.marketing.campaigns.index',
+        'sort' => 5,
+    ], [
+        'key' => 'settings.automation.campaigns.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.marketing.campaigns.create', 'admin.settings.marketing.campaigns.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.automation.campaigns.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.marketing.campaigns.edit', 'admin.settings.marketing.campaigns.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.automation.campaigns.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.settings.marketing.campaigns.delete', 'admin.settings.marketing.campaigns.mass_delete'],
+        'sort' => 3,
+    ], [
+        'key' => 'settings.automation.webhooks',
+        'name' => 'admin::app.acl.webhook',
+        'route' => 'admin.settings.webhooks.index',
+        'sort' => 6,
+    ], [
+        'key' => 'settings.automation.webhooks.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.webhooks.create', 'admin.settings.webhooks.store'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.automation.webhooks.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.webhooks.edit', 'admin.settings.webhooks.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.automation.webhooks.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.webhooks.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.automation.data_transfer',
+        'name' => 'admin::app.acl.data-transfer',
+        'route' => 'admin.settings.data_transfer.imports.index',
+        'sort' => 7,
+    ], [
+        'key' => 'settings.automation.data_transfer.imports',
+        'name' => 'admin::app.acl.imports',
+        'route' => 'admin.settings.data_transfer.imports.index',
+        'sort' => 1,
+    ], [
+        'key' => 'settings.automation.data_transfer.imports.create',
+        'name' => 'admin::app.acl.create',
+        'route' => 'admin.settings.data_transfer.imports.create',
+        'sort' => 1,
+    ], [
+        'key' => 'settings.automation.data_transfer.imports.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => 'admin.settings.data_transfer.imports.edit',
+        'sort' => 2,
+    ], [
+        'key' => 'settings.automation.data_transfer.imports.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => 'admin.settings.data_transfer.imports.delete',
+        'sort' => 3,
+    ], [
+        'key' => 'settings.automation.data_transfer.imports.import',
+        'name' => 'admin::app.acl.import',
+        'route' => 'admin.settings.data_transfer.imports.imports',
+        'sort' => 4,
+    ], [
+        'key' => 'settings.other_settings',
+        'name' => 'admin::app.acl.other-settings',
+        'route' => 'admin.settings.tags.index',
+        'sort' => 5,
+    ], [
+        'key' => 'settings.other_settings.tags',
+        'name' => 'admin::app.acl.tags',
+        'route' => 'admin.settings.tags.index',
+        'sort' => 1,
+    ], [
+        'key' => 'settings.other_settings.tags.create',
+        'name' => 'admin::app.acl.create',
+        'route' => ['admin.settings.tags.create', 'admin.settings.tags.store', 'admin.leads.tags.attach'],
+        'sort' => 1,
+    ], [
+        'key' => 'settings.other_settings.tags.edit',
+        'name' => 'admin::app.acl.edit',
+        'route' => ['admin.settings.tags.edit', 'admin.settings.tags.update'],
+        'sort' => 2,
+    ], [
+        'key' => 'settings.other_settings.tags.delete',
+        'name' => 'admin::app.acl.delete',
+        'route' => ['admin.settings.tags.delete', 'admin.settings.tags.mass_delete', 'admin.leads.tags.detach'],
+        'sort' => 3,
+    ], [
+        'key' => 'configuration',
+        'name' => 'admin::app.acl.configuration',
+        'route' => 'admin.configuration.index',
+        'sort' => 12,
+    ], [
+        'key' => 'help',
+        'name' => 'admin::app.acl.help',
+        'route' => 'admin.help.index',
+        'sort' => 13,
+    ],
+];
+
+==================================================
+ALLOCATION TABLE SCHEMA
+==================================================
+array:19 [
+  0 => "id"
+  1 => "delivery_order_id"
+  2 => "delivery_order_item_id"
+  3 => "inventory_item_id"
+  4 => "inventory_asset_id"
+  5 => "tracking_type"
+  6 => "quantity"
+  7 => "status"
+  8 => "allocated_by"
+  9 => "allocated_at"
+  10 => "picked_by"
+  11 => "picked_at"
+  12 => "out_by"
+  13 => "out_at"
+  14 => "released_by"
+  15 => "released_at"
+  16 => "notes"
+  17 => "created_at"
+  18 => "updated_at"
+] // vendor\psy\psysh\src\ExecutionClosure.php(41) : eval()'d code:1
+
+==================================================
+INVENTORY ASSET TABLE SCHEMA
+==================================================
+array:14 [
+  0 => "id"
+  1 => "inventory_item_id"
+  2 => "asset_code"
+  3 => "barcode_value"
+  4 => "serial_number"
+  5 => "warehouse_id"
+  6 => "warehouse_location_id"
+  7 => "status"
+  8 => "condition"
+  9 => "purchase_date"
+  10 => "purchase_price"
+  11 => "notes"
+  12 => "created_at"
+  13 => "updated_at"
+] // vendor\psy\psysh\src\ExecutionClosure.php(41) : eval()'d code:1
+
+==================================================
+INVENTORY ITEM TABLE SCHEMA
+==================================================
+array:14 [
+  0 => "id"
+  1 => "code"
+  2 => "name"
+  3 => "category"
+  4 => "description"
+  5 => "tracking_type"
+  6 => "unit"
+  7 => "quantity_on_hand"
+  8 => "minimum_stock"
+  9 => "warehouse_id"
+  10 => "warehouse_location_id"
+  11 => "is_active"
+  12 => "created_at"
+  13 => "updated_at"
+] // vendor\psy\psysh\src\ExecutionClosure.php(41) : eval()'d code:1
+
+==================================================
+MOVEMENT TABLE SCHEMA
+==================================================
+array:17 [
+  0 => "id"
+  1 => "inventory_item_id"
+  2 => "inventory_asset_id"
+  3 => "warehouse_id"
+  4 => "warehouse_location_id"
+  5 => "movement_type"
+  6 => "quantity"
+  7 => "from_status"
+  8 => "to_status"
+  9 => "reference_type"
+  10 => "reference_id"
+  11 => "reference_number"
+  12 => "performed_by"
+  13 => "notes"
+  14 => "occurred_at"
+  15 => "created_at"
+  16 => "updated_at"
+] // vendor\psy\psysh\src\ExecutionClosure.php(41) : eval()'d code:1
+
+==================================================
+DO 2 CURRENT ALLOCATIONS
+==================================================
+array:9 [
+  0 => {#7417
+    +"id": 1
+    +"delivery_order_item_id": 13
+    +"inventory_item_id": 3
+    +"inventory_asset_id": null
+    +"tracking_type": "quantity"
+    +"quantity": "2.00"
+    +"status": "out"
+    +"allocated_at": "2026-08-28 15:11:35"
+    +"picked_at": "2026-08-28 15:41:00"
+    +"out_at": "2026-08-28 15:42:29"
+  }
+  1 => {#7415
+    +"id": 2
+    +"delivery_order_item_id": 14
+    +"inventory_item_id": 7
+    +"inventory_asset_id": null
+    +"tracking_type": "quantity"
+    +"quantity": "2.00"
+    +"status": "out"
+    +"allocated_at": "2026-08-28 15:11:56"
+    +"picked_at": "2026-08-28 15:41:02"
+    +"out_at": "2026-08-28 15:42:29"
+  }
+  2 => {#7413
+    +"id": 3
+    +"delivery_order_item_id": 15
+    +"inventory_item_id": 4
+    +"inventory_asset_id": null
+    +"tracking_type": "quantity"
+    +"quantity": "300.00"
+    +"status": "out"
+    +"allocated_at": "2026-08-28 15:12:11"
+    +"picked_at": "2026-08-28 15:41:04"
+    +"out_at": "2026-08-28 15:42:29"
+  }
+  3 => {#7411
+    +"id": 4
+    +"delivery_order_item_id": 16
+    +"inventory_item_id": 8
+    +"inventory_asset_id": null
+    +"tracking_type": "quantity"
+    +"quantity": "1.00"
+    +"status": "out"
+    +"allocated_at": "2026-08-28 15:12:25"
+    +"picked_at": "2026-08-28 15:41:07"
+    +"out_at": "2026-08-28 15:42:29"
+  }
+  4 => {#7410
+    +"id": 5
+    +"delivery_order_item_id": 9
+    +"inventory_item_id": 1
+    +"inventory_asset_id": 1
+    +"tracking_type": "serialized"
+    +"quantity": "1.00"
+    +"status": "out"
+    +"allocated_at": "2026-08-28 15:12:40"
+    +"picked_at": "2026-08-28 15:40:48"
+    +"out_at": "2026-08-28 15:42:29"
+  }
+  5 => {#7409
+    +"id": 6
+    +"delivery_order_item_id": 10
+    +"inventory_item_id": 2
+    +"inventory_asset_id": 6
+    +"tracking_type": "serialized"
+    +"quantity": "1.00"
+    +"status": "out"
+    +"allocated_at": "2026-08-28 15:12:44"
+    +"picked_at": "2026-08-28 15:40:51"
+    +"out_at": "2026-08-28 15:42:29"
+  }
+  6 => {#7408
+    +"id": 7
+    +"delivery_order_item_id": 11
+    +"inventory_item_id": 5
+    +"inventory_asset_id": 3
+    +"tracking_type": "serialized"
+    +"quantity": "1.00"
+    +"status": "out"
+    +"allocated_at": "2026-08-28 15:12:48"
+    +"picked_at": "2026-08-28 15:40:53"
+    +"out_at": "2026-08-28 15:42:29"
+  }
+  7 => {#7407
+    +"id": 8
+    +"delivery_order_item_id": 12
+    +"inventory_item_id": 6
+    +"inventory_asset_id": 4
+    +"tracking_type": "serialized"
+    +"quantity": "1.00"
+    +"status": "out"
+    +"allocated_at": "2026-08-28 15:12:55"
+    +"picked_at": "2026-08-28 15:40:55"
+    +"out_at": "2026-08-28 15:42:29"
+  }
+  8 => {#7406
+    +"id": 9
+    +"delivery_order_item_id": 12
+    +"inventory_item_id": 6
+    +"inventory_asset_id": 5
+    +"tracking_type": "serialized"
+    +"quantity": "1.00"
+    +"status": "out"
+    +"allocated_at": "2026-08-28 15:12:55"
+    +"picked_at": "2026-08-28 15:40:57"
+    +"out_at": "2026-08-28 15:42:29"
+  }
+] // vendor\psy\psysh\src\ExecutionClosure.php(41) : eval()'d code:1
+
+==================================================
+CURRENT ASSET STATUS
+==================================================
+array:6 [
+  0 => {#7400
+    +"id": 1
+    +"asset_code": "CAM-0001"
+    +"inventory_item_id": 1
+    +"status": "out"
+    +"condition": "good"
+  }
+  1 => {#7398
+    +"id": 2
+    +"asset_code": "CAM-002"
+    +"inventory_item_id": 1
+    +"status": "available"
+    +"condition": "good"
+  }
+  2 => {#7397
+    +"id": 6
+    +"asset_code": "PRN-0001"
+    +"inventory_item_id": 2
+    +"status": "out"
+    +"condition": "good"
+  }
+  3 => {#7396
+    +"id": 3
+    +"asset_code": "MP-0001"
+    +"inventory_item_id": 5
+    +"status": "out"
+    +"condition": "good"
+  }
+  4 => {#7395
+    +"id": 4
+    +"asset_code": "LGT-0001"
+    +"inventory_item_id": 6
+    +"status": "out"
+    +"condition": "good"
+  }
+  5 => {#7394
+    +"id": 5
+    +"asset_code": "LGT-0002"
+    +"inventory_item_id": 6
+    +"status": "out"
+    +"condition": "good"
+  }
+] // vendor\psy\psysh\src\ExecutionClosure.php(41) : eval()'d code:1
+
+==================================================
+CURRENT QUANTITY STOCK
+==================================================
+array:4 [
+  0 => {#7401
+    +"id": 3
+    +"code": "PAPER-DNP"
+    +"name": "DNP Paper Roll"
+    +"unit": "roll"
+    +"quantity_on_hand": "8.00"
+  }
+  1 => {#7405
+    +"id": 4
+    +"code": "Frame4R"
+    +"name": "Frame 4R"
+    +"unit": "Pcs"
+    +"quantity_on_hand": "9300.00"
+  }
+  2 => {#7402
+    +"id": 7
+    +"code": "EXT-CABLE"
+    +"name": "Extension Cable"
+    +"unit": "box"
+    +"quantity_on_hand": "13.00"
+  }
+  3 => {#7400
+    +"id": 8
+    +"code": "PROPS-PHOTO"
+    +"name": "Property Photo"
+    +"unit": "set"
+    +"quantity_on_hand": "4.00"
+  }
+] // vendor\psy\psysh\src\ExecutionClosure.php(41) : eval()'d code:1
+

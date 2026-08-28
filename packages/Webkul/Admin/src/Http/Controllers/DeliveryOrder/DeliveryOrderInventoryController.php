@@ -98,7 +98,7 @@ class DeliveryOrderInventoryController extends Controller
                 ->where('tracking_type', 'quantity')
                 ->whereIn(
                     'status',
-                    DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+                    DeliveryOrderInventoryAllocation::RESERVATION_STATUSES
                 )
                 ->sum('quantity');
 

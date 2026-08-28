@@ -118,8 +118,6 @@ class InventoryMovementController extends Controller
                     ->whereIn('status', [
                         'allocated',
                         'picked',
-                        'out',
-                        'return_pending',
                     ])
                     ->sum('quantity');
 

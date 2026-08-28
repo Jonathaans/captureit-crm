@@ -17,6 +17,17 @@ class DeliveryOrderInventoryAllocation extends Model
         'return_pending',
     ];
 
+    /**
+     * Status yang masih mencadangkan stok fisik di warehouse.
+     *
+     * OUT dan RETURN_PENDING tidak termasuk karena quantity_on_hand
+     * sudah berkurang ketika barang benar-benar keluar.
+     */
+    public const RESERVATION_STATUSES = [
+        'allocated',
+        'picked',
+    ];
+
     protected $table = 'delivery_order_inventory_allocations';
 
     protected $fillable = [
@@ -29,6 +40,10 @@ class DeliveryOrderInventoryAllocation extends Model
         'status',
         'allocated_by',
         'allocated_at',
+        'picked_by',
+        'picked_at',
+        'out_by',
+        'out_at',
         'released_by',
         'released_at',
         'notes',
@@ -41,8 +56,12 @@ class DeliveryOrderInventoryAllocation extends Model
         'inventory_asset_id'     => 'integer',
         'quantity'               => 'decimal:2',
         'allocated_by'           => 'integer',
+        'picked_by'              => 'integer',
+        'out_by'                 => 'integer',
         'released_by'            => 'integer',
         'allocated_at'           => 'datetime',
+        'picked_at'              => 'datetime',
+        'out_at'                 => 'datetime',
         'released_at'            => 'datetime',
     ];
 
@@ -83,6 +102,22 @@ class DeliveryOrderInventoryAllocation extends Model
         return $this->belongsTo(
             UserProxy::modelClass(),
             'allocated_by'
+        );
+    }
+
+    public function pickedBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            UserProxy::modelClass(),
+            'picked_by'
+        );
+    }
+
+    public function outBy(): BelongsTo
+    {
+        return $this->belongsTo(
+            UserProxy::modelClass(),
+            'out_by'
         );
     }
 
