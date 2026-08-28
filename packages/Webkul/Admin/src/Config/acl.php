@@ -246,11 +246,83 @@ return [
     'route' => 'admin.delivery-orders.cancel',
     'sort'  => 8,
 ],
+
+/*
+|--------------------------------------------------------------------------
+| Inventory
+|--------------------------------------------------------------------------
+*/
+    [
+        'key'   => 'inventory',
+        'name'  => 'Inventory',
+        'route' => 'admin.inventory.dashboard',
+        'sort'  => 6,
+    ], [
+        'key'   => 'inventory.dashboard',
+        'name'  => 'Inventory Dashboard',
+        'route' => 'admin.inventory.dashboard',
+        'sort'  => 1,
+    ], [
+        'key'   => 'inventory.items',
+        'name'  => 'Inventory Items',
+        'route' => 'admin.inventory.items.index',
+        'sort'  => 2,
+    ], [
+        'key'   => 'inventory.items.create',
+        'name'  => 'Create Inventory Item',
+        'route' => [
+            'admin.inventory.items.create',
+            'admin.inventory.items.store',
+        ],
+        'sort'  => 1,
+    ], [
+        'key'   => 'inventory.items.edit',
+        'name'  => 'Edit Inventory Item',
+        'route' => [
+            'admin.inventory.items.edit',
+            'admin.inventory.items.update',
+        ],
+        'sort'  => 2,
+    ], [
+        'key'   => 'inventory.assets',
+        'name'  => 'Inventory Assets',
+        'route' => 'admin.inventory.assets.index',
+        'sort'  => 3,
+    ], [
+        'key'   => 'inventory.assets.create',
+        'name'  => 'Create Inventory Asset',
+        'route' => [
+            'admin.inventory.assets.create',
+            'admin.inventory.assets.store',
+        ],
+        'sort'  => 1,
+    ], [
+        'key'   => 'inventory.assets.edit',
+        'name'  => 'Edit Inventory Asset',
+        'route' => [
+            'admin.inventory.assets.edit',
+            'admin.inventory.assets.update',
+        ],
+        'sort'  => 2,
+    ], [
+        'key'   => 'inventory.movements',
+        'name'  => 'Inventory Movements',
+        'route' => 'admin.inventory.movements.index',
+        'sort'  => 4,
+    ], [
+        'key'   => 'inventory.movements.adjust-stock',
+        'name'  => 'Adjust Quantity Stock',
+        'route' => [
+            'admin.inventory.movements.adjust-stock.create',
+            'admin.inventory.movements.adjust-stock.store',
+        ],
+        'sort'  => 1,
+    ],
     [
         'key' => 'mail',
         'name' => 'admin::app.acl.mail',
         'route' => 'admin.mail.index',
-        'sort' => 6,
+        'sort' => 7,
 ], [
         'key' => 'mail.inbox',
         'name' => 'admin::app.acl.inbox',
@@ -305,7 +377,7 @@ return [
         'key' => 'activities',
         'name' => 'admin::app.acl.activities',
         'route' => 'admin.activities.index',
-        'sort' => 7,
+        'sort' => 8,
     ], [
         'key' => 'activities.create',
         'name' => 'admin::app.acl.create',
@@ -325,7 +397,7 @@ return [
         'key' => 'contacts',
         'name' => 'admin::app.acl.contacts',
         'route' => 'admin.contacts.users.index',
-        'sort' => 8,
+        'sort' => 9,
     ], [
         'key' => 'contacts.persons',
         'name' => 'admin::app.acl.persons',
@@ -385,7 +457,7 @@ return [
         'key' => 'products',
         'name' => 'admin::app.acl.products',
         'route' => 'admin.products.index',
-        'sort' => 9,
+        'sort' => 10,
     ], [
         'key' => 'products.create',
         'name' => 'admin::app.acl.create',
@@ -415,7 +487,7 @@ return [
         'key' => 'settings',
         'name' => 'admin::app.acl.settings',
         'route' => 'admin.settings.index',
-        'sort' => 10,
+        'sort' => 11,
     ], [
         'key' => 'settings.user',
         'name' => 'admin::app.acl.user',
@@ -755,11 +827,11 @@ return [
         'key' => 'configuration',
         'name' => 'admin::app.acl.configuration',
         'route' => 'admin.configuration.index',
-        'sort' => 11,
+        'sort' => 12,
     ], [
         'key' => 'help',
         'name' => 'admin::app.acl.help',
         'route' => 'admin.help.index',
-        'sort' => 12,
+        'sort' => 13,
     ],
 ];

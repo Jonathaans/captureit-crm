@@ -1,0 +1,299 @@
+<?php
+
+namespace Webkul\Admin\DataGrids\Inventory;
+
+use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Facades\DB;
+use Webkul\DataGrid\DataGrid;
+
+class InventoryMovementDataGrid extends DataGrid
+{
+    public function prepareQueryBuilder(): Builder
+    {
+        $queryBuilder = DB::table('inventory_stock_movements')
+            ->join(
+                'inventory_items',
+                'inventory_stock_movements.inventory_item_id',
+                '=',
+                'inventory_items.id'
+            )
+            ->leftJoin(
+                'inventory_assets',
+                'inventory_stock_movements.inventory_asset_id',
+                '=',
+                'inventory_assets.id'
+            )
+            ->leftJoin(
+                'warehouses',
+                'inventory_stock_movements.warehouse_id',
+                '=',
+                'warehouses.id'
+            )
+            ->leftJoin(
+                'users',
+                'inventory_stock_movements.performed_by',
+                '=',
+                'users.id'
+            )
+            ->select(
+                'inventory_stock_movements.id',
+                'inventory_stock_movements.inventory_item_id',
+                'inventory_stock_movements.inventory_asset_id',
+                'inventory_stock_movements.movement_type',
+                'inventory_stock_movements.quantity',
+                'inventory_stock_movements.from_status',
+                'inventory_stock_movements.to_status',
+                'inventory_stock_movements.reference_type',
+                'inventory_stock_movements.reference_number',
+                'inventory_stock_movements.notes',
+                'inventory_stock_movements.occurred_at',
+                'inventory_items.code as item_code',
+                'inventory_items.name as item_name',
+                'inventory_items.tracking_type',
+                'inventory_items.unit',
+                'inventory_assets.asset_code',
+                'warehouses.name as warehouse_name',
+                'users.name as performed_by_name'
+            )
+            ->orderByDesc('inventory_stock_movements.occurred_at')
+            ->orderByDesc('inventory_stock_movements.id');
+
+        if (request()->filled('inventory_item_id')) {
+            $queryBuilder->where(
+                'inventory_stock_movements.inventory_item_id',
+                request()->integer('inventory_item_id')
+            );
+        }
+
+        if (request()->filled('inventory_asset_id')) {
+            $queryBuilder->where(
+                'inventory_stock_movements.inventory_asset_id',
+                request()->integer('inventory_asset_id')
+            );
+        }
+
+        $this->addFilter(
+            'item_code',
+            'inventory_items.code'
+        );
+
+        $this->addFilter(
+            'item_name',
+            'inventory_items.name'
+        );
+
+        $this->addFilter(
+            'asset_code',
+            'inventory_assets.asset_code'
+        );
+
+        $this->addFilter(
+            'movement_type',
+            'inventory_stock_movements.movement_type'
+        );
+
+        $this->addFilter(
+            'reference_number',
+            'inventory_stock_movements.reference_number'
+        );
+
+        $this->addFilter(
+            'occurred_at',
+            'inventory_stock_movements.occurred_at'
+        );
+
+        return $queryBuilder;
+    }
+
+    public function prepareColumns(): void
+    {
+        $this->addColumn([
+            'index'      => 'occurred_at',
+            'label'      => 'Date / Time',
+            'type'       => 'datetime',
+            'searchable' => false,
+            'sortable'   => true,
+            'filterable' => true,
+            'closure'    => fn ($row) => date(
+                'd M Y H:i',
+                strtotime((string) $row->occurred_at)
+            ),
+        ]);
+
+        $this->addColumn([
+            'index'      => 'item_name',
+            'label'      => 'Inventory Item',
+            'type'       => 'string',
+            'searchable' => true,
+            'sortable'   => true,
+            'filterable' => true,
+            'closure'    => fn ($row) => sprintf(
+                '%s — %s',
+                e($row->item_code),
+                e($row->item_name)
+            ),
+        ]);
+
+        $this->addColumn([
+            'index'      => 'asset_code',
+            'label'      => 'Asset',
+            'type'       => 'string',
+            'searchable' => true,
+            'sortable'   => true,
+            'filterable' => true,
+            'closure'    => fn ($row) => $row->asset_code ?: '-',
+        ]);
+
+        $this->addColumn([
+            'index'              => 'movement_type',
+            'label'              => 'Movement',
+            'type'               => 'string',
+            'searchable'         => false,
+            'sortable'           => true,
+            'filterable'         => true,
+            'filterable_type'    => 'dropdown',
+            'filterable_options' => [
+                ['label' => 'Opening', 'value' => 'opening'],
+                ['label' => 'Stock In', 'value' => 'stock_in'],
+                ['label' => 'Stock Out', 'value' => 'stock_out'],
+                ['label' => 'Adjustment In', 'value' => 'adjustment_in'],
+                ['label' => 'Adjustment Out', 'value' => 'adjustment_out'],
+                ['label' => 'Allocated', 'value' => 'allocated'],
+                ['label' => 'Released', 'value' => 'released'],
+                ['label' => 'Picked', 'value' => 'picked'],
+                ['label' => 'Out', 'value' => 'out'],
+                ['label' => 'Return Pending', 'value' => 'return_pending'],
+                ['label' => 'Returned', 'value' => 'returned'],
+                ['label' => 'Damaged', 'value' => 'damaged'],
+                ['label' => 'Missing', 'value' => 'missing'],
+                ['label' => 'Maintenance', 'value' => 'maintenance'],
+                ['label' => 'Retired', 'value' => 'retired'],
+            ],
+            'closure' => fn ($row) => $this->movementBadge(
+                (string) $row->movement_type
+            ),
+        ]);
+
+        $this->addColumn([
+            'index'      => 'quantity',
+            'label'      => 'Qty',
+            'type'       => 'string',
+            'searchable' => false,
+            'sortable'   => true,
+            'filterable' => false,
+            'closure'    => function ($row) {
+                $qty = rtrim(
+                    rtrim(
+                        number_format(
+                            (float) $row->quantity,
+                            2,
+                            '.',
+                            ''
+                        ),
+                        '0'
+                    ),
+                    '.'
+                );
+
+                return $qty.' '.e((string) $row->unit);
+            },
+        ]);
+
+        $this->addColumn([
+            'index'      => 'status_change',
+            'label'      => 'Status Change',
+            'type'       => 'string',
+            'searchable' => false,
+            'sortable'   => false,
+            'filterable' => false,
+            'closure'    => function ($row) {
+                if (! $row->from_status && ! $row->to_status) {
+                    return '-';
+                }
+
+                return sprintf(
+                    '%s → %s',
+                    e($row->from_status ?: '-'),
+                    e($row->to_status ?: '-')
+                );
+            },
+        ]);
+
+        $this->addColumn([
+            'index'      => 'reference_number',
+            'label'      => 'Reference',
+            'type'       => 'string',
+            'searchable' => true,
+            'sortable'   => true,
+            'filterable' => true,
+            'closure'    => fn ($row) => $row->reference_number ?: '-',
+        ]);
+
+        $this->addColumn([
+            'index'      => 'performed_by_name',
+            'label'      => 'Performed By',
+            'type'       => 'string',
+            'searchable' => false,
+            'sortable'   => true,
+            'filterable' => false,
+            'closure'    => fn ($row) => $row->performed_by_name ?: 'System / Migration',
+        ]);
+
+        $this->addColumn([
+            'index'      => 'warehouse_name',
+            'label'      => 'Warehouse',
+            'type'       => 'string',
+            'searchable' => false,
+            'sortable'   => false,
+            'filterable' => false,
+            'closure'    => fn ($row) => $row->warehouse_name ?: '-',
+        ]);
+
+        $this->addColumn([
+            'index'      => 'notes',
+            'label'      => 'Notes',
+            'type'       => 'string',
+            'searchable' => false,
+            'sortable'   => false,
+            'filterable' => false,
+            'closure'    => fn ($row) => $row->notes ?: '-',
+        ]);
+    }
+
+    public function prepareActions(): void
+    {
+        // Ledger is intentionally read-only.
+        // No edit or delete actions are registered.
+    }
+
+    private function movementBadge(string $movementType): string
+    {
+        $labels = [
+            'opening'        => ['OPENING', '#e0f2fe', '#0369a1'],
+            'stock_in'       => ['STOCK IN', '#dcfce7', '#15803d'],
+            'stock_out'      => ['STOCK OUT', '#ffedd5', '#c2410c'],
+            'adjustment_in'  => ['ADJ. IN', '#d1fae5', '#047857'],
+            'adjustment_out' => ['ADJ. OUT', '#fee2e2', '#b91c1c'],
+            'allocated'      => ['ALLOCATED', '#fef3c7', '#a16207'],
+            'released'       => ['RELEASED', '#f3f4f6', '#4b5563'],
+            'picked'         => ['PICKED', '#dbeafe', '#1d4ed8'],
+            'out'            => ['OUT', '#e0e7ff', '#4338ca'],
+            'return_pending' => ['RETURN PENDING', '#ffedd5', '#c2410c'],
+            'returned'       => ['RETURNED', '#dcfce7', '#15803d'],
+            'damaged'        => ['DAMAGED', '#fee2e2', '#b91c1c'],
+            'missing'        => ['MISSING', '#fee2e2', '#991b1b'],
+            'maintenance'    => ['MAINTENANCE', '#f3e8ff', '#7e22ce'],
+            'retired'        => ['RETIRED', '#f3f4f6', '#4b5563'],
+        ];
+
+        [$label, $background, $color] = $labels[$movementType]
+            ?? [strtoupper($movementType), '#f3f4f6', '#4b5563'];
+
+        return sprintf(
+            '<span style="padding:4px 9px;border-radius:9999px;background:%s;color:%s;font-weight:700;font-size:11px;">%s</span>',
+            $background,
+            $color,
+            e($label)
+        );
+    }
+}

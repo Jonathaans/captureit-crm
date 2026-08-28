@@ -47,6 +47,11 @@ require __DIR__.'/invoice-routes.php';
 require __DIR__.'/delivery-order-routes.php';
 
 /**
+ * Inventory routes.
+ */
+require __DIR__.'/inventory-routes.php';
+
+/**
  * Configuration routes.
  */
 require 'configuration-routes.php';
