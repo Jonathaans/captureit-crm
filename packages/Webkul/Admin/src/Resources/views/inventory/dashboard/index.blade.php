@@ -127,6 +127,15 @@
                     </a>
                 @endif
 
+                @if (bouncer()->hasPermission('inventory.stock-opname'))
+                    <a
+                        href="{{ route('admin.inventory.stock-opname.index') }}"
+                        class="secondary-button"
+                    >
+                        Stock Opname
+                    </a>
+                @endif
+
                 @if (bouncer()->hasPermission('inventory.items.create'))
                     <a
                         href="{{ route('admin.inventory.items.create') }}"

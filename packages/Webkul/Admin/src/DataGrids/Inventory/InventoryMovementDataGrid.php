@@ -44,6 +44,7 @@ class InventoryMovementDataGrid extends DataGrid
                 'inventory_stock_movements.from_status',
                 'inventory_stock_movements.to_status',
                 'inventory_stock_movements.reference_type',
+                'inventory_stock_movements.reference_id',
                 'inventory_stock_movements.reference_number',
                 'inventory_stock_movements.notes',
                 'inventory_stock_movements.occurred_at',
@@ -90,6 +91,11 @@ class InventoryMovementDataGrid extends DataGrid
         $this->addFilter(
             'movement_type',
             'inventory_stock_movements.movement_type'
+        );
+
+        $this->addFilter(
+            'reference_type',
+            'inventory_stock_movements.reference_type'
         );
 
         $this->addFilter(
@@ -168,6 +174,13 @@ class InventoryMovementDataGrid extends DataGrid
                 ['label' => 'Missing', 'value' => 'missing'],
                 ['label' => 'Maintenance', 'value' => 'maintenance'],
                 ['label' => 'Retired', 'value' => 'retired'],
+                ['label' => 'Maintenance Started', 'value' => 'maintenance_started'],
+                ['label' => 'Maintenance Completed', 'value' => 'maintenance_completed'],
+                ['label' => 'Asset Retired', 'value' => 'asset_retired'],
+                ['label' => 'Stock Opname Missing', 'value' => 'stock_opname_missing'],
+                ['label' => 'Stock Opname Found', 'value' => 'stock_opname_found'],
+                ['label' => 'Stock Opname Adjustment In', 'value' => 'stock_opname_adjustment_in'],
+                ['label' => 'Stock Opname Adjustment Out', 'value' => 'stock_opname_adjustment_out'],
             ],
             'closure' => fn ($row) => $this->movementBadge(
                 (string) $row->movement_type
@@ -220,13 +233,33 @@ class InventoryMovementDataGrid extends DataGrid
         ]);
 
         $this->addColumn([
+            'index'              => 'reference_type',
+            'label'              => 'Reference Type',
+            'type'               => 'string',
+            'searchable'         => false,
+            'sortable'           => true,
+            'filterable'         => true,
+            'filterable_type'    => 'dropdown',
+            'filterable_options' => [
+                ['label' => 'Surat Jalan', 'value' => 'delivery_order'],
+                ['label' => 'Stock Opname', 'value' => 'stock_opname'],
+                ['label' => 'Maintenance', 'value' => 'maintenance'],
+                ['label' => 'Manual Stock Movement', 'value' => 'manual_stock_movement'],
+                ['label' => 'Opening', 'value' => 'opening'],
+            ],
+            'closure' => fn ($row) => $this->referenceTypeBadge(
+                (string) ($row->reference_type ?: '')
+            ),
+        ]);
+
+        $this->addColumn([
             'index'      => 'reference_number',
             'label'      => 'Reference',
             'type'       => 'string',
             'searchable' => true,
             'sortable'   => true,
             'filterable' => true,
-            'closure'    => fn ($row) => $row->reference_number ?: '-',
+            'closure'    => fn ($row) => $this->referenceLink($row),
         ]);
 
         $this->addColumn([
@@ -266,6 +299,78 @@ class InventoryMovementDataGrid extends DataGrid
         // No edit or delete actions are registered.
     }
 
+    /**
+     * Render a human-readable source for each inventory movement.
+     *
+     * Event workflow movements are always identified as Surat Jalan.
+     */
+    private function referenceTypeBadge(string $referenceType): string
+    {
+        $types = [
+            'delivery_order'        => ['SURAT JALAN', '#fff7ed', '#c2410c'],
+            'stock_opname'          => ['STOCK OPNAME', '#ecfeff', '#0e7490'],
+            'maintenance'           => ['MAINTENANCE', '#f3e8ff', '#7e22ce'],
+            'manual_stock_movement' => ['MANUAL', '#f3f4f6', '#4b5563'],
+            'opening'               => ['OPENING', '#e0f2fe', '#0369a1'],
+        ];
+
+        [$label, $background, $color] = $types[$referenceType]
+            ?? [
+                $referenceType !== ''
+                    ? strtoupper(
+                        str_replace('_', ' ', $referenceType)
+                    )
+                    : '-',
+                '#f3f4f6',
+                '#4b5563',
+            ];
+
+        return sprintf(
+            '<span style="display:inline-flex;padding:4px 9px;border-radius:9999px;background:%s;color:%s;font-weight:700;font-size:10px;white-space:nowrap;">%s</span>',
+            $background,
+            $color,
+            e($label)
+        );
+    }
+
+    /**
+     * Surat Jalan references become clickable when the current user is
+     * allowed to view Delivery Orders.
+     */
+    private function referenceLink(object $row): string
+    {
+        $referenceNumber = trim(
+            (string) ($row->reference_number ?: '')
+        );
+
+        if ($referenceNumber === '') {
+            return '-';
+        }
+
+        if (
+            $row->reference_type === 'delivery_order'
+            && ! empty($row->reference_id)
+            && bouncer()->hasPermission('delivery-orders.view')
+        ) {
+            return sprintf(
+                '<a href="%s" style="color:#dc2626;font-weight:700;text-decoration:none;white-space:nowrap;" title="Open Surat Jalan %s">%s ↗</a>',
+                e(
+                    route(
+                        'admin.delivery-orders.show',
+                        $row->reference_id
+                    )
+                ),
+                e($referenceNumber),
+                e($referenceNumber)
+            );
+        }
+
+        return sprintf(
+            '<span style="font-weight:600;white-space:nowrap;">%s</span>',
+            e($referenceNumber)
+        );
+    }
+
     private function movementBadge(string $movementType): string
     {
         $labels = [
@@ -283,7 +388,14 @@ class InventoryMovementDataGrid extends DataGrid
             'damaged'        => ['DAMAGED', '#fee2e2', '#b91c1c'],
             'missing'        => ['MISSING', '#fee2e2', '#991b1b'],
             'maintenance'    => ['MAINTENANCE', '#f3e8ff', '#7e22ce'],
-            'retired'        => ['RETIRED', '#f3f4f6', '#4b5563'],
+            'retired'                     => ['RETIRED', '#f3f4f6', '#4b5563'],
+            'maintenance_started'         => ['MAINT. START', '#f3e8ff', '#7e22ce'],
+            'maintenance_completed'       => ['MAINT. DONE', '#dcfce7', '#15803d'],
+            'asset_retired'               => ['ASSET RETIRED', '#f3f4f6', '#4b5563'],
+            'stock_opname_missing'        => ['OPNAME MISSING', '#fee2e2', '#991b1b'],
+            'stock_opname_found'          => ['OPNAME FOUND', '#dcfce7', '#15803d'],
+            'stock_opname_adjustment_in'  => ['OPNAME ADJ. IN', '#d1fae5', '#047857'],
+            'stock_opname_adjustment_out' => ['OPNAME ADJ. OUT', '#fee2e2', '#b91c1c'],
         ];
 
         [$label, $background, $color] = $labels[$movementType]
