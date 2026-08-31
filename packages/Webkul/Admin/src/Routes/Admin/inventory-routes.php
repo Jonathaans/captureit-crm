@@ -6,6 +6,7 @@ use Webkul\Admin\Http\Controllers\Inventory\InventoryDashboardController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryItemController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryMaintenanceController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryMovementController;
+use Webkul\Admin\Http\Controllers\Inventory\InventoryStockOpnameController;
 
 Route::prefix('inventory')
     ->group(function () {
@@ -85,6 +86,40 @@ Route::prefix('inventory')
 
                 Route::put('{id}/retire', 'retire')
                     ->name('admin.inventory.maintenance.retire');
+            });
+
+        Route::controller(InventoryStockOpnameController::class)
+            ->prefix('stock-opname')
+            ->group(function () {
+                Route::get('/', 'index')
+                    ->name('admin.inventory.stock-opname.index');
+
+                Route::get('create', 'create')
+                    ->name('admin.inventory.stock-opname.create');
+
+                Route::post('/', 'store')
+                    ->name('admin.inventory.stock-opname.store');
+
+                Route::get('{id}', 'show')
+                    ->name('admin.inventory.stock-opname.show');
+
+                Route::put('{id}/start', 'start')
+                    ->name('admin.inventory.stock-opname.start');
+
+                Route::put('{id}/scan', 'scan')
+                    ->name('admin.inventory.stock-opname.scan');
+
+                Route::put('{id}/quantity/{entryId}', 'countQuantity')
+                    ->name('admin.inventory.stock-opname.quantity');
+
+                Route::put('{id}/review', 'review')
+                    ->name('admin.inventory.stock-opname.review');
+
+                Route::put('{id}/resume', 'resume')
+                    ->name('admin.inventory.stock-opname.resume');
+
+                Route::put('{id}/finalize', 'finalize')
+                    ->name('admin.inventory.stock-opname.finalize');
             });
 
         Route::controller(InventoryMovementController::class)

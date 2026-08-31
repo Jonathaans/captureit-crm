@@ -57,6 +57,15 @@
                         + Asset
                     </a>
                 @endif
+
+                @if (bouncer()->hasPermission('inventory.stock-opname'))
+                    <a
+                        href="{{ route('admin.inventory.stock-opname.index') }}"
+                        class="secondary-button"
+                    >
+                        Stock Opname
+                    </a>
+                @endif
             </div>
         </div>
 

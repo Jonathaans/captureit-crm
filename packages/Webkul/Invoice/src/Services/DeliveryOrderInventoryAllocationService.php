@@ -109,9 +109,37 @@ class DeliveryOrderInventoryAllocationService
             }
 
             /*
-             * Defensive check: satu asset tidak boleh aktif di dua SJ.
+             * Hard lock against DOUBLE EVENT usage.
+             *
+             * Serialized asset is exclusive while its allocation is:
+             * allocated / picked / out / return_pending.
+             *
+             * It can only be reused after the previous workflow releases
+             * or returns the allocation and the asset itself is AVAILABLE.
+             *
+             * Asset row is locked before this query, so two nearly
+             * simultaneous scans cannot both win.
              */
-            $otherActiveAllocation = DeliveryOrderInventoryAllocation::query()
+            $otherActiveAllocation = $this->activeSerializedConflict(
+                $lockedAsset,
+                $deliveryOrder
+            );
+
+            if ($otherActiveAllocation) {
+                throw ValidationException::withMessages([
+                    'barcode' => $this->doubleEventConflictMessage(
+                        $lockedAsset,
+                        $otherActiveAllocation
+                    ),
+                ]);
+            }
+
+            /*
+             * The same physical asset may not satisfy two different
+             * requirements in the same Surat Jalan either.
+             */
+            $sameDeliveryOrderAllocation = DeliveryOrderInventoryAllocation::query()
+                ->where('delivery_order_id', $deliveryOrder->id)
                 ->where('inventory_asset_id', $lockedAsset->id)
                 ->whereIn(
                     'status',
@@ -120,18 +148,19 @@ class DeliveryOrderInventoryAllocationService
                 ->lockForUpdate()
                 ->first();
 
-            if ($otherActiveAllocation) {
+            if ($sameDeliveryOrderAllocation) {
                 if (
-                    (int) $otherActiveAllocation->delivery_order_id
-                    === (int) $deliveryOrder->id
+                    (int) $sameDeliveryOrderAllocation->delivery_order_item_id
+                    === (int) $deliveryOrderItem->id
                 ) {
-                    return $otherActiveAllocation;
+                    return $sameDeliveryOrderAllocation;
                 }
 
                 throw ValidationException::withMessages([
                     'barcode' => sprintf(
-                        'Asset %s sudah terikat ke Surat Jalan lain.',
-                        $lockedAsset->asset_code
+                        'Asset %s sudah dipakai untuk request lain di %s. Satu asset fisik hanya boleh dihitung sekali.',
+                        $lockedAsset->asset_code,
+                        $deliveryOrder->delivery_order_number
                     ),
                 ]);
             }
@@ -319,6 +348,20 @@ class DeliveryOrderInventoryAllocationService
                 if (! $asset) {
                     throw ValidationException::withMessages([
                         'asset_ids' => "Asset ID {$assetId} tidak cocok dengan Inventory Item.",
+                    ]);
+                }
+
+                $otherActiveAllocation = $this->activeSerializedConflict(
+                    $asset,
+                    $deliveryOrder
+                );
+
+                if ($otherActiveAllocation) {
+                    throw ValidationException::withMessages([
+                        'asset_ids' => $this->doubleEventConflictMessage(
+                            $asset,
+                            $otherActiveAllocation
+                        ),
                     ]);
                 }
 
@@ -877,6 +920,97 @@ class DeliveryOrderInventoryAllocationService
                 "Released because {$deliveryOrder->delivery_order_number} was cancelled."
             );
         });
+    }
+
+    /**
+     * Find active usage of one serialized physical asset in another SJ.
+     *
+     * ACTIVE_STATUSES intentionally does NOT include returned/released.
+     * Therefore after Return is finalized (or a draft allocation is
+     * released/cancelled), the asset may be used again.
+     */
+    private function activeSerializedConflict(
+        InventoryAsset $asset,
+        DeliveryOrder $currentDeliveryOrder
+    ): ?DeliveryOrderInventoryAllocation {
+        return DeliveryOrderInventoryAllocation::query()
+            ->with([
+                'deliveryOrder',
+                'deliveryOrderItem',
+            ])
+            ->where('inventory_asset_id', $asset->id)
+            ->where('tracking_type', 'serialized')
+            ->where(
+                'delivery_order_id',
+                '!=',
+                $currentDeliveryOrder->id
+            )
+            ->whereIn(
+                'status',
+                DeliveryOrderInventoryAllocation::ACTIVE_STATUSES
+            )
+            ->orderByDesc('id')
+            ->lockForUpdate()
+            ->first();
+    }
+
+    /**
+     * Human-readable warning for warehouse scanner operators.
+     */
+    private function doubleEventConflictMessage(
+        InventoryAsset $asset,
+        DeliveryOrderInventoryAllocation $allocation
+    ): string {
+        $otherDeliveryOrder = $allocation->deliveryOrder;
+
+        $deliveryOrderNumber = $otherDeliveryOrder?->delivery_order_number
+            ?: 'SJ #'.$allocation->delivery_order_id;
+
+        $project = trim(
+            (string) (
+                $otherDeliveryOrder?->project_name
+                ?: $otherDeliveryOrder?->project_code
+                ?: '-'
+            )
+        );
+
+        $eventDate = $otherDeliveryOrder?->event_date
+            ? $otherDeliveryOrder->event_date->format('d M Y')
+            : '-';
+
+        $eventTime = trim(
+            (string) (
+                $otherDeliveryOrder?->event_time
+                ?: ''
+            )
+        );
+
+        $event = $eventDate;
+
+        if ($eventTime !== '') {
+            $event .= ' '.$eventTime;
+        }
+
+        $sjStatus = strtoupper(
+            (string) (
+                $otherDeliveryOrder?->status
+                ?: '-'
+            )
+        );
+
+        $inventoryStatus = strtoupper(
+            (string) $allocation->status
+        );
+
+        return sprintf(
+            'DOUBLE EVENT BLOCKED: %s sedang dipakai oleh %s | Project: %s | Event: %s | SJ Status: %s | Inventory: %s. Asset baru dapat dipakai lagi setelah SJ sebelumnya selesai Return dan asset kembali AVAILABLE.',
+            $asset->asset_code,
+            $deliveryOrderNumber,
+            $project,
+            $event,
+            $sjStatus,
+            $inventoryStatus
+        );
     }
 
     private function recordMovement(

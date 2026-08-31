@@ -1,0 +1,24 @@
+OPTIONAL MENU.PHP PATCH
+=======================
+
+Package ini TIDAK menimpa Config/menu.php agar custom menu Anda tetap aman.
+
+Stock Opname sudah dapat diakses dari:
+Inventory -> Dashboard -> Stock Opname
+
+Jika Anda ingin child menu khusus "Stock Opname", tambahkan di dalam
+Inventory children pada:
+
+packages/Webkul/Admin/src/Config/menu.php
+
+setelah Inventory Movements / Maintenance sesuai struktur menu Anda:
+
+[
+    'key'        => 'inventory.stock-opname',
+    'name'       => 'Stock Opname',
+    'route'      => 'admin.inventory.stock-opname.index',
+    'sort'       => 6,
+    'icon-class' => '',
+],
+
+Jangan mengganti seluruh menu.php hanya untuk patch kecil ini.

@@ -133,6 +133,13 @@
                 id="scan-message"
                 class="mt-4 hidden rounded-md px-4 py-3 text-sm font-semibold"
             ></div>
+
+            <div class="mt-4 rounded-md border border-green-200 bg-white/70 px-4 py-3 text-xs text-green-800">
+                <strong>Double Event Protection aktif.</strong>
+                Asset yang masih ALLOCATED, OUT, atau RETURN PENDING pada Surat Jalan lain
+                akan ditolak otomatis. Asset baru dapat dipakai lagi setelah Return selesai
+                dan status kembali AVAILABLE.
+            </div>
         </div>
     @endif
 

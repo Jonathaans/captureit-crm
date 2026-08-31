@@ -370,6 +370,38 @@ return [
         'name'  => 'Retire Asset',
         'route' => 'admin.inventory.maintenance.retire',
         'sort'  => 3,
+    ], [
+        'key'   => 'inventory.stock-opname',
+        'name'  => 'Stock Opname',
+        'route' => [
+            'admin.inventory.stock-opname.index',
+            'admin.inventory.stock-opname.show',
+        ],
+        'sort'  => 6,
+    ], [
+        'key'   => 'inventory.stock-opname.create',
+        'name'  => 'Create Stock Opname',
+        'route' => [
+            'admin.inventory.stock-opname.create',
+            'admin.inventory.stock-opname.store',
+        ],
+        'sort'  => 1,
+    ], [
+        'key'   => 'inventory.stock-opname.count',
+        'name'  => 'Count Stock Opname',
+        'route' => [
+            'admin.inventory.stock-opname.start',
+            'admin.inventory.stock-opname.scan',
+            'admin.inventory.stock-opname.quantity',
+            'admin.inventory.stock-opname.review',
+            'admin.inventory.stock-opname.resume',
+        ],
+        'sort'  => 2,
+    ], [
+        'key'   => 'inventory.stock-opname.finalize',
+        'name'  => 'Finalize Stock Opname',
+        'route' => 'admin.inventory.stock-opname.finalize',
+        'sort'  => 3,
     ],
     [
         'key' => 'mail',
