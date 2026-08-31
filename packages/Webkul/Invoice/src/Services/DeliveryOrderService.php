@@ -16,139 +16,202 @@ class DeliveryOrderService
     }
 
     /**
-     * Membuat Surat Jalan pertama dari Invoice.
+     * Membuat Surat Jalan dari Invoice.
      *
-     * Untuk flow saat ini, tombol Generate hanya membuat satu Surat Jalan
-     * pertama per Invoice. Database tetap mendukung lebih dari satu Surat Jalan
-     * untuk pengembangan berikutnya.
+     * One Invoice -> Many Delivery Orders.
+     *
+     * Aturan:
+     * - SJ pertama tetap auto-populate requirement dari Product Equipment Template.
+     * - SJ kedua dan seterusnya dibuat sebagai DRAFT kosong agar requirement
+     *   pengiriman pertama tidak terduplikasi secara tidak sengaja.
+     * - Setiap pemanggilan selalu meminta nomor SJ baru dari number service.
+     * - Inventory allocation / issue / return tetap berdiri sendiri per SJ.
      */
     public function createFromInvoice(
         Invoice $invoice,
         ?int $createdBy = null
     ): DeliveryOrder {
-        /*
-        |--------------------------------------------------------------------------
-        | Cegah double generate
-        |--------------------------------------------------------------------------
-        */
+        return DB::transaction(
+            function () use (
+                $invoice,
+                $createdBy
+            ) {
+                /*
+                |--------------------------------------------------------------------------
+                | Lock Invoice
+                |--------------------------------------------------------------------------
+                |
+                | Serialize generation untuk Invoice yang sama sehingga dua request
+                | yang datang hampir bersamaan tidak sama-sama dianggap "SJ pertama".
+                |
+                */
 
-        $existingDeliveryOrder = DeliveryOrder::query()
-            ->where('invoice_id', $invoice->id)
-            ->orderBy('id')
-            ->first();
+                $invoice = Invoice::query()
+                    ->whereKey($invoice->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
-        if ($existingDeliveryOrder) {
-            return $existingDeliveryOrder;
-        }
+                $existingDeliveryOrderCount =
+                    DeliveryOrder::query()
+                        ->where(
+                            'invoice_id',
+                            $invoice->id
+                        )
+                        ->count();
 
-        return DB::transaction(function () use ($invoice, $createdBy) {
-            /*
-            |--------------------------------------------------------------------------
-            | Cek ulang di dalam transaction
-            |--------------------------------------------------------------------------
-            */
-
-            $existingDeliveryOrder = DeliveryOrder::query()
-                ->where('invoice_id', $invoice->id)
-                ->orderBy('id')
-                ->first();
-
-            if ($existingDeliveryOrder) {
-                return $existingDeliveryOrder;
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | Load data yang dibutuhkan
-            |--------------------------------------------------------------------------
-            */
-
-            $invoice->loadMissing([
-                'quote',
-                'person',
-                'user',
-                'items',
-            ]);
-
-            $customerName = $invoice->person?->name;
-            $salesPersonName = $invoice->user?->name;
-
-            $deliveryAddress = $this->formatAddress(
-                $invoice->shipping_address ?: $invoice->billing_address
-            );
-
-            /*
-            |--------------------------------------------------------------------------
-            | Create Delivery Order Header
-            |--------------------------------------------------------------------------
-            */
-
-            $deliveryOrder = DeliveryOrder::create([
-                'delivery_order_number' => $this->numberService
-                    ->generateForInvoice($invoice),
-
-                'invoice_id' => $invoice->id,
-                'quote_id' => $invoice->quote_id,
-
-                'invoice_number' => $invoice->invoice_number,
-                'quote_number' => $invoice->quote?->quote_number,
-
-                'project_code' => $invoice->project_code,
-                'business_unit' => $invoice->business_unit,
-                'project_name' => $invoice->subject,
-
-                'person_id' => $invoice->person_id,
-                'customer_name' => $customerName,
-
-                'user_id' => $invoice->user_id,
-                'sales_person_name' => $salesPersonName,
+                $isFirstDeliveryOrder =
+                    $existingDeliveryOrderCount === 0;
 
                 /*
-                 * Recipient default dari customer.
-                 * Tetap bisa diedit dari halaman Surat Jalan.
-                 */
-                'recipient_name' => $customerName,
-                'recipient_phone' => null,
+                |--------------------------------------------------------------------------
+                | Load Data
+                |--------------------------------------------------------------------------
+                */
 
-                'pic_name' => null,
-                'pic_phone' => null,
+                $invoice->loadMissing([
+                    'quote',
+                    'person',
+                    'user',
+                    'items',
+                ]);
 
-                'event_date' => $invoice->event_date,
-                'event_time' => null,
-                'location' => $invoice->location,
+                $customerName =
+                    $invoice->person?->name;
 
-                'delivery_address' => $deliveryAddress,
-                'delivery_date' => $invoice->event_date,
-                'delivery_time' => null,
+                $salesPersonName =
+                    $invoice->user?->name;
 
-                'status' => 'draft',
-                'notes' => null,
+                $deliveryAddress =
+                    $this->formatAddress(
+                        $invoice->shipping_address
+                        ?: $invoice->billing_address
+                    );
 
-                'created_by' => $createdBy,
-            ]);
+                /*
+                |--------------------------------------------------------------------------
+                | Create New Delivery Order Header
+                |--------------------------------------------------------------------------
+                |
+                | generateForInvoice() dipanggil SETIAP kali.
+                | Artinya nomor Surat Jalan mengikuti sequence global SJ yang
+                | sudah digunakan sistem, bukan menggunakan nomor Invoice.
+                |
+                */
 
-            /*
-            |--------------------------------------------------------------------------
-            | Auto Populate Equipment dari Product Template
-            |--------------------------------------------------------------------------
-            */
+                $deliveryOrder = DeliveryOrder::create([
+                    'delivery_order_number' =>
+                        $this->numberService
+                            ->generateForInvoice(
+                                $invoice
+                            ),
 
-            $this->copyEquipmentFromInvoice(
-                $invoice,
-                $deliveryOrder
-            );
+                    'invoice_id' =>
+                        $invoice->id,
 
-            return $deliveryOrder;
-        });
+                    'quote_id' =>
+                        $invoice->quote_id,
+
+                    'invoice_number' =>
+                        $invoice->invoice_number,
+
+                    'quote_number' =>
+                        $invoice->quote?->quote_number,
+
+                    'project_code' =>
+                        $invoice->project_code,
+
+                    'business_unit' =>
+                        $invoice->business_unit,
+
+                    'project_name' =>
+                        $invoice->subject,
+
+                    'person_id' =>
+                        $invoice->person_id,
+
+                    'customer_name' =>
+                        $customerName,
+
+                    'user_id' =>
+                        $invoice->user_id,
+
+                    'sales_person_name' =>
+                        $salesPersonName,
+
+                    'recipient_name' =>
+                        $customerName,
+
+                    'recipient_phone' =>
+                        null,
+
+                    'pic_name' =>
+                        null,
+
+                    'pic_phone' =>
+                        null,
+
+                    'event_date' =>
+                        $invoice->event_date,
+
+                    'event_time' =>
+                        null,
+
+                    'location' =>
+                        $invoice->location,
+
+                    'delivery_address' =>
+                        $deliveryAddress,
+
+                    'delivery_date' =>
+                        $invoice->event_date,
+
+                    'delivery_time' =>
+                        null,
+
+                    'status' =>
+                        'draft',
+
+                    /*
+                     * SJ tambahan sengaja diberi catatan agar operator tahu
+                     * bahwa requirement harus diisi hanya dengan barang
+                     * tertinggal / tambahan untuk pengiriman tersebut.
+                     */
+                    'notes' =>
+                        $isFirstDeliveryOrder
+                            ? null
+                            : sprintf(
+                                'Additional Surat Jalan #%d untuk %s. Isi hanya requirement barang tambahan / tertinggal pada pengiriman ini.',
+                                $existingDeliveryOrderCount + 1,
+                                $invoice->invoice_number
+                            ),
+
+                    'created_by' =>
+                        $createdBy,
+                ]);
+
+                /*
+                |--------------------------------------------------------------------------
+                | First SJ Only: Copy Standard Equipment Requirement
+                |--------------------------------------------------------------------------
+                |
+                | SJ tambahan TIDAK menyalin semua equipment lagi.
+                | Ini mencegah seluruh Camera / Printer / Lighting dari SJ pertama
+                | masuk lagi dan tanpa sengaja dialokasikan dua kali.
+                |
+                */
+
+                if ($isFirstDeliveryOrder) {
+                    $this->copyEquipmentFromInvoice(
+                        $invoice,
+                        $deliveryOrder
+                    );
+                }
+
+                return $deliveryOrder;
+            }
+        );
     }
 
-    /**
-     * Copy Equipment Template dari Product yang terdapat pada Invoice
-     * ke delivery_order_items.
-     *
-     * Template hanya dicopy saat Surat Jalan dibuat. Setelah itu,
-     * perubahan pada Product Equipment Template tidak mengubah Surat Jalan lama.
-     */
     protected function copyEquipmentFromInvoice(
         Invoice $invoice,
         DeliveryOrder $deliveryOrder

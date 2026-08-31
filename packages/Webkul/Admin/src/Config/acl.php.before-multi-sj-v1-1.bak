@@ -181,10 +181,7 @@ return [
 ], [
     'key'   => 'delivery-orders.view',
     'name'  => 'admin::app.acl.view',
-    'route' => [
-            'admin.invoices.delivery-orders.index',
-            'admin.delivery-orders.show',
-        ],
+    'route' => 'admin.delivery-orders.show',
     'sort'  => 1,
 ], [
     'key'   => 'delivery-orders.generate',

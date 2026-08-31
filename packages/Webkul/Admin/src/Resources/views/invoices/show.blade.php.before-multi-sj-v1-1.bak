@@ -95,41 +95,14 @@
         bouncer()->hasPermission('delivery-orders.view')
     )
         <a
-            href="{{ route('admin.invoices.delivery-orders.index', $invoice->id) }}"
+            href="{{ route(
+                'admin.delivery-orders.show',
+                $deliveryOrder->id
+            ) }}"
             class="secondary-button"
         >
             View Surat Jalan
         </a>
-@if (
-    bouncer()->hasPermission(
-        'delivery-orders.generate'
-    )
-)
-    <form
-        method="POST"
-        action="{{ route(
-            'admin.invoices.delivery-order.generate',
-            $invoice->id
-        ) }}"
-        onsubmit="
-            const button = this.querySelector('button');
-            if (button) {
-                button.disabled = true;
-                button.textContent = 'Generating...';
-            }
-        "
-        style="margin:0;"
-    >
-        @csrf
-
-        <button
-            type="submit"
-            class="secondary-button"
-        >
-            + Generate Additional SJ
-        </button>
-    </form>
-@endif
     @endif
 
     @if (

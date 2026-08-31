@@ -74,13 +74,7 @@ Route::controller(InvoiceController::class)
         |--------------------------------------------------------------------------
         */
 
-                Route::get(
-            '{id}/delivery-orders',
-            [\Webkul\Admin\Http\Controllers\Invoice\InvoiceDeliveryOrderController::class, 'index']
-        )
-            ->name('admin.invoices.delivery-orders.index');
-
-Route::post(
+        Route::post(
             '{id}/delivery-order',
             'generateDeliveryOrder'
         )->name(
