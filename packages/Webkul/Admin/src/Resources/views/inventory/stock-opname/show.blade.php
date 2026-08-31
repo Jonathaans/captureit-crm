@@ -329,6 +329,7 @@
                                     <th class="px-4 py-3">Observed</th>
                                     <th class="px-4 py-3">Condition</th>
                                     <th class="px-4 py-3">Result</th>
+                                    <th class="px-4 py-3">Scanned By</th>
                                     <th class="px-4 py-3">Scanned At</th>
                                 </tr>
                             </thead>
@@ -371,6 +372,13 @@
                                             >
                                                 {{ strtoupper(str_replace('_', ' ', $entry->result)) }}
                                             </span>
+                                        </td>
+
+                                        <td
+                                            data-scanned-by
+                                            class="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-700"
+                                        >
+                                            {{ $entry->scannedBy?->name ?: '-' }}
                                         </td>
 
                                         <td
@@ -712,6 +720,10 @@
                         '[data-result-badge]'
                     );
 
+                    const scannedBy = row.querySelector(
+                        '[data-scanned-by]'
+                    );
+
                     const scannedAt = row.querySelector(
                         '[data-scanned-at]'
                     );
@@ -732,6 +744,11 @@
                         badge.className =
                             'rounded-full px-3 py-1 text-xs font-bold '
                             + resultClasses(entry.result);
+                    }
+
+                    if (scannedBy) {
+                        scannedBy.textContent =
+                            entry.scanned_by || '-';
                     }
 
                     if (scannedAt) {

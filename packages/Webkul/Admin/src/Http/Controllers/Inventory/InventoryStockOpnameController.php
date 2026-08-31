@@ -509,6 +509,17 @@ class InventoryStockOpnameController extends Controller
 
         $entry = $result['entry'];
 
+        /*
+         * scanned_by is already stored by InventoryStockOpnameService.
+         * Load the relation here so the scanner UI can immediately show
+         * which authenticated warehouse account performed the first scan.
+         */
+        $entry->loadMissing([
+            'scannedBy',
+            'asset.item',
+            'item',
+        ]);
+
         return response()->json([
             'success' => true,
             'duplicate' => $result['duplicate'],
@@ -526,6 +537,7 @@ class InventoryStockOpnameController extends Controller
                 'expected_status' => $entry->expected_status,
                 'observed_status' => $entry->observed_status,
                 'result' => $entry->result,
+                'scanned_by' => $entry->scannedBy?->name,
                 'scanned_at' => $entry->scanned_at
                     ? $entry->scanned_at->format('d M Y H:i:s')
                     : null,

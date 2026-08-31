@@ -5,6 +5,7 @@ namespace Webkul\Admin\Http\Controllers\Invoice;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Webkul\Admin\Http\Controllers\Controller;
@@ -63,6 +64,14 @@ class FinancialReportController extends Controller
 
         $businessUnitOptions = BusinessUnit::options();
 
+        /*
+         * Product is sourced from invoice_items.name because invoice items
+         * are the immutable commercial snapshot stored on each invoice.
+         * This means historical reports keep showing what was actually
+         * invoiced even if the Product master is renamed later.
+         */
+        $productOptions = $this->availableProducts();
+
         return view(
             'admin::invoices.financial-report',
             [
@@ -70,8 +79,10 @@ class FinancialReportController extends Controller
                 'month' => $filters['month'],
                 'businessUnit' => $filters['business_unit'],
                 'eventStatus' => $filters['event_status'],
+                'product' => $filters['product'],
                 'availableYears' => $availableYears,
                 'businessUnitOptions' => $businessUnitOptions,
+                'productOptions' => $productOptions,
                 'financialSummary' => $financialSummary,
                 'invoicePerformance' => $invoicePerformance,
                 'invoiceStats' => $invoiceStats,
@@ -161,6 +172,12 @@ class FinancialReportController extends Controller
                         : 'ALL EVENT STATUSES',
                 ]);
 
+                $writeRow($handle, [
+                    'Product',
+                    $filters['product']
+                        ?: 'ALL PRODUCTS',
+                ]);
+
                 $writeRow($handle, []);
 
                 /*
@@ -228,6 +245,7 @@ class FinancialReportController extends Controller
                     'Invoice Date',
                     'Customer',
                     'Project / Subject',
+                    'Product',
                     'Event Status',
                     'Payment Status',
                     'Invoice Value',
@@ -249,6 +267,7 @@ class FinancialReportController extends Controller
                             ?->format('Y-m-d'),
                         $invoice['customer'],
                         $invoice['subject'],
+                        $invoice['products'],
                         strtoupper($invoice['event_status']),
                         strtoupper($invoice['status']),
                         $invoice['invoice_value'],
@@ -291,6 +310,10 @@ class FinancialReportController extends Controller
 
             'event_status' => $this->normalizeEventStatus(
                 $request->input('event_status')
+            ),
+
+            'product' => $this->normalizeProduct(
+                $request->input('product')
             ),
         ];
     }
@@ -491,6 +514,11 @@ class FinancialReportController extends Controller
                 );
             }
 
+            $this->applyInvoiceProductDimension(
+                $projectQuery,
+                $filters
+            );
+
             $estimatedProfit = (float) $projectQuery
                 ->get()
                 ->sum(function (Invoice $invoice) {
@@ -527,6 +555,7 @@ class FinancialReportController extends Controller
                 'person',
                 'payments',
                 'expenses',
+                'items',
             ])
             ->whereNotNull('issued_at');
 
@@ -545,6 +574,18 @@ class FinancialReportController extends Controller
             ->get()
             ->map(function (Invoice $invoice) use ($filters) {
                 $invoiceValue = (float) $invoice->grand_total;
+
+                $productNames = $invoice
+                    ->items
+                    ->pluck('name')
+                    ->map(
+                        fn ($name) => trim(
+                            (string) $name
+                        )
+                    )
+                    ->filter()
+                    ->unique()
+                    ->values();
 
                 $paidToDate = (float) $invoice
                     ->payments
@@ -595,6 +636,8 @@ class FinancialReportController extends Controller
                     'invoice_number' => $invoice->invoice_number,
                     'customer' => $invoice->person?->name ?? '-',
                     'subject' => $invoice->subject ?? '-',
+                    'products' => $productNames->implode('; '),
+                    'product_list' => $productNames->all(),
                     'issued_at' => $invoice->issued_at,
                     'event_status' => $invoice->event_status ?? 'confirm',
                     'status' => $invoice->status ?? 'unpaid',
@@ -722,6 +765,11 @@ class FinancialReportController extends Controller
             );
         }
 
+        $this->applyInvoiceProductDimension(
+            $revenueQuery,
+            $filters
+        );
+
         if (
             $filters['event_status']
             && $filters['event_status'] !== 'confirm'
@@ -808,6 +856,11 @@ class FinancialReportController extends Controller
                     $filters['business_unit']
                 );
             }
+
+            $this->applyInvoiceProductDimension(
+                $projectQuery,
+                $filters
+            );
 
             $monthlyProfit = $projectQuery
                 ->get()
@@ -912,6 +965,11 @@ class FinancialReportController extends Controller
                 $filters['event_status']
             );
         }
+
+        $this->applyInvoiceProductDimension(
+            $query,
+            $filters
+        );
     }
 
     /**
@@ -945,6 +1003,7 @@ class FinancialReportController extends Controller
         if (
             ! $filters['business_unit']
             && ! $filters['event_status']
+            && ! $filters['product']
         ) {
             return;
         }
@@ -965,6 +1024,11 @@ class FinancialReportController extends Controller
                         $filters['event_status']
                     );
                 }
+
+                $this->applyInvoiceProductDimension(
+                    $invoiceQuery,
+                    $filters
+                );
             }
         );
     }
@@ -1057,7 +1121,86 @@ class FinancialReportController extends Controller
             $parts[] = $filters['event_status'];
         }
 
+        if ($filters['product']) {
+            $productSlug = strtolower(
+                preg_replace(
+                    '/[^A-Za-z0-9]+/',
+                    '-',
+                    $filters['product']
+                )
+            );
+
+            $productSlug = trim(
+                (string) $productSlug,
+                '-'
+            );
+
+            if ($productSlug !== '') {
+                $parts[] = $productSlug;
+            }
+        }
+
         return implode('-', $parts).'.csv';
+    }
+
+    /**
+     * Product dimension.
+     *
+     * "Product" deliberately means the invoice-item snapshot name.
+     * It is safer for historical reporting than joining the current
+     * Product master, whose name may change after the invoice was issued.
+     */
+    private function applyInvoiceProductDimension(
+        Builder $query,
+        array $filters
+    ): void {
+        if (! $filters['product']) {
+            return;
+        }
+
+        $query->whereHas(
+            'items',
+            function (Builder $itemQuery) use ($filters) {
+                $itemQuery->where(
+                    'name',
+                    $filters['product']
+                );
+            }
+        );
+    }
+
+    /**
+     * Product dropdown values from historical invoice line snapshots.
+     */
+    private function availableProducts()
+    {
+        return DB::table('invoice_items')
+            ->whereNotNull('name')
+            ->where('name', '<>', '')
+            ->select('name')
+            ->distinct()
+            ->orderBy('name')
+            ->pluck('name')
+            ->map(
+                fn ($name) => trim(
+                    (string) $name
+                )
+            )
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
+    private function normalizeProduct(
+        mixed $product
+    ): ?string {
+        $product = trim(
+            (string) ($product ?? '')
+        );
+
+        return $product !== ''
+            ? $product
+            : null;
     }
 
     private function projectedEventStatuses(

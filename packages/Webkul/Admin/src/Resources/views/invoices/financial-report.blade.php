@@ -17,9 +17,12 @@
         $eventStatusLabel = $eventStatus
             ? ucfirst($eventStatus)
             : 'All Events';
+
+        $productLabel = $product
+            ?: 'All Products';
     @endphp
 
-    <div class="space-y-7 lg:space-y-8">
+    <div class="space-y-5">
         {{-- Header --}}
         <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -40,6 +43,9 @@
                     <span class="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
                         {{ $eventStatusLabel }}
                     </span>
+                    <span class="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                        {{ $productLabel }}
+                    </span>
                 </div>
             </div>
         </div>
@@ -50,13 +56,13 @@
                 <div>
                     <h2 class="text-lg font-semibold text-gray-800 dark:text-white">Filters</h2>
                     <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Filter by period, business unit, and event status.
+                        Filter by period, business unit, event status, and product.
                     </p>
                 </div>
 
                 @if (bouncer()->hasPermission('invoices.financial-report.export'))
                     <a
-                        href="{{ route('admin.invoices.financial-report.export', ['year' => $year, 'month' => $month, 'business_unit' => $businessUnit, 'event_status' => $eventStatus]) }}"
+                        href="{{ route('admin.invoices.financial-report.export', ['year' => $year, 'month' => $month, 'business_unit' => $businessUnit, 'event_status' => $eventStatus, 'product' => $product]) }}"
                         class="secondary-button rounded-lg px-4 py-2.5 text-sm"
                     >
                         Export CSV
@@ -65,7 +71,7 @@
             </div>
 
             <form method="GET" action="{{ route('admin.invoices.financial-report') }}">
-                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                     <div>
                         <label class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                             Year
@@ -130,6 +136,27 @@
                             <option value="cancel" @selected($eventStatus === 'cancel')>Cancel</option>
                         </select>
                     </div>
+
+                    <div>
+                        <label class="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            Product
+                        </label>
+                        <select
+                            name="product"
+                            class="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-500 focus:bg-white dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                        >
+                            <option value="">All Products</option>
+
+                            @foreach ($productOptions as $productOption)
+                                <option
+                                    value="{{ $productOption }}"
+                                    @selected($product === $productOption)
+                                >
+                                    {{ $productOption }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
 
                 <div class="mt-4 flex flex-wrap gap-3">
@@ -188,7 +215,7 @@
         </div>
 
         {{-- Invoice cohort --}}
-        <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
                 <span class="font-semibold text-gray-800 dark:text-white">Invoice Cohort</span>
                 <span class="text-gray-600 dark:text-gray-300">Total: <strong>{{ $invoiceStats['total'] }}</strong></span>
@@ -219,6 +246,7 @@
                         <tr class="bg-gray-50 dark:bg-gray-950">
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Invoice / Project</th>
                             <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Customer / Subject</th>
+                            <th class="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Product</th>
                             <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Invoice Value</th>
                             <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Received</th>
                             <th class="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Outstanding</th>
@@ -252,6 +280,20 @@
                                                 {{ $invoice['business_unit_label'] }}
                                             </span>
                                         </div>
+                                    @endif
+                                </td>
+
+                                <td class="px-6 py-5 align-top">
+                                    @if (! empty($invoice['product_list']))
+                                        <div class="flex max-w-[280px] flex-wrap gap-1.5">
+                                            @foreach ($invoice['product_list'] as $productName)
+                                                <span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+                                                    {{ $productName }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <span class="text-sm text-gray-400">-</span>
                                     @endif
                                 </td>
 
@@ -292,7 +334,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="10" class="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                                <td colspan="11" class="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
                                     No invoice data for the selected filters.
                                 </td>
                             </tr>
@@ -301,8 +343,6 @@
                 </table>
             </div>
         </div>
-
-        <div class="pt-1"></div>
 
         {{-- Monthly analytics --}}
         @if (! $month)
@@ -340,8 +380,6 @@
             </details>
         @endif
 
-        <div class="pt-1"></div>
-
         {{-- Expense breakdown --}}
         <details class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <summary class="cursor-pointer px-5 py-4 text-base font-semibold text-gray-800 dark:text-white">
@@ -359,8 +397,6 @@
                 @endforelse
             </div>
         </details>
-
-        <div class="pt-1"></div>
 
         {{-- How calculations work --}}
         <details class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
