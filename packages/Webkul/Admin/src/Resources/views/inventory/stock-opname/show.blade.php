@@ -36,6 +36,15 @@
                 default => 'bg-gray-100 text-gray-700',
             };
         };
+
+        $conditionClass = static function ($condition) {
+            return match ($condition) {
+                'good' => 'bg-green-100 text-green-700',
+                'fair' => 'bg-yellow-100 text-yellow-700',
+                'damaged' => 'bg-red-100 text-red-700',
+                default => 'bg-gray-100 text-gray-700',
+            };
+        };
     @endphp
 
     <div class="grid gap-5">
@@ -78,6 +87,18 @@
             </div>
 
             <div class="flex flex-wrap gap-2">
+                @if (bouncer()->hasPermission('inventory.stock-opname'))
+                    <a
+                        href="{{ route(
+                            'admin.inventory.stock-opname.export-csv',
+                            $session->id
+                        ) }}"
+                        class="secondary-button"
+                    >
+                        Export CSV
+                    </a>
+                @endif
+
                 @if (
                     $session->status === 'draft'
                     && bouncer()->hasPermission('inventory.stock-opname.count')
@@ -214,6 +235,7 @@
 
                         <p class="mt-1 text-sm text-green-700">
                             Tidak perlu klik input. Scan asset lalu Enter. Scan hanya mencatat fakta fisik dan tidak langsung mengubah status asset.
+                            Jika QR yang sama discan lagi pada session yang sama, sistem hanya memberi duplicate warning dan tidak menghitung asset dua kali.
                         </p>
                     </div>
 
@@ -283,6 +305,7 @@
 
                         <p class="mt-1 text-xs text-gray-500">
                             FOUND = sesuai. MISSING = expected tapi tidak discan. STATUS CONFLICT = fisik ditemukan tetapi status sistem tidak sesuai.
+                            Kolom Condition menampilkan kondisi asset pada snapshot saat Stock Opname dimulai.
                         </p>
                     </div>
 
@@ -304,6 +327,7 @@
                                     <th class="px-4 py-3">Item</th>
                                     <th class="px-4 py-3">Expected</th>
                                     <th class="px-4 py-3">Observed</th>
+                                    <th class="px-4 py-3">Condition</th>
                                     <th class="px-4 py-3">Result</th>
                                     <th class="px-4 py-3">Scanned At</th>
                                 </tr>
@@ -332,6 +356,12 @@
                                             class="px-4 py-3 text-sm font-semibold"
                                         >
                                             {{ strtoupper($entry->observed_status ?: '-') }}
+                                        </td>
+
+                                        <td class="px-4 py-3">
+                                            <span class="rounded-full px-3 py-1 text-xs font-bold {{ $conditionClass($entry->expected_condition) }}">
+                                                {{ strtoupper(str_replace('_', ' ', $entry->expected_condition ?: '-')) }}
+                                            </span>
                                         </td>
 
                                         <td class="px-4 py-3">
@@ -415,17 +445,18 @@
                                             $session->status === 'in_progress'
                                             && bouncer()->hasPermission('inventory.stock-opname.count')
                                         )
-                                            <form
-                                                method="POST"
-                                                action="{{ route(
-                                                    'admin.inventory.stock-opname.quantity',
-                                                    [$session->id, $entry->id]
-                                                ) }}"
-                                            >
-                                                @csrf
-                                                @method('PUT')
+                                            <td class="px-4 py-3">
+                                                <form
+                                                    id="quantity-count-form-{{ $entry->id }}"
+                                                    method="POST"
+                                                    action="{{ route(
+                                                        'admin.inventory.stock-opname.quantity',
+                                                        [$session->id, $entry->id]
+                                                    ) }}"
+                                                >
+                                                    @csrf
+                                                    @method('PUT')
 
-                                                <td class="px-4 py-3">
                                                     <input
                                                         type="number"
                                                         name="actual_quantity"
@@ -436,24 +467,28 @@
                                                         value="{{ $entry->actual_quantity !== null ? $formatQty($entry->actual_quantity) : '' }}"
                                                         class="w-32 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
                                                     >
-                                                </td>
+                                                </form>
+                                            </td>
 
-                                                <td class="px-4 py-3 font-semibold {{ (float) $entry->variance !== 0.0 ? 'text-red-700' : 'text-gray-800' }}">
-                                                    {{ $entry->variance !== null ? $formatQty($entry->variance) : '-' }}
-                                                </td>
+                                            <td class="px-4 py-3 font-semibold {{ (float) $entry->variance !== 0.0 ? 'text-red-700' : 'text-gray-800' }}">
+                                                {{ $entry->variance !== null ? $formatQty($entry->variance) : '-' }}
+                                            </td>
 
-                                                <td class="px-4 py-3">
-                                                    <span class="rounded-full px-3 py-1 text-xs font-bold {{ $resultClass($entry->result) }}">
-                                                        {{ strtoupper(str_replace('_', ' ', $entry->result)) }}
-                                                    </span>
-                                                </td>
+                                            <td class="px-4 py-3">
+                                                <span class="rounded-full px-3 py-1 text-xs font-bold {{ $resultClass($entry->result) }}">
+                                                    {{ strtoupper(str_replace('_', ' ', $entry->result)) }}
+                                                </span>
+                                            </td>
 
-                                                <td class="px-4 py-3 text-right">
-                                                    <button type="submit" class="secondary-button">
-                                                        Save Count
-                                                    </button>
-                                                </td>
-                                            </form>
+                                            <td class="px-4 py-3 text-right">
+                                                <button
+                                                    type="submit"
+                                                    form="quantity-count-form-{{ $entry->id }}"
+                                                    class="secondary-button"
+                                                >
+                                                    Save Count
+                                                </button>
+                                            </td>
                                         @else
                                             <td class="px-4 py-3 font-semibold">
                                                 {{ $formatQty($entry->actual_quantity) }} {{ $entry->item?->unit }}

@@ -5,6 +5,7 @@ use Webkul\Admin\Http\Controllers\Inventory\InventoryAssetController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryDashboardController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryItemController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryMaintenanceController;
+use Webkul\Admin\Http\Controllers\Inventory\InventoryAlertController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryMovementController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryStockOpnameController;
 
@@ -12,6 +13,16 @@ Route::prefix('inventory')
     ->group(function () {
         Route::get('/', [InventoryDashboardController::class, 'index'])
             ->name('admin.inventory.dashboard');
+
+        Route::controller(InventoryAlertController::class)
+            ->prefix('alerts')
+            ->group(function () {
+                Route::get('/', 'index')
+                    ->name('admin.inventory.alerts.index');
+
+                Route::get('export-csv', 'exportCsv')
+                    ->name('admin.inventory.alerts.export-csv');
+            });
 
         Route::controller(InventoryItemController::class)
             ->prefix('items')
@@ -102,6 +113,9 @@ Route::prefix('inventory')
 
                 Route::get('{id}', 'show')
                     ->name('admin.inventory.stock-opname.show');
+
+                Route::get('{id}/export-csv', 'exportCsv')
+                    ->name('admin.inventory.stock-opname.export-csv');
 
                 Route::put('{id}/start', 'start')
                     ->name('admin.inventory.stock-opname.start');

@@ -17,7 +17,7 @@
             </p>
 
             <p class="mt-1 text-sm text-gray-500">
-                Buat session terlebih dahulu. Snapshot inventory baru diambil saat Start Counting.
+                Buat session terlebih dahulu. Snapshot inventory baru diambil saat Start Counting. Jika hanya ada satu gudang fisik, warehouse dipilih otomatis.
             </p>
         </div>
 
@@ -34,22 +34,51 @@
                         Warehouse
                     </label>
 
-                    <select
-                        name="warehouse_id"
-                        required
-                        class="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white"
-                    >
-                        <option value="">Select Warehouse</option>
+                    @if ($singleWarehouse)
+                        <input
+                            type="hidden"
+                            name="warehouse_id"
+                            value="{{ $singleWarehouse->id }}"
+                        >
 
-                        @foreach ($warehouses as $warehouse)
-                            <option
-                                value="{{ $warehouse->id }}"
-                                @selected((string) old('warehouse_id') === (string) $warehouse->id)
-                            >
-                                {{ $warehouse->name }}
-                            </option>
-                        @endforeach
-                    </select>
+                        <div class="rounded-md border border-gray-300 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-950">
+                            <p class="font-bold text-gray-800 dark:text-white">
+                                {{ $singleWarehouse->name }}
+                            </p>
+
+                            <p class="mt-1 text-xs text-gray-500">
+                                Single warehouse mode
+                                &middot;
+                                {{ $singleWarehouse->asset_count }} asset
+                                &middot;
+                                {{ $singleWarehouse->item_count }} inventory item
+                            </p>
+                        </div>
+                    @else
+                        <select
+                            name="warehouse_id"
+                            required
+                            class="w-full rounded-md border border-gray-300 bg-white px-3 py-2.5 text-sm dark:border-gray-700 dark:bg-gray-950 dark:text-white"
+                        >
+                            <option value="">Select Warehouse</option>
+
+                            @foreach ($warehouses as $warehouse)
+                                <option
+                                    value="{{ $warehouse->id }}"
+                                    @selected((string) old('warehouse_id') === (string) $warehouse->id)
+                                >
+                                    {{ $warehouse->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    @endif
+
+                    @if ($ignoredDuplicateWarehouses > 0)
+                        <div class="mt-2 rounded-md border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
+                            {{ $ignoredDuplicateWarehouses }} duplicate warehouse database record diabaikan.
+                            Stock Opname otomatis memakai warehouse yang memiliki Inventory Assets / Items.
+                        </div>
+                    @endif
 
                     @error('warehouse_id')
                         <p class="mt-1 text-xs font-semibold text-red-600">{{ $message }}</p>

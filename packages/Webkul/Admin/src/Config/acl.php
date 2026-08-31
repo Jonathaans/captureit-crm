@@ -376,6 +376,7 @@ return [
         'route' => [
             'admin.inventory.stock-opname.index',
             'admin.inventory.stock-opname.show',
+            'admin.inventory.stock-opname.export-csv',
         ],
         'sort'  => 6,
     ], [
@@ -402,6 +403,14 @@ return [
         'name'  => 'Finalize Stock Opname',
         'route' => 'admin.inventory.stock-opname.finalize',
         'sort'  => 3,
+    ], [
+        'key'   => 'inventory.alerts',
+        'name'  => 'Inventory Alerts & Reorder',
+        'route' => [
+            'admin.inventory.alerts.index',
+            'admin.inventory.alerts.export-csv',
+        ],
+        'sort'  => 7,
     ],
     [
         'key' => 'mail',

@@ -1,0 +1,20 @@
+OPTIONAL MENU PATCH — INVENTORY ALERTS & REORDER
+=============================================
+
+Package sengaja TIDAK menimpa Config/menu.php karena file menu Anda sudah
+banyak customization.
+
+Halaman tetap bisa dibuka dari:
+Inventory -> Dashboard -> Alerts & Reorder
+
+Jika ingin child menu permanen, tambahkan ke children Inventory:
+
+[
+    'key'        => 'inventory.alerts',
+    'name'       => 'Alerts & Reorder',
+    'route'      => 'admin.inventory.alerts.index',
+    'sort'       => 7,
+    'icon-class' => '',
+],
+
+Jangan replace seluruh menu.php hanya untuk satu entry ini.

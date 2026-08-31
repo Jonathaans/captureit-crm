@@ -66,6 +66,15 @@
                         Stock Opname
                     </a>
                 @endif
+
+                @if (bouncer()->hasPermission('inventory.alerts'))
+                    <a
+                        href="{{ route('admin.inventory.alerts.index') }}"
+                        class="secondary-button"
+                    >
+                        Alerts & Reorder
+                    </a>
+                @endif
             </div>
         </div>
 

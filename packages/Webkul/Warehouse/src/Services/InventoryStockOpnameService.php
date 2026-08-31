@@ -32,6 +32,15 @@ class InventoryStockOpnameService
         ?string $notes,
         ?int $performedBy
     ): InventoryStockOpnameSession {
+        /*
+         * Defensive canonicalization for stale forms / direct requests.
+         * A duplicate row with the same normalized warehouse name is
+         * redirected to the row that actually owns inventory.
+         */
+        $warehouseId = $this->canonicalWarehouseId(
+            $warehouseId
+        );
+
         $existing = InventoryStockOpnameSession::query()
             ->where('warehouse_id', $warehouseId)
             ->whereIn(
@@ -820,6 +829,84 @@ class InventoryStockOpnameService
                 ->where('result', 'variance')
                 ->count(),
         ];
+    }
+
+    private function canonicalWarehouseId(
+        int $warehouseId
+    ): int {
+        $warehouse = DB::table('warehouses')
+            ->where('id', $warehouseId)
+            ->first([
+                'id',
+                'name',
+            ]);
+
+        if (! $warehouse) {
+            return $warehouseId;
+        }
+
+        $normalizedName = mb_strtolower(
+            trim((string) $warehouse->name)
+        );
+
+        $candidates = DB::table('warehouses')
+            ->orderBy('id')
+            ->get([
+                'id',
+                'name',
+            ])
+            ->filter(
+                fn ($candidate) => mb_strtolower(
+                    trim((string) $candidate->name)
+                ) === $normalizedName
+            )
+            ->map(function ($candidate) {
+                $candidate->asset_count = DB::table(
+                    'inventory_assets'
+                )
+                    ->where(
+                        'warehouse_id',
+                        $candidate->id
+                    )
+                    ->count();
+
+                $candidate->item_count = DB::table(
+                    'inventory_items'
+                )
+                    ->where(
+                        'warehouse_id',
+                        $candidate->id
+                    )
+                    ->count();
+
+                return $candidate;
+            })
+            ->sort(function ($left, $right) {
+                if (
+                    (int) $left->asset_count
+                    !== (int) $right->asset_count
+                ) {
+                    return (int) $right->asset_count
+                        <=> (int) $left->asset_count;
+                }
+
+                if (
+                    (int) $left->item_count
+                    !== (int) $right->item_count
+                ) {
+                    return (int) $right->item_count
+                        <=> (int) $left->item_count;
+                }
+
+                return (int) $left->id
+                    <=> (int) $right->id;
+            })
+            ->values();
+
+        return (int) (
+            $candidates->first()?->id
+            ?: $warehouseId
+        );
     }
 
     private function assertInProgress(
