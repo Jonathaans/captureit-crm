@@ -35,7 +35,7 @@ class InventoryAssetController extends Controller
     }
 
     /**
-     * Printable Code 39 barcode labels.
+     * Printable QR asset labels.
      *
      * Optional query:
      * ?ids=1,4,5
@@ -80,7 +80,7 @@ class InventoryAssetController extends Controller
     }
 
     /**
-     * Raw SVG used by barcode label pages.
+     * Raw SVG used by QR label pages.
      */
     public function qrSvg(
         int $id,
@@ -98,6 +98,334 @@ class InventoryAssetController extends Controller
             [
                 'Content-Type'  => 'image/svg+xml; charset=UTF-8',
                 'Cache-Control' => 'private, no-store, max-age=0',
+            ]
+        );
+    }
+
+    /**
+     * Bulk registration for serialized physical assets.
+     *
+     * Example:
+     * Prefix       EXT-BOX
+     * Start Number 1
+     * Padding      3
+     * Quantity     10
+     *
+     * Result:
+     * EXT-BOX-001 ... EXT-BOX-010
+     *
+     * Asset Code = Barcode Value so the database identity,
+     * printed QR payload, and scanner value stay consistent.
+     */
+    public function bulkCreate(): View
+    {
+        $items = InventoryItem::query()
+            ->where('tracking_type', 'serialized')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        $selectedItemId = request()->integer('inventory_item_id')
+            ?: null;
+
+        return view(
+            'admin::inventory.assets.bulk-create',
+            compact(
+                'items',
+                'selectedItemId'
+            )
+        );
+    }
+
+    /**
+     * Create multiple serialized assets in a single transaction.
+     */
+    public function bulkStore(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'inventory_item_id' => [
+                'required',
+                'integer',
+                Rule::exists('inventory_items', 'id')
+                    ->where(
+                        fn ($query) => $query
+                            ->where('tracking_type', 'serialized')
+                            ->where('is_active', true)
+                    ),
+            ],
+
+            'prefix' => [
+                'required',
+                'string',
+                'max:24',
+                'regex:/^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/',
+            ],
+
+            'start_number' => [
+                'required',
+                'integer',
+                'min:0',
+                'max:999999999',
+            ],
+
+            'padding' => [
+                'required',
+                'integer',
+                Rule::in([
+                    2,
+                    3,
+                    4,
+                    5,
+                    6,
+                ]),
+            ],
+
+            'quantity' => [
+                'required',
+                'integer',
+                'min:1',
+                'max:200',
+            ],
+
+            'condition' => [
+                'required',
+                Rule::in([
+                    'good',
+                    'fair',
+                    'damaged',
+                ]),
+            ],
+
+            'purchase_date' => [
+                'nullable',
+                'date',
+            ],
+
+            'purchase_price' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
+
+            'notes' => [
+                'nullable',
+                'string',
+                'max:2000',
+            ],
+
+            'print_qr_after_create' => [
+                'nullable',
+                'boolean',
+            ],
+        ], [
+            'prefix.regex' => 'Prefix hanya boleh berisi huruf, angka, titik, underscore, atau dash. Contoh: EXT-BOX.',
+            'quantity.max' => 'Maksimal 200 asset per batch agar transaksi dan print QR tetap aman.',
+        ]);
+
+        $item = InventoryItem::query()
+            ->where('tracking_type', 'serialized')
+            ->where('is_active', true)
+            ->findOrFail(
+                $validated['inventory_item_id']
+            );
+
+        $prefix = strtoupper(
+            trim(
+                $validated['prefix']
+            )
+        );
+
+        $startNumber = (int) $validated['start_number'];
+        $padding = (int) $validated['padding'];
+        $quantity = (int) $validated['quantity'];
+
+        $assetCodes = [];
+
+        for ($offset = 0; $offset < $quantity; $offset++) {
+            $number = $startNumber + $offset;
+
+            $numberText = str_pad(
+                (string) $number,
+                $padding,
+                '0',
+                STR_PAD_LEFT
+            );
+
+            $assetCode = $prefix.'-'.$numberText;
+
+            /*
+             * Internal QR generator currently supports up to
+             * 32 ASCII characters.
+             */
+            if (strlen($assetCode) > 32) {
+                return back()
+                    ->withInput()
+                    ->withErrors([
+                        'prefix' => sprintf(
+                            'Asset Code %s terlalu panjang untuk QR internal. Maksimal 32 karakter.',
+                            $assetCode
+                        ),
+                    ]);
+            }
+
+            $assetCodes[] = $assetCode;
+        }
+
+        $duplicateInBatch = collect($assetCodes)
+            ->duplicates()
+            ->unique()
+            ->values();
+
+        if ($duplicateInBatch->isNotEmpty()) {
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'prefix' => 'Generator menghasilkan kode duplicate: '
+                        .$duplicateInBatch->implode(', '),
+                ]);
+        }
+
+        $existingCodes = InventoryAsset::query()
+            ->whereIn(
+                'asset_code',
+                $assetCodes
+            )
+            ->orWhereIn(
+                'barcode_value',
+                $assetCodes
+            )
+            ->get([
+                'asset_code',
+                'barcode_value',
+            ])
+            ->flatMap(
+                fn ($asset) => [
+                    $asset->asset_code,
+                    $asset->barcode_value,
+                ]
+            )
+            ->filter()
+            ->intersect($assetCodes)
+            ->unique()
+            ->values();
+
+        if ($existingCodes->isNotEmpty()) {
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'prefix' => 'Kode berikut sudah digunakan: '
+                        .$existingCodes->take(15)->implode(', ')
+                        .(
+                            $existingCodes->count() > 15
+                                ? ' ...'
+                                : ''
+                        ),
+                ]);
+        }
+
+        $condition = $validated['condition'];
+        $status = $condition === 'damaged'
+            ? 'damaged'
+            : 'available';
+
+        $performedBy = auth()
+            ->guard('user')
+            ->id();
+
+        $createdAssets = DB::transaction(
+            function () use (
+                $assetCodes,
+                $item,
+                $condition,
+                $status,
+                $performedBy,
+                $validated
+            ) {
+                $assets = collect();
+
+                foreach ($assetCodes as $assetCode) {
+                    $asset = InventoryAsset::create([
+                        'inventory_item_id' => $item->id,
+                        'asset_code' => $assetCode,
+
+                        /*
+                         * New standard:
+                         * Asset Code == Barcode Value == QR Payload.
+                         */
+                        'barcode_value' => $assetCode,
+
+                        'serial_number' => null,
+                        'warehouse_id' => $item->warehouse_id,
+                        'warehouse_location_id' => $item->warehouse_location_id,
+                        'status' => $status,
+                        'condition' => $condition,
+                        'purchase_date' => $validated['purchase_date']
+                            ?? null,
+                        'purchase_price' => $validated['purchase_price']
+                            ?? null,
+                        'notes' => ! empty($validated['notes'])
+                            ? trim($validated['notes'])
+                            : null,
+                    ]);
+
+                    InventoryStockMovement::create([
+                        'inventory_item_id' => $item->id,
+                        'inventory_asset_id' => $asset->id,
+                        'warehouse_id' => $asset->warehouse_id,
+                        'warehouse_location_id' => $asset->warehouse_location_id,
+                        'movement_type' => 'opening',
+                        'quantity' => 1,
+                        'from_status' => null,
+                        'to_status' => $status,
+                        'reference_type' => 'bulk_asset_registration',
+                        'reference_id' => $asset->id,
+                        'reference_number' => $asset->asset_code,
+                        'performed_by' => $performedBy,
+                        'notes' => sprintf(
+                            'Bulk asset registration for %s.',
+                            $item->code
+                        ),
+                        'occurred_at' => now(),
+                    ]);
+
+                    $assets->push($asset);
+                }
+
+                return $assets;
+            }
+        );
+
+        session()->flash(
+            'success',
+            sprintf(
+                '%d asset %s berhasil dibuat: %s sampai %s.',
+                $createdAssets->count(),
+                $item->name,
+                $createdAssets->first()?->asset_code,
+                $createdAssets->last()?->asset_code
+            )
+        );
+
+        if (
+            (bool) (
+                $validated['print_qr_after_create']
+                ?? false
+            )
+        ) {
+            return redirect()->route(
+                'admin.inventory.assets.qr-labels.index',
+                [
+                    'ids' => $createdAssets
+                        ->pluck('id')
+                        ->implode(','),
+                ]
+            );
+        }
+
+        return redirect()->route(
+            'admin.inventory.assets.index',
+            [
+                'inventory_item_id' => $item->id,
             ]
         );
     }

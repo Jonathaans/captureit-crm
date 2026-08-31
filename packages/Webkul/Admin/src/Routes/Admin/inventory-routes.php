@@ -45,6 +45,12 @@ Route::prefix('inventory')
                 Route::get('{id}/qr.svg', 'qrSvg')
                     ->name('admin.inventory.assets.qr-labels.svg');
 
+                Route::get('bulk-create', 'bulkCreate')
+                    ->name('admin.inventory.assets.bulk-create');
+
+                Route::post('bulk-create', 'bulkStore')
+                    ->name('admin.inventory.assets.bulk-store');
+
                 Route::get('create', 'create')
                     ->name('admin.inventory.assets.create');
 

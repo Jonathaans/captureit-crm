@@ -311,6 +311,8 @@ return [
         'route' => [
             'admin.inventory.assets.create',
             'admin.inventory.assets.store',
+            'admin.inventory.assets.bulk-create',
+            'admin.inventory.assets.bulk-store',
         ],
         'sort'  => 1,
     ], [
