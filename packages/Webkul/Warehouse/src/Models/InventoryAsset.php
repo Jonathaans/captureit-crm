@@ -49,6 +49,14 @@ class InventoryAsset extends Model
         return $this->hasMany(InventoryStockMovement::class, 'inventory_asset_id');
     }
 
+    public function maintenances(): HasMany
+    {
+        return $this->hasMany(
+            InventoryAssetMaintenance::class,
+            'inventory_asset_id'
+        );
+    }
+
     public function scopeAvailable($query)
     {
         return $query->where('status', 'available');

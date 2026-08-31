@@ -557,9 +557,23 @@ class InventoryAssetController extends Controller
             'item',
             'warehouse',
             'location',
+            'maintenances' => fn ($query) => $query
+                ->orderByDesc('id'),
+            'maintenances.startedBy',
+            'maintenances.completedBy',
+            'maintenances.retiredBy',
         ])->findOrFail($id);
 
-        return view('admin::inventory.assets.edit', compact('asset'));
+        $activeMaintenance = $asset->maintenances
+            ->firstWhere('status', 'in_progress');
+
+        return view(
+            'admin::inventory.assets.edit',
+            compact(
+                'asset',
+                'activeMaintenance'
+            )
+        );
     }
 
     public function update(Request $request, int $id): RedirectResponse

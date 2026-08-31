@@ -344,6 +344,32 @@ return [
             'admin.inventory.movements.adjust-stock.store',
         ],
         'sort'  => 1,
+    ], [
+        'key'   => 'inventory.maintenance',
+        'name'  => 'Maintenance & Repair',
+        'route' => [
+            'admin.inventory.maintenance.index',
+            'admin.inventory.maintenance.show',
+        ],
+        'sort'  => 5,
+    ], [
+        'key'   => 'inventory.maintenance.start',
+        'name'  => 'Start Maintenance',
+        'route' => [
+            'admin.inventory.maintenance.create',
+            'admin.inventory.maintenance.store',
+        ],
+        'sort'  => 1,
+    ], [
+        'key'   => 'inventory.maintenance.complete',
+        'name'  => 'Complete Repair',
+        'route' => 'admin.inventory.maintenance.complete',
+        'sort'  => 2,
+    ], [
+        'key'   => 'inventory.maintenance.retire',
+        'name'  => 'Retire Asset',
+        'route' => 'admin.inventory.maintenance.retire',
+        'sort'  => 3,
     ],
     [
         'key' => 'mail',

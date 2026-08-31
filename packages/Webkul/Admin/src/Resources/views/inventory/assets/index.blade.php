@@ -19,6 +19,15 @@
         </div>
 
         <div class="flex flex-wrap gap-2">
+            @if (bouncer()->hasPermission('inventory.maintenance'))
+                <a
+                    href="{{ route('admin.inventory.maintenance.index') }}"
+                    class="secondary-button"
+                >
+                    Maintenance
+                </a>
+            @endif
+
             @if ($selectedItem)
                 <a
                     href="{{ route('admin.inventory.items.edit', $selectedItem->id) }}"

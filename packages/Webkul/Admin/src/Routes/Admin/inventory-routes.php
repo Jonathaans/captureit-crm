@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryAssetController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryDashboardController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryItemController;
+use Webkul\Admin\Http\Controllers\Inventory\InventoryMaintenanceController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryMovementController;
 
 Route::prefix('inventory')
@@ -62,6 +63,28 @@ Route::prefix('inventory')
 
                 Route::put('{id}', 'update')
                     ->name('admin.inventory.assets.update');
+            });
+
+        Route::controller(InventoryMaintenanceController::class)
+            ->prefix('maintenance')
+            ->group(function () {
+                Route::get('/', 'index')
+                    ->name('admin.inventory.maintenance.index');
+
+                Route::get('create', 'create')
+                    ->name('admin.inventory.maintenance.create');
+
+                Route::post('/', 'store')
+                    ->name('admin.inventory.maintenance.store');
+
+                Route::get('{id}', 'show')
+                    ->name('admin.inventory.maintenance.show');
+
+                Route::put('{id}/complete', 'complete')
+                    ->name('admin.inventory.maintenance.complete');
+
+                Route::put('{id}/retire', 'retire')
+                    ->name('admin.inventory.maintenance.retire');
             });
 
         Route::controller(InventoryMovementController::class)
