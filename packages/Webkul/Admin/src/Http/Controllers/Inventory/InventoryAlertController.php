@@ -286,7 +286,7 @@ class InventoryAlertController extends Controller
                 'updated_at' => $this->carbon(
                     $item->updated_at
                 ),
-                'entity_type' => 'item',
+                'entity_type' => 'consumable',
                 'entity_id' => (int) $item->id,
             ]);
 

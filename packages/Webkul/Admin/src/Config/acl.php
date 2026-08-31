@@ -280,6 +280,27 @@ return [
         'route' => 'admin.inventory.dashboard',
         'sort'  => 1,
     ], [
+        'key'   => 'inventory.consumables',
+        'name'  => 'Consumables',
+        'route' => 'admin.inventory.consumables.index',
+        'sort'  => 2,
+    ], [
+        'key'   => 'inventory.consumables.create',
+        'name'  => 'Create Consumable',
+        'route' => [
+            'admin.inventory.consumables.create',
+            'admin.inventory.consumables.store',
+        ],
+        'sort'  => 1,
+    ], [
+        'key'   => 'inventory.consumables.edit',
+        'name'  => 'Edit Consumable',
+        'route' => [
+            'admin.inventory.consumables.edit',
+            'admin.inventory.consumables.update',
+        ],
+        'sort'  => 2,
+    ], [
         'key'   => 'inventory.items',
         'name'  => 'Inventory Items',
         'route' => 'admin.inventory.items.index',
@@ -411,6 +432,15 @@ return [
             'admin.inventory.alerts.export-csv',
         ],
         'sort'  => 7,
+    ],
+    [
+        'key'   => 'inventory.qa',
+        'name'  => 'Warehouse QA',
+        'route' => [
+            'admin.inventory.qa.index',
+            'admin.inventory.qa.export-csv',
+        ],
+        'sort'  => 8,
     ],
     [
         'key' => 'mail',

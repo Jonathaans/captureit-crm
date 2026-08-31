@@ -6,6 +6,8 @@ use Webkul\Admin\Http\Controllers\Inventory\InventoryDashboardController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryItemController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryMaintenanceController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryAlertController;
+use Webkul\Admin\Http\Controllers\Inventory\InventoryConsumableController;
+use Webkul\Admin\Http\Controllers\Inventory\InventoryQaController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryMovementController;
 use Webkul\Admin\Http\Controllers\Inventory\InventoryStockOpnameController;
 
@@ -22,6 +24,35 @@ Route::prefix('inventory')
 
                 Route::get('export-csv', 'exportCsv')
                     ->name('admin.inventory.alerts.export-csv');
+            });
+
+        Route::controller(InventoryQaController::class)
+            ->prefix('qa')
+            ->group(function () {
+                Route::get('/', 'index')
+                    ->name('admin.inventory.qa.index');
+
+                Route::get('export-csv', 'exportCsv')
+                    ->name('admin.inventory.qa.export-csv');
+            });
+
+        Route::controller(InventoryConsumableController::class)
+            ->prefix('consumables')
+            ->group(function () {
+                Route::get('/', 'index')
+                    ->name('admin.inventory.consumables.index');
+
+                Route::get('create', 'create')
+                    ->name('admin.inventory.consumables.create');
+
+                Route::post('/', 'store')
+                    ->name('admin.inventory.consumables.store');
+
+                Route::get('{id}/edit', 'edit')
+                    ->name('admin.inventory.consumables.edit');
+
+                Route::put('{id}', 'update')
+                    ->name('admin.inventory.consumables.update');
             });
 
         Route::controller(InventoryItemController::class)

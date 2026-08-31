@@ -11,49 +11,27 @@ class InventoryItemDataGrid extends DataGrid
     public function prepareQueryBuilder(): Builder
     {
         $queryBuilder = DB::table('inventory_items')
-            ->leftJoin(
-                'warehouses',
-                'inventory_items.warehouse_id',
-                '=',
-                'warehouses.id'
-            )
-            ->leftJoin(
-                'inventory_assets',
-                'inventory_items.id',
-                '=',
-                'inventory_assets.inventory_item_id'
-            )
+            ->leftJoin('warehouses', 'inventory_items.warehouse_id', '=', 'warehouses.id')
+            ->leftJoin('inventory_assets', 'inventory_items.id', '=', 'inventory_assets.inventory_item_id')
+            ->where('inventory_items.tracking_type', 'serialized')
             ->select(
                 'inventory_items.id',
                 'inventory_items.code',
                 'inventory_items.name',
                 'inventory_items.category',
-                'inventory_items.tracking_type',
                 'inventory_items.unit',
-                'inventory_items.quantity_on_hand',
-                'inventory_items.minimum_stock',
                 'inventory_items.is_active',
                 'inventory_items.created_at',
                 'warehouses.name as warehouse_name',
                 DB::raw('COUNT(inventory_assets.id) as asset_count'),
-                DB::raw(
-                    "SUM(
-                        CASE
-                            WHEN inventory_assets.status = 'available' THEN 1
-                            ELSE 0
-                        END
-                    ) as available_asset_count"
-                )
+                DB::raw("SUM(CASE WHEN inventory_assets.status = 'available' THEN 1 ELSE 0 END) as available_asset_count")
             )
             ->groupBy(
                 'inventory_items.id',
                 'inventory_items.code',
                 'inventory_items.name',
                 'inventory_items.category',
-                'inventory_items.tracking_type',
                 'inventory_items.unit',
-                'inventory_items.quantity_on_hand',
-                'inventory_items.minimum_stock',
                 'inventory_items.is_active',
                 'inventory_items.created_at',
                 'warehouses.name'
@@ -62,7 +40,6 @@ class InventoryItemDataGrid extends DataGrid
         $this->addFilter('code', 'inventory_items.code');
         $this->addFilter('name', 'inventory_items.name');
         $this->addFilter('category', 'inventory_items.category');
-        $this->addFilter('tracking_type', 'inventory_items.tracking_type');
         $this->addFilter('is_active', 'inventory_items.is_active');
 
         return $queryBuilder;
@@ -107,55 +84,21 @@ class InventoryItemDataGrid extends DataGrid
             'closure'    => fn ($row) => $row->category ?: '-',
         ]);
 
-        $this->addColumn([
-            'index'              => 'tracking_type',
-            'label'              => 'Tracking',
-            'type'               => 'string',
-            'searchable'         => false,
-            'sortable'           => true,
-            'filterable'         => true,
-            'filterable_type'    => 'dropdown',
-            'filterable_options' => [
-                ['label' => 'Serialized', 'value' => 'serialized'],
-                ['label' => 'Quantity', 'value' => 'quantity'],
-            ],
-            'closure' => fn ($row) => strtolower(trim((string) $row->tracking_type)) === 'serialized'
-                ? 'Serialized'
-                : 'Quantity',
-        ]);
+
 
         $this->addColumn([
-            'index'      => 'stock',
-            'label'      => 'Stock / Assets',
+            'index'      => 'registered_assets',
+            'label'      => 'Registered Assets',
             'type'       => 'string',
             'searchable' => false,
             'sortable'   => false,
             'filterable' => false,
             'closure'    => function ($row) {
-                $trackingType = strtolower(trim((string) $row->tracking_type));
-
-                if ($trackingType === 'serialized') {
-                    return sprintf(
-                        '%d total / %d available',
-                        (int) ($row->asset_count ?? 0),
-                        (int) ($row->available_asset_count ?? 0)
-                    );
-                }
-
-                $quantity = rtrim(
-                    rtrim(
-                        number_format(
-                            (float) ($row->quantity_on_hand ?? 0),
-                            2,
-                            '.',
-                            ''
-                        ),
-                        '0'
-                    ),
-                    '.'
+                return sprintf(
+                    '<span style="font-weight:800;">%d total</span> <span style="color:#6b7280;">/ %d available</span>',
+                    (int) $row->asset_count,
+                    (int) $row->available_asset_count
                 );
-
-                return $quantity.' '.e((string) ($row->unit ?: 'unit'));
             },
         ]);
 
@@ -202,10 +145,7 @@ class InventoryItemDataGrid extends DataGrid
             'icon'   => 'icon-edit',
             'title'  => 'Edit Inventory Item',
             'method' => 'GET',
-            'url'    => fn ($row) => route(
-                'admin.inventory.items.edit',
-                $row->id
-            ),
+            'url'    => fn ($row) => route('admin.inventory.items.edit', $row->id),
         ]);
     }
 }

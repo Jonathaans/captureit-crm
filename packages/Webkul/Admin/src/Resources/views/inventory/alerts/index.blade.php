@@ -484,6 +484,13 @@
                                                         >
                                                             Open Asset
                                                         </a>
+                                                    @elseif ($alert['entity_type'] === 'consumable')
+                                                        <a
+                                                            href="{{ route('admin.inventory.consumables.edit', $alert['entity_id']) }}"
+                                                            class="text-xs font-bold text-brandColor hover:underline"
+                                                        >
+                                                            Open Consumable
+                                                        </a>
                                                     @elseif ($alert['entity_type'] === 'item')
                                                         <a
                                                             href="{{ route('admin.inventory.items.edit', $alert['entity_id']) }}"
@@ -668,7 +675,7 @@
 
                                     <td class="px-5 py-4 text-right">
                                         <a
-                                            href="{{ route('admin.inventory.items.edit', $suggestion['id']) }}"
+                                            href="{{ route('admin.inventory.consumables.edit', $suggestion['id']) }}"
                                             class="text-xs font-bold text-brandColor hover:underline"
                                         >
                                             Open Item

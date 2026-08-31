@@ -136,12 +136,21 @@
                     </a>
                 @endif
 
-                @if (bouncer()->hasPermission('inventory.items.create'))
+                @if (bouncer()->hasPermission('inventory.qa'))
                     <a
-                        href="{{ route('admin.inventory.items.create') }}"
+                        href="{{ route('admin.inventory.qa.index') }}"
+                        class="secondary-button"
+                    >
+                        Warehouse QA
+                    </a>
+                @endif
+
+                @if (bouncer()->hasPermission('inventory.consumables.create'))
+                    <a
+                        href="{{ route('admin.inventory.consumables.create') }}"
                         class="primary-button"
                     >
-                        + Inventory Item
+                        + Consumable
                     </a>
                 @endif
 

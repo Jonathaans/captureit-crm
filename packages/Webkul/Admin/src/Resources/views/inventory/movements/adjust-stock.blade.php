@@ -17,7 +17,7 @@
                 </p>
 
                 <p class="mt-1 text-sm text-gray-500">
-                    Catat Stock In, Stock Out, atau koreksi stock untuk Inventory Item bertipe Quantity.
+                    Catat Stock In, Stock Out, atau koreksi stock untuk Consumable.
                 </p>
             </div>
 
@@ -49,8 +49,8 @@
 
         @if ($items->isEmpty())
             <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                Belum ada Inventory Item aktif dengan Tracking Type Quantity.
-                Buat item seperti Paper Roll atau consumable terlebih dahulu.
+                Belum ada Consumable aktif.
+                Buat Consumable seperti Paper Roll, Ribbon, atau Frame terlebih dahulu.
             </div>
         @else
             <div class="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
@@ -61,7 +61,7 @@
                 <div class="grid grid-cols-2 gap-4 max-md:grid-cols-1">
                     <div>
                         <label class="mb-1.5 block text-sm font-medium">
-                            Inventory Item *
+                            Consumable *
                         </label>
 
                         <select
@@ -70,7 +70,7 @@
                             class="w-full rounded-md border px-3 py-2 dark:border-gray-800 dark:bg-gray-900"
                             required
                         >
-                            <option value="">Select Quantity Item</option>
+                            <option value="">Select Consumable</option>
 
                             @foreach ($items as $item)
                                 <option
