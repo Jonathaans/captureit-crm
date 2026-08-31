@@ -59,33 +59,7 @@ class InvoiceDataGrid extends DataGrid
         /**
          * Native DataGrid filter mapping.
          */
-        
-        /*
-         * Product reporting/filter dimension.
-         * invoice_items.name is the historical commercial snapshot.
-         */
-        $queryBuilder
-            ->leftJoin(
-                'invoice_items as invoice_product_items',
-                'invoices.id',
-                '=',
-                'invoice_product_items.invoice_id'
-            )
-            ->addSelect(
-                DB::raw(
-                    "(SELECT GROUP_CONCAT(DISTINCT ii_product.name ORDER BY ii_product.name SEPARATOR ', ')"
-                    ." FROM invoice_items ii_product"
-                    ." WHERE ii_product.invoice_id = invoices.id"
-                    .") as products"
-                )
-            )
-            ->distinct();
-
         $this->addFilter(
-            'products',
-            'invoice_product_items.name'
-        );
-$this->addFilter(
             'invoice_number',
             'invoices.invoice_number'
         );
@@ -303,66 +277,7 @@ $this->addColumn([
          * Keep this as a string because the displayed value is
          * formatted as Indonesian Rupiah by the closure.
          */
-        
         $this->addColumn([
-            'index'      => 'products',
-            'label'      => 'Product',
-            'type'       => 'string',
-            'searchable' => false,
-            'sortable'   => false,
-            'filterable' => true,
-            'filterable_type' => 'dropdown',
-            'filterable_options' => DB::table('invoice_items')
-                ->whereNotNull('name')
-                ->where('name', '<>', '')
-                ->select('name')
-                ->distinct()
-                ->orderBy('name')
-                ->pluck('name')
-                ->map(
-                    fn ($name) => [
-                        'label' => (string) $name,
-                        'value' => (string) $name,
-                    ]
-                )
-                ->values()
-                ->all(),
-            'closure' => function ($row) {
-                $products = trim(
-                    (string) (
-                        $row->products
-                        ?? ''
-                    )
-                );
-
-                if ($products === '') {
-                    return '-';
-                }
-
-                $badges = collect(
-                    array_filter(
-                        array_map(
-                            'trim',
-                            explode(
-                                ',',
-                                $products
-                            )
-                        )
-                    )
-                )
-                    ->unique()
-                    ->map(
-                        fn ($product) => sprintf(
-                            '<span style="display:inline-flex;margin:2px;padding:4px 8px;border-radius:9999px;background:#eff6ff;color:#1d4ed8;font-weight:600;font-size:10px;">%s</span>',
-                            e($product)
-                        )
-                    )
-                    ->implode('');
-
-                return $badges;
-            },
-        ]);
-$this->addColumn([
             'index' => 'grand_total',
             'label' => 'Grand Total',
             'type' => 'string',
