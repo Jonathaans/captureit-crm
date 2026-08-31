@@ -92,7 +92,7 @@ return [
         'name'       => 'Purchase Orders',
         'route'      => 'admin.purchase-orders.index',
         'sort'       => 8,
-        'icon-class' => 'icon-quote',
+        'icon-class' => 'icon-cart',
     ],[
     'key'        => 'inventory',
     'name'       => 'Inventory',

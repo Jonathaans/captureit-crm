@@ -2097,35 +2097,6 @@ public function generateDeliveryOrder(
         int $invoiceId,
         int $expenseId
     ): RedirectResponse {
-
-        /*
-         * PO-GENERATED EXPENSE GUARD
-         *
-         * Expense dari RELEASED/COMPLETED PO dikunci agar PO dan
-         * Financial Report tidak berbeda nominal.
-         */
-        $linkedPurchaseOrder =
-            \Webkul\Invoice\Models\PurchaseOrder::query()
-                ->where('expense_id', $expenseId)
-                ->whereIn(
-                    'status',
-                    [
-                        'released',
-                        'completed',
-                    ]
-                )
-                ->first();
-
-        if ($linkedPurchaseOrder) {
-            session()->flash(
-                'warning',
-                'Expense ini berasal dari '
-                    .$linkedPurchaseOrder->po_number
-                    .' dan dikunci. Kelola koreksi dari Purchase Order.'
-            );
-
-            return back();
-        }
         $invoice = Invoice::findOrFail(
             $invoiceId
         );
@@ -2268,35 +2239,6 @@ public function generateDeliveryOrder(
         int $invoiceId,
         int $expenseId
     ): RedirectResponse {
-
-        /*
-         * PO-GENERATED EXPENSE GUARD
-         *
-         * Expense dari RELEASED/COMPLETED PO dikunci agar PO dan
-         * Financial Report tidak berbeda nominal.
-         */
-        $linkedPurchaseOrder =
-            \Webkul\Invoice\Models\PurchaseOrder::query()
-                ->where('expense_id', $expenseId)
-                ->whereIn(
-                    'status',
-                    [
-                        'released',
-                        'completed',
-                    ]
-                )
-                ->first();
-
-        if ($linkedPurchaseOrder) {
-            session()->flash(
-                'warning',
-                'Expense ini berasal dari '
-                    .$linkedPurchaseOrder->po_number
-                    .' dan dikunci. Kelola koreksi dari Purchase Order.'
-            );
-
-            return back();
-        }
         $invoice = Invoice::findOrFail(
             $invoiceId
         );

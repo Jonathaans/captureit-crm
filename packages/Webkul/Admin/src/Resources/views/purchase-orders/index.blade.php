@@ -1,0 +1,187 @@
+<x-admin::layouts>
+    <x-slot:title>Purchase Orders</x-slot>
+
+    @php
+        $statusBadge = static function ($status) {
+            return match ($status) {
+                'released' => ['RELEASED', '#dbeafe', '#1d4ed8'],
+                'completed' => ['COMPLETED', '#dcfce7', '#15803d'],
+                'cancelled' => ['CANCELLED', '#fee2e2', '#b91c1c'],
+                default => ['DRAFT', '#f3f4f6', '#4b5563'],
+            };
+        };
+
+        $money = static fn ($value) =>
+            'Rp '.number_format((float) $value, 0, ',', '.');
+    @endphp
+
+    <div style="width:100%;display:flex;flex-direction:column;gap:14px;">
+        <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Purchase Orders</h1>
+                    <p class="mt-1 text-sm text-gray-500">
+                        Vendor / outsource cost untuk event. Expense baru diposting ketika PO di-Release.
+                    </p>
+                </div>
+
+                @if (bouncer()->hasPermission('purchase-orders.create'))
+                    <a href="{{ route('admin.purchase-orders.create') }}" class="primary-button">
+                        + Create Purchase Order
+                    </a>
+                @endif
+            </div>
+
+            <div class="mt-5" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+                @foreach (['draft' => 'Draft', 'released' => 'Released', 'completed' => 'Completed', 'cancelled' => 'Cancelled'] as $status => $label)
+                    <a
+                        href="{{ route('admin.purchase-orders.index', ['status' => $status]) }}"
+                        class="rounded-lg border border-gray-200 bg-gray-50 p-4 transition hover:border-blue-300 dark:border-gray-800 dark:bg-gray-950"
+                    >
+                        <p class="text-[11px] font-bold uppercase tracking-wide text-gray-500">{{ $label }}</p>
+                        <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                            {{ (int) $statusCounts->get($status, 0) }}
+                        </p>
+                    </a>
+                @endforeach
+            </div>
+        </section>
+
+        <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <form
+                method="GET"
+                action="{{ route('admin.purchase-orders.index') }}"
+                style="display:grid;grid-template-columns:minmax(240px,1fr) 180px auto;gap:10px;align-items:end;"
+            >
+                <div>
+                    <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">Search</label>
+                    <input
+                        type="text"
+                        name="q"
+                        value="{{ request('q') }}"
+                        class="w-full rounded-md border px-3 py-2 dark:border-gray-800 dark:bg-gray-950"
+                        placeholder="PO / vendor / invoice / project / product"
+                    >
+                </div>
+
+                <div>
+                    <label class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-gray-500">Status</label>
+                    <select name="status" class="w-full rounded-md border px-3 py-2 dark:border-gray-800 dark:bg-gray-950">
+                        <option value="">All Status</option>
+                        <option value="draft" @selected(request('status') === 'draft')>Draft</option>
+                        <option value="released" @selected(request('status') === 'released')>Released</option>
+                        <option value="completed" @selected(request('status') === 'completed')>Completed</option>
+                        <option value="cancelled" @selected(request('status') === 'cancelled')>Cancelled</option>
+                    </select>
+                </div>
+
+                <div style="display:flex;gap:8px;">
+                    <button type="submit" class="primary-button">Apply</button>
+                    <a href="{{ route('admin.purchase-orders.index') }}" class="secondary-button">Reset</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            @if ($purchaseOrders->isEmpty())
+                <div class="p-10 text-center">
+                    <p class="font-bold text-gray-900 dark:text-white">Belum ada Purchase Order</p>
+                    <p class="mt-2 text-sm text-gray-500">PO vendor event akan muncul di sini.</p>
+                </div>
+            @else
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase text-gray-500 dark:border-gray-800 dark:bg-gray-950">
+                            <tr>
+                                <th class="px-4 py-3">PO Number</th>
+                                <th class="px-4 py-3">Invoice / Project</th>
+                                <th class="px-4 py-3">Vendor</th>
+                                <th class="px-4 py-3">Product / Service</th>
+                                <th class="px-4 py-3">Order Date</th>
+                                <th class="px-4 py-3">Grand Total</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Expense</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach ($purchaseOrders as $purchaseOrder)
+                                @php($badge = $statusBadge($purchaseOrder->status))
+
+                                <tr class="border-b border-gray-100 last:border-b-0 dark:border-gray-800">
+                                    <td class="px-4 py-4">
+                                        <a href="{{ route('admin.purchase-orders.show', $purchaseOrder->id) }}" class="font-bold text-blue-600 hover:underline">
+                                            {{ $purchaseOrder->po_number }}
+                                        </a>
+                                    </td>
+
+                                    <td class="px-4 py-4">
+                                        <p class="font-semibold text-gray-900 dark:text-white">{{ $purchaseOrder->invoice_number ?: '-' }}</p>
+                                        <p class="mt-1 text-xs text-gray-500">
+                                            {{ $purchaseOrder->project_code ?: '-' }} · {{ $purchaseOrder->project_name ?: '-' }}
+                                        </p>
+                                    </td>
+
+                                    <td class="px-4 py-4 text-sm font-semibold">{{ $purchaseOrder->vendor_name }}</td>
+
+                                    <td class="px-4 py-4">
+                                        <div style="display:flex;flex-wrap:wrap;gap:4px;max-width:320px;">
+                                            @foreach ($purchaseOrder->items as $item)
+                                                <span style="display:inline-flex;padding:4px 8px;border-radius:9999px;background:#eff6ff;color:#1d4ed8;font-size:10px;font-weight:700;">
+                                                    {{ $item->name }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    </td>
+
+                                    <td class="whitespace-nowrap px-4 py-4 text-sm">
+                                        {{ $purchaseOrder->order_date?->format('d M Y') ?: '-' }}
+                                    </td>
+
+                                    <td class="whitespace-nowrap px-4 py-4 font-bold">
+                                        {{ $money($purchaseOrder->grand_total) }}
+                                    </td>
+
+                                    <td class="px-4 py-4">
+                                        <span style="display:inline-flex;padding:5px 9px;border-radius:9999px;background:{{ $badge[1] }};color:{{ $badge[2] }};font-size:10px;font-weight:800;">
+                                            {{ $badge[0] }}
+                                        </span>
+                                    </td>
+
+                                    <td class="px-4 py-4">
+                                        @if ($purchaseOrder->expense_id)
+                                            <span style="display:inline-flex;padding:5px 9px;border-radius:9999px;background:#dcfce7;color:#15803d;font-size:10px;font-weight:800;">
+                                                POSTED #{{ $purchaseOrder->expense_id }}
+                                            </span>
+                                        @else
+                                            <span class="text-xs font-semibold text-gray-400">Not posted</span>
+                                        @endif
+                                    </td>
+
+                                    <td class="px-4 py-4">
+                                        <div style="display:flex;justify-content:flex-end;gap:6px;flex-wrap:wrap;">
+                                            <a href="{{ route('admin.purchase-orders.show', $purchaseOrder->id) }}" class="secondary-button">View</a>
+
+                                            @if ($purchaseOrder->status === 'draft' && bouncer()->hasPermission('purchase-orders.edit'))
+                                                <a href="{{ route('admin.purchase-orders.edit', $purchaseOrder->id) }}" class="secondary-button">Edit</a>
+                                            @endif
+
+                                            @if (bouncer()->hasPermission('purchase-orders.print'))
+                                                <a href="{{ route('admin.purchase-orders.print', $purchaseOrder->id) }}" class="secondary-button">PDF</a>
+                                            @endif
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="border-t border-gray-200 p-4 dark:border-gray-800">
+                    {{ $purchaseOrders->links() }}
+                </div>
+            @endif
+        </section>
+    </div>
+</x-admin::layouts>

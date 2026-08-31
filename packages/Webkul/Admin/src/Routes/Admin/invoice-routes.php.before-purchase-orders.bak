@@ -35,48 +35,6 @@ Route::controller(FinancialReportController::class)
         );
     });
 
-
-/*
-|--------------------------------------------------------------------------
-| Purchase Orders - Event Vendor / Outsource
-|--------------------------------------------------------------------------
-*/
-
-Route::controller(
-    \Webkul\Admin\Http\Controllers\PurchaseOrder\PurchaseOrderController::class
-)
-    ->prefix('purchase-orders')
-    ->group(function () {
-        Route::get('/', 'index')
-            ->name('admin.purchase-orders.index');
-
-        Route::get('create', 'create')
-            ->name('admin.purchase-orders.create');
-
-        Route::post('/', 'store')
-            ->name('admin.purchase-orders.store');
-
-        Route::get('{id}/edit', 'edit')
-            ->name('admin.purchase-orders.edit');
-
-        Route::put('{id}', 'update')
-            ->name('admin.purchase-orders.update');
-
-        Route::post('{id}/release', 'release')
-            ->name('admin.purchase-orders.release');
-
-        Route::post('{id}/complete', 'complete')
-            ->name('admin.purchase-orders.complete');
-
-        Route::post('{id}/cancel', 'cancel')
-            ->name('admin.purchase-orders.cancel');
-
-        Route::get('{id}/print', 'print')
-            ->name('admin.purchase-orders.print');
-
-        Route::get('{id}', 'show')
-            ->name('admin.purchase-orders.show');
-    });
 Route::controller(InvoiceController::class)
     ->prefix('invoices')
     ->group(function () {

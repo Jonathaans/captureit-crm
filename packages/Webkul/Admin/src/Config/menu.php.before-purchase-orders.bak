@@ -86,14 +86,7 @@ return [
 | Inventory
 |--------------------------------------------------------------------------
 */
-
-    [
-        'key'        => 'purchase-orders',
-        'name'       => 'Purchase Orders',
-        'route'      => 'admin.purchase-orders.index',
-        'sort'       => 8,
-        'icon-class' => 'icon-quote',
-    ],[
+[
     'key'        => 'inventory',
     'name'       => 'Inventory',
     'route'      => 'admin.inventory.dashboard',
