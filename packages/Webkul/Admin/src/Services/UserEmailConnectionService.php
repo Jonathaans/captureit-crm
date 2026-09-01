@@ -13,35 +13,66 @@ class UserEmailConnectionService
     public function testImap(
         UserEmailAccount $account
     ): void {
-        $stream =
-            $this->openImap(
-                $account,
-                'INBOX',
-                true
-            );
-
-        try {
-            $check =
-                imap_check(
-                    $stream
-                );
-
-            if (! $check) {
-                throw new RuntimeException(
-                    'IMAP connected, tetapi mailbox check gagal.'
-                );
-            }
-        } finally {
-            imap_close(
-                $stream
+        if (
+            ! function_exists(
+                'stream_socket_client'
+            )
+        ) {
+            throw new RuntimeException(
+                'PHP stream_socket_client tidak tersedia.'
             );
         }
 
-        $account->update([
-            'imap_status' => 'connected',
-            'last_tested_at' => now(),
-            'last_sync_error' => null,
-        ]);
+        if (
+            strtolower(
+                (string) $account->imap_encryption
+            ) !== 'none'
+            && ! extension_loaded(
+                'openssl'
+            )
+        ) {
+            throw new RuntimeException(
+                'OpenSSL extension belum aktif.'
+            );
+        }
+
+        $client =
+            app(
+                PurePhpImapClient::class
+            );
+
+        try {
+            $client->connect(
+                $account,
+                'INBOX'
+            );
+
+            $account->update([
+                'imap_status' =>
+                    'connected',
+
+                'last_tested_at' =>
+                    now(),
+
+                'last_sync_error' =>
+                    null,
+            ]);
+        } catch (Throwable $exception) {
+            $account->update([
+                'imap_status' =>
+                    'error',
+
+                'last_tested_at' =>
+                    now(),
+
+                'last_sync_error' =>
+                    $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        } finally {
+            $client->disconnect();
+        }
     }
 
     public function testSmtp(
@@ -157,119 +188,5 @@ class UserEmailConnectionService
                 $mailerName
             );
         }
-    }
-
-    public function openImap(
-        UserEmailAccount $account,
-        string $folder = 'INBOX',
-        bool $halfOpen = false
-    ) {
-        if (
-            ! function_exists(
-                'imap_open'
-            )
-        ) {
-            throw new RuntimeException(
-                'PHP IMAP extension belum aktif. '
-                .'Aktifkan ext-imap pada PHP CLI dan web server.'
-            );
-        }
-
-        $mailbox =
-            $this->mailboxString(
-                $account,
-                $folder
-            );
-
-        imap_timeout(
-            IMAP_OPENTIMEOUT,
-            15
-        );
-
-        imap_timeout(
-            IMAP_READTIMEOUT,
-            30
-        );
-
-        $flags =
-            $halfOpen
-                ? OP_HALFOPEN
-                : 0;
-
-        $stream =
-            @imap_open(
-                $mailbox,
-                $account->imap_username,
-                (string) $account->imap_password,
-                $flags,
-                1
-            );
-
-        if (! $stream) {
-            $error =
-                imap_last_error()
-                ?: 'Unknown IMAP error.';
-
-            $account->update([
-                'imap_status' => 'error',
-                'last_tested_at' => now(),
-                'last_sync_error' => $error,
-            ]);
-
-            throw new RuntimeException(
-                'IMAP connection failed: '
-                .$error
-            );
-        }
-
-        return $stream;
-    }
-
-    public function mailboxString(
-        UserEmailAccount $account,
-        string $folder = 'INBOX'
-    ): string {
-        $encryption =
-            strtolower(
-                trim(
-                    (string) $account
-                        ->imap_encryption
-                )
-            );
-
-        $flags = [
-            'imap',
-        ];
-
-        if ($encryption === 'ssl') {
-            $flags[] = 'ssl';
-        } elseif (
-            $encryption === 'tls'
-        ) {
-            $flags[] = 'tls';
-        } elseif (
-            $encryption === 'none'
-        ) {
-            $flags[] = 'notls';
-        }
-
-        if (
-            ! $account
-                ->imap_validate_certificate
-        ) {
-            $flags[] =
-                'novalidate-cert';
-        }
-
-        return sprintf(
-            '{%s:%d/%s}%s',
-            $account->imap_host,
-            (int) $account->imap_port,
-            implode(
-                '/',
-                $flags
-            ),
-            $folder
-        );
     }
 }
