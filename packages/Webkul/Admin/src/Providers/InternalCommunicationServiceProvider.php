@@ -1,0 +1,439 @@
+<?php
+
+namespace Webkul\Admin\Providers;
+
+use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
+use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatAttachmentController;
+use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatController;
+use Webkul\Admin\Http\Controllers\InternalCommunication\WorkflowNotificationController;
+use Webkul\Admin\Http\Middleware\InjectInternalCommunicationUi;
+use Webkul\Admin\Services\LeadWonNotificationDetector;
+use Webkul\Admin\Services\WorkflowNotificationService;
+
+class InternalCommunicationServiceProvider extends ServiceProvider
+{
+    public function boot(
+        Router $router
+    ): void {
+        /*
+         * Global admin popup/chat widget without modifying the customized
+         * Admin master layout.
+         */
+        $router->pushMiddlewareToGroup(
+            'web',
+            InjectInternalCommunicationUi::class
+        );
+
+        $this->registerRoutes();
+
+        $this->registerBusinessNotifications();
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                \Webkul\Admin\Console\Commands\CrmInternalCommunicationCheckCommand::class,
+            ]);
+        }
+    }
+
+    private function registerRoutes(): void
+    {
+        Route::middleware(
+            'web'
+        )
+            ->prefix(
+                'admin'
+            )
+            ->group(
+                function () {
+                    Route::get(
+                        'internal-notifications',
+                        [
+                            WorkflowNotificationController::class,
+                            'index',
+                        ]
+                    )->name(
+                        'admin.internal-notifications.index'
+                    );
+
+                    Route::get(
+                        'internal-notifications/poll',
+                        [
+                            WorkflowNotificationController::class,
+                            'poll',
+                        ]
+                    )->name(
+                        'admin.internal-notifications.poll'
+                    );
+
+                    Route::get(
+                        'internal-notifications/{id}/open',
+                        [
+                            WorkflowNotificationController::class,
+                            'open',
+                        ]
+                    )->name(
+                        'admin.internal-notifications.open'
+                    );
+
+                    Route::post(
+                        'internal-notifications/read-all',
+                        [
+                            WorkflowNotificationController::class,
+                            'markAllRead',
+                        ]
+                    )->name(
+                        'admin.internal-notifications.read-all'
+                    );
+
+                    Route::get(
+                        'internal-chat',
+                        [
+                            InternalChatController::class,
+                            'index',
+                        ]
+                    )->name(
+                        'admin.internal-chat.index'
+                    );
+
+                    Route::post(
+                        'internal-chat/direct/{userId}',
+                        [
+                            InternalChatController::class,
+                            'startDirect',
+                        ]
+                    )->name(
+                        'admin.internal-chat.direct'
+                    );
+
+                    Route::get(
+                        'internal-chat/{conversationId}/messages',
+                        [
+                            InternalChatController::class,
+                            'messages',
+                        ]
+                    )->name(
+                        'admin.internal-chat.messages'
+                    );
+
+                    Route::post(
+                        'internal-chat/{conversationId}/messages',
+                        [
+                            InternalChatController::class,
+                            'send',
+                        ]
+                    )->name(
+                        'admin.internal-chat.send'
+                    );
+
+                    Route::get(
+                        'internal-chat/attachments/{id}/download',
+                        [
+                            InternalChatAttachmentController::class,
+                            'download',
+                        ]
+                    )->name(
+                        'admin.internal-chat.attachments.download'
+                    );
+                }
+            );
+    }
+
+    private function registerBusinessNotifications(): void
+    {
+        /*
+        |--------------------------------------------------------------------------
+        | Lead WON -> Sales Admin
+        |--------------------------------------------------------------------------
+        */
+
+        $leadClass =
+            \Webkul\Lead\Models\Lead::class;
+
+        if (class_exists($leadClass)) {
+            $leadClass::updated(
+                function ($lead) {
+                    $detector =
+                        app(
+                            LeadWonNotificationDetector::class
+                        );
+
+                    if (
+                        ! $detector->becameWon(
+                            $lead
+                        )
+                    ) {
+                        return;
+                    }
+
+                    $service =
+                        app(
+                            WorkflowNotificationService::class
+                        );
+
+                    $recipientIds =
+                        $service->usersByRoleNames([
+                            'Sales Admin',
+                        ]);
+
+                    if ($recipientIds->isEmpty()) {
+                        return;
+                    }
+
+                    $leadLabel =
+                        trim(
+                            (string) (
+                                $lead->title
+                                ?? $lead->subject
+                                ?? ''
+                            )
+                        );
+
+                    if ($leadLabel === '') {
+                        $leadLabel =
+                            'Lead #'
+                            .$lead->id;
+                    }
+
+                    $ownerName =
+                        null;
+
+                    if (
+                        ! empty(
+                            $lead->user_id
+                        )
+                    ) {
+                        $ownerName =
+                            \Illuminate\Support\Facades\DB::table(
+                                'users'
+                            )
+                                ->where(
+                                    'id',
+                                    $lead->user_id
+                                )
+                                ->value(
+                                    'name'
+                                );
+                    }
+
+                    $message =
+                        $leadLabel
+                        .(
+                            $ownerName
+                                ? ' · Sales Owner: '
+                                    .$ownerName
+                                : ''
+                        )
+                        .' · Action: buat Quotation.';
+
+                    $service->notifyUsers(
+                        $recipientIds,
+                        'lead_won',
+                        'Lead WON - Buat Quotation',
+                        $message,
+                        route(
+                            'admin.leads.view',
+                            $lead->id
+                        ),
+                        'lead-won:'
+                            .$lead->id,
+                        'lead',
+                        $lead->id,
+                        [
+                            'sales_owner_id' =>
+                                $lead->user_id
+                                ?? null,
+                        ]
+                    );
+                }
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | SPK Released -> Sales Owner
+        |--------------------------------------------------------------------------
+        */
+
+        $workOrderClass =
+            \Webkul\Invoice\Models\WorkOrder::class;
+
+        if (class_exists($workOrderClass)) {
+            $workOrderClass::updated(
+                function ($workOrder) {
+                    if (
+                        ! $workOrder->wasChanged(
+                            'status'
+                        )
+                        || strtolower(
+                            trim(
+                                (string) $workOrder
+                                    ->status
+                            )
+                        ) !== 'released'
+                    ) {
+                        return;
+                    }
+
+                    $salesOwnerId =
+                        (int) (
+                            $workOrder->user_id
+                            ?? 0
+                        );
+
+                    if ($salesOwnerId < 1) {
+                        return;
+                    }
+
+                    $message =
+                        $workOrder->work_order_number
+                        .(
+                            $workOrder->project_code
+                                ? ' · '
+                                    .$workOrder
+                                        ->project_code
+                                : ''
+                        )
+                        .(
+                            $workOrder->project_name
+                                ? ' · '
+                                    .$workOrder
+                                        ->project_name
+                                : ''
+                        );
+
+                    app(
+                        WorkflowNotificationService::class
+                    )->notifyUser(
+                        $salesOwnerId,
+                        'spk_released',
+                        'SPK Dirilis',
+                        $message,
+                        route(
+                            'admin.work-orders.show',
+                            $workOrder->id
+                        ),
+                        'spk-released:'
+                            .$workOrder->id,
+                        'work_order',
+                        $workOrder->id
+                    );
+                }
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Surat Jalan Released -> Warehouse
+        |--------------------------------------------------------------------------
+        */
+
+        $deliveryOrderClass =
+            \Webkul\Invoice\Models\DeliveryOrder::class;
+
+        if (class_exists($deliveryOrderClass)) {
+            $deliveryOrderClass::updated(
+                function ($deliveryOrder) {
+                    if (
+                        ! $deliveryOrder->wasChanged(
+                            'status'
+                        )
+                    ) {
+                        return;
+                    }
+
+                    $status =
+                        strtolower(
+                            trim(
+                                (string) (
+                                    $deliveryOrder->status
+                                    ?? ''
+                                )
+                            )
+                        );
+
+                    if (
+                        ! in_array(
+                            $status,
+                            [
+                                'released',
+                                'release',
+                            ],
+                            true
+                        )
+                    ) {
+                        return;
+                    }
+
+                    $service =
+                        app(
+                            WorkflowNotificationService::class
+                        );
+
+                    $recipientIds =
+                        $service->usersByRoleNames([
+                            'Head Warehouse',
+                            'Warehouse User',
+                        ]);
+
+                    if ($recipientIds->isEmpty()) {
+                        return;
+                    }
+
+                    $number =
+                        $deliveryOrder
+                            ->delivery_order_number
+                        ?? (
+                            'SJ #'
+                            .$deliveryOrder->id
+                        );
+
+                    $message =
+                        $number;
+
+                    if (
+                        ! empty(
+                            $deliveryOrder
+                                ->work_order_id
+                        )
+                    ) {
+                        $workOrderNumber =
+                            \Illuminate\Support\Facades\DB::table(
+                                'work_orders'
+                            )
+                                ->where(
+                                    'id',
+                                    $deliveryOrder
+                                        ->work_order_id
+                                )
+                                ->value(
+                                    'work_order_number'
+                                );
+
+                        if ($workOrderNumber) {
+                            $message .=
+                                ' · '
+                                .$workOrderNumber;
+                        }
+                    }
+
+                    $service->notifyUsers(
+                        $recipientIds,
+                        'delivery_order_released',
+                        'Surat Jalan Siap Diproses',
+                        $message,
+                        route(
+                            'admin.delivery-orders.show',
+                            $deliveryOrder->id
+                        ),
+                        'delivery-order-released:'
+                            .$deliveryOrder->id,
+                        'delivery_order',
+                        $deliveryOrder->id
+                    );
+                }
+            );
+        }
+    }
+}
