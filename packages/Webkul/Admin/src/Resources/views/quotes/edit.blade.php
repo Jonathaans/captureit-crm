@@ -248,7 +248,7 @@
                                 <x-admin::attributes
                                     :custom-attributes="app('Webkul\Attribute\Repositories\AttributeRepository')->findWhere([
                                         'entity_type' => 'quotes',
-                                        ['code', 'IN', ['expired_at', 'user_id']],
+                                        ['code', 'IN', ['expired_at']],
                                     ])->sortBy('sort_order')"
                                     :custom-validations="[
                                         'expired_at' => [
@@ -259,6 +259,64 @@
                                     ]"
                                     :entity="$quote"
                                 />
+                            <!-- QUOTE SALES OWNER ROLE FILTER EDIT V1.1 -->
+                            <?php
+                                $quoteSalesOwnerCurrentId = old(
+                                    'user_id',
+                                    $quote->user_id
+                                );
+
+                                $quoteSalesOwners = app(
+                                    \Webkul\Admin\Services\QuoteSalesOwnerService::class
+                                )->options(
+                                    true
+                                        ? (int) ($quoteSalesOwnerCurrentId ?: 0)
+                                        : null
+                                );
+                            ?>
+
+                            <!-- QUOTE SALES OWNER ROLE FILTER EDIT V1.3 -->
+<?php
+    $quoteSalesOwnerCurrentId = old(
+        'user_id',
+        $quote->user_id
+    );
+
+    $quoteSalesOwners = app(
+        \Webkul\Admin\Services\QuoteSalesOwnerService::class
+    )->options(
+        true
+            ? (int) ($quoteSalesOwnerCurrentId ?: 0)
+            : null
+    );
+?>
+
+<x-admin::form.control-group class="w-full">
+    <x-admin::form.control-group.label class="required">
+        Sales Owner
+    </x-admin::form.control-group.label>
+
+    <select
+        name="user_id"
+        class="w-full rounded-md border border-gray-300 px-3 py-2 dark:border-gray-800 dark:bg-gray-950"
+        required
+    >
+        <option value="">Select Sales Owner</option>
+
+        <?php foreach ($quoteSalesOwners as $salesOwner): ?>
+            <option
+                value="{{ $salesOwner->id }}"
+                {{ (string) $quoteSalesOwnerCurrentId === (string) $salesOwner->id ? 'selected' : '' }}
+            >
+                {{ $salesOwner->name }}
+                ({{ $salesOwner->role_name ?: 'Current Owner' }})
+                {{ $salesOwner->is_legacy_current ? ' - Current Owner' : '' }}
+            </option>
+        <?php endforeach; ?>
+    </select>
+
+    <x-admin::form.control-group.error control-name="user_id" />
+</x-admin::form.control-group>
                             </div>
 
                             <div class="flex gap-4">

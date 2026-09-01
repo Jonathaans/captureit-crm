@@ -105,9 +105,6 @@ class QuoteController extends Controller
     {
         if (! request()->has('quick_add')) {
             $this->additionalValidation();
-
-            /* QUOTE SALES OWNER ROLE VALIDATION - CREATE */
-            $this->validateSalesOwnerSelection();
         }
 
 $this->syncShippingAddressWithBilling($request);
@@ -201,15 +198,6 @@ $leadId = request('lead_id');
         $this->preventUnauthorizedAccess($this->quoteRepository->findOrFail($id)->user_id);
 
         $this->additionalValidation();
-
-        /* QUOTE SALES OWNER ROLE VALIDATION - EDIT */
-        $currentQuoteOwnerId = (int) $this->quoteRepository
-            ->findOrFail($id)
-            ->user_id;
-
-        $this->validateSalesOwnerSelection(
-            $currentQuoteOwnerId
-        );
 
         $this->syncShippingAddressWithBilling($request);
 
@@ -339,42 +327,7 @@ $leadId = request('lead_id');
         }
     }
 
-        /**
-     * QUOTE SALES OWNER ROLE VALIDATION
-     *
-     * New owner must be Sales Admin or Sales User.
-     * Existing legacy owner may stay unchanged on old Quotes.
-     */
-    private function validateSalesOwnerSelection(
-        ?int $currentOwnerId = null
-    ): void {
-        $selectedOwnerId =
-            (int) request(
-                'user_id'
-            );
-
-        if (
-            $currentOwnerId
-            && $selectedOwnerId === $currentOwnerId
-        ) {
-            return;
-        }
-
-        if (
-            ! app(
-                \Webkul\Admin\Services\QuoteSalesOwnerService::class
-            )->isEligible(
-                $selectedOwnerId
-            )
-        ) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'user_id' =>
-                    'Sales Owner harus memiliki role Sales Admin atau Sales User.',
-            ]);
-        }
-    }
-
-/**
+    /**
      * Additional validation for quote product items.
      */
     private function additionalValidation(): void

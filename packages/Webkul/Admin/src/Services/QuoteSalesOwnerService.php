@@ -9,6 +9,7 @@ use Webkul\User\Models\User;
 class QuoteSalesOwnerService
 {
     public const ALLOWED_ROLE_NAMES = [
+        'administrator',
         'sales admin',
         'sales user',
     ];

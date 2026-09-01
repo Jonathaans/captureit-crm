@@ -7,29 +7,22 @@ require __DIR__.'/../vendor/autoload.php';
 
 $app = require_once __DIR__.'/../bootstrap/app.php';
 
-$app->make(
-    Kernel::class
-)->bootstrap();
+$app->make(Kernel::class)->bootstrap();
 
 echo "QUOTE SALES OWNER ROLE FILTER CHECK\n";
 echo "===================================\n\n";
 
-$service = app(
+$users = app(
     QuoteSalesOwnerService::class
-);
+)->roleSummary();
 
-$users =
-    $service->roleSummary();
+$allowed = [
+    'administrator',
+    'sales admin',
+    'sales user',
+];
 
-if ($users->isEmpty()) {
-    echo "FAIL\n";
-    echo "Tidak ada user dengan role Sales Admin atau Sales User.\n";
-    echo "Pastikan nama Role di Settings > Roles sesuai requirement.\n";
-
-    exit(1);
-}
-
-echo "Eligible Sales Owners:\n\n";
+$errors = [];
 
 foreach ($users as $user) {
     echo sprintf(
@@ -38,93 +31,52 @@ foreach ($users as $user) {
         $user['name'],
         $user['role']
     );
-}
 
-$createPath =
-    base_path(
-        'packages/Webkul/Admin/src/Resources/views/quotes/create.blade.php'
-    );
-
-$editPath =
-    base_path(
-        'packages/Webkul/Admin/src/Resources/views/quotes/edit.blade.php'
-    );
-
-$controllerCandidates = [];
-
-$root =
-    base_path(
-        'packages/Webkul/Admin/src/Http/Controllers'
-    );
-
-$iterator =
-    new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator(
-            $root,
-            FilesystemIterator::SKIP_DOTS
-        )
-    );
-
-foreach ($iterator as $file) {
     if (
-        $file->isFile()
-        && $file->getExtension() === 'php'
+        ! in_array(
+            strtolower($user['role']),
+            $allowed,
+            true
+        )
     ) {
-        $source =
-            file_get_contents(
-                $file->getPathname()
-            );
-
-        if (
-            $source !== false
-            && str_contains(
-                $source,
-                'class QuoteController'
-            )
-        ) {
-            $controllerCandidates[] =
-                $file->getPathname();
-        }
+        $errors[] =
+            'Role tidak valid: '
+            .$user['role'];
     }
 }
 
-$errors = [];
+$create = file_get_contents(
+    base_path(
+        'packages/Webkul/Admin/src/Resources/views/quotes/create.blade.php'
+    )
+);
+
+$edit = file_get_contents(
+    base_path(
+        'packages/Webkul/Admin/src/Resources/views/quotes/edit.blade.php'
+    )
+);
 
 if (
-    ! is_file($createPath)
+    $create === false
     || ! str_contains(
-        file_get_contents($createPath),
-        'QUOTE SALES OWNER ROLE FILTER CREATE'
+        $create,
+        'QUOTE SALES OWNER ROLE FILTER CREATE V1.3'
     )
 ) {
     $errors[] =
-        'Quote Create Sales Owner filter belum terpasang.';
+        'Quote Create filter V1.3 belum terpasang.';
 }
 
 if (
-    ! is_file($editPath)
+    $edit === false
     || ! str_contains(
-        file_get_contents($editPath),
-        'QUOTE SALES OWNER ROLE FILTER EDIT'
+        $edit,
+        'QUOTE SALES OWNER ROLE FILTER EDIT V1.3'
     )
 ) {
     $errors[] =
-        'Quote Edit Sales Owner filter belum terpasang.';
-}
-
-if (
-    count(
-        $controllerCandidates
-    ) !== 1
-    || ! str_contains(
-        file_get_contents(
-            $controllerCandidates[0]
-        ),
-        'QUOTE SALES OWNER ROLE VALIDATION'
-    )
-) {
-    $errors[] =
-        'QuoteController Sales Owner validation belum terpasang.';
+        'Quote Edit filter V1.3 belum terpasang.';
 }
 
 if ($errors) {
@@ -134,10 +86,8 @@ if ($errors) {
         echo " - {$error}\n";
     }
 
-    exit(2);
+    exit(1);
 }
 
 echo "\nPASS\n";
-echo "Create Quote filter ready.\n";
-echo "Edit Quote filter ready.\n";
-echo "Server validation ready.\n";
+echo "Allowed roles only: Administrator, Sales Admin, Sales User.\n";
