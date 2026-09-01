@@ -60,5 +60,4 @@ return [
     WarehouseServiceProvider::class,
     WebFormServiceProvider::class,
     \Webkul\Admin\Providers\GoogleCalendarIntegrationServiceProvider::class,
-    \Webkul\Admin\Providers\CrmHardeningCoreServiceProvider::class,
 ];

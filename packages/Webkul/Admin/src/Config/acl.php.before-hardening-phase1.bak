@@ -1031,15 +1031,4 @@ return [
         'name'  => 'Export PO Expense CSV',
         'route' => 'admin.purchase-orders.export-expense',
         'sort'  => 8,
-    ],
-    [
-        'key'   => 'system-control',
-        'name'  => 'System Control',
-        'route' => [
-            'admin.system-control.index',
-            'admin.system-control.audit-logs',
-            'admin.system-control.incidents',
-            'admin.system-control.incidents.resolve',
-        ],
-        'sort'  => 99,
     ],];
