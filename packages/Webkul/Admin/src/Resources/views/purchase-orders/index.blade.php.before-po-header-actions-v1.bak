@@ -25,15 +25,12 @@
                     </p>
                 </div>
 
-                                <!-- PO HEADER ACTIONS GROUP V1 -->
-                <div class="flex items-center gap-2">
-@if (bouncer()->hasPermission('purchase-orders.create'))
+                @if (bouncer()->hasPermission('purchase-orders.create'))
                     <a href="{{ route('admin.purchase-orders.create') }}" class="primary-button">
                         + Create Purchase Order
                     </a>
                 @endif
-
-<!-- PO EXPENSE CSV EXPORT V1 BUTTON -->
+                <!-- PO EXPENSE CSV EXPORT V1 BUTTON -->
                 @if (bouncer()->hasPermission('purchase-orders.export'))
                     <a
                         href="{{ route(
@@ -49,7 +46,6 @@
                         Export Expense CSV
                     </a>
                 @endif
-                </div>
             </div>
 
             <div class="mt-5" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">

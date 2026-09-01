@@ -1025,10 +1025,4 @@ return [
         'name'  => 'Print Purchase Order',
         'route' => 'admin.purchase-orders.print',
         'sort'  => 7,
-    ],
-    [
-        'key'   => 'purchase-orders.export',
-        'name'  => 'Export PO Expense CSV',
-        'route' => 'admin.purchase-orders.export-expense',
-        'sort'  => 8,
     ],];

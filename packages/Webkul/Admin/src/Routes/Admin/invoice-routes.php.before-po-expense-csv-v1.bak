@@ -42,20 +42,6 @@ Route::controller(FinancialReportController::class)
 |--------------------------------------------------------------------------
 */
 
-
-/*
-|--------------------------------------------------------------------------
-| PO EXPENSE CSV EXPORT V1 ROUTE
-|--------------------------------------------------------------------------
-*/
-
-Route::get(
-    'purchase-orders/export-expense-csv',
-    [
-        \Webkul\Admin\Http\Controllers\PurchaseOrder\PurchaseOrderExpenseExportController::class,
-        'export',
-    ]
-)->name('admin.purchase-orders.export-expense');
 Route::controller(
     \Webkul\Admin\Http\Controllers\PurchaseOrder\PurchaseOrderController::class
 )
