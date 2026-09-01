@@ -16,33 +16,6 @@ class OperationsDashboardController extends Controller
             403
         );
 
-        $user =
-            auth()->guard('user')->user();
-
-        $user->loadMissing('role');
-
-        /*
-         * OPERATIONS DASHBOARD ADMINISTRATOR ONLY V1
-         *
-         * Backend hard lock:
-         * even if another role accidentally receives the
-         * "operations-dashboard" ACL permission, access is still denied.
-         */
-        abort_unless(
-            strtolower(
-                trim(
-                    (string) (
-                        $user->role?->name
-                        ?? ''
-                    )
-                )
-            ) === 'administrator',
-            403
-        );
-
-        /*
-         * Keep the existing ACL as a second security layer.
-         */
         if (
             function_exists('bouncer')
             && ! bouncer()->hasPermission(
@@ -51,6 +24,11 @@ class OperationsDashboardController extends Controller
         ) {
             abort(403);
         }
+
+        $user =
+            auth()->guard('user')->user();
+
+        $user->loadMissing('role');
 
         return view(
             'admin::operations-dashboard.index',
