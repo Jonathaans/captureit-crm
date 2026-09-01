@@ -105,11 +105,7 @@ class LeadDataGrid extends DataGrid
         $this->addFilter('created_at', 'leads.created_at');
         $this->addFilter('rotten_lead', DB::raw('DATEDIFF(NOW(), '.$tablePrefix.'leads.created_at) >= '.$tablePrefix.'lead_pipelines.rotten_days'));
 
-                /* SALES USER LEAD DATAGRID ISOLATION V1 */
-        app(\Webkul\Admin\Services\SalesLeadAccessService::class)
-            ->scopeQuery($queryBuilder);
-
-return $queryBuilder;
+        return $queryBuilder;
     }
 
     /**

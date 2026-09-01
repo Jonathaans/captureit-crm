@@ -127,7 +127,7 @@ class OperationsDashboardService
         }
 
         $query =
-            app(\Webkul\Admin\Services\SalesLeadAccessService::class)->scopeQuery(DB::table('leads'));
+            DB::table('leads');
 
         if (
             $role === 'sales user'
