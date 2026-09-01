@@ -64,27 +64,3 @@ Route::controller(LeadController::class)->prefix('leads')->group(function () {
         Route::delete('{quote_id?}', 'delete')->name('admin.leads.quotes.delete');
     });
 });
-
-/*
-|--------------------------------------------------------------------------
-| CRM GOOGLE CALENDAR EVENTS V1 ROUTES
-|--------------------------------------------------------------------------
-*/
-
-Route::prefix('google-calendar')
-    ->group(function () {
-        Route::get(
-            'lead/{leadId}',
-            [\Webkul\Admin\Http\Controllers\GoogleCalendar\LeadCalendarController::class, 'edit']
-        )->name('admin.google-calendar.leads.edit');
-
-        Route::post(
-            'lead/{leadId}',
-            [\Webkul\Admin\Http\Controllers\GoogleCalendar\LeadCalendarController::class, 'update']
-        )->name('admin.google-calendar.leads.update');
-
-        Route::post(
-            'lead/{leadId}/sync',
-            [\Webkul\Admin\Http\Controllers\GoogleCalendar\LeadCalendarController::class, 'sync']
-        )->name('admin.google-calendar.leads.sync');
-    });

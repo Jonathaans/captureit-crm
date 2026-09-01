@@ -24,12 +24,7 @@ return [
     ], [
         'key' => 'leads.view',
         'name' => 'admin::app.acl.view',
-        'route' => [
-            'admin.leads.view',
-            'admin.google-calendar.leads.edit',
-            'admin.google-calendar.leads.update',
-            'admin.google-calendar.leads.sync',
-        ],
+        'route' => 'admin.leads.view',
         'sort' => 2,
     ], [
         'key' => 'leads.edit',
