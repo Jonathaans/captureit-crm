@@ -530,11 +530,4 @@ return [
         'route'      => 'admin.operations-dashboard.index',
         'sort'       => 2,
         'icon-class' => 'icon-dashboard',
-    ],
-    [
-        'key'        => 'my-email',
-        'name'       => 'My Email',
-        'route'      => 'admin.my-email.inbox',
-        'sort'       => 89,
-        'icon-class' => 'icon-mail',
     ],];

@@ -1,0 +1,51 @@
+<x-admin::layouts>
+    <x-slot:title>
+        {{ $message->subject ?: 'Email' }}
+    </x-slot>
+
+    <div class="mx-auto flex max-w-5xl flex-col gap-4">
+        <div class="flex items-center justify-between rounded-xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div>
+                <h1 class="text-xl font-bold">
+                    {{ $message->subject ?: '(No Subject)' }}
+                </h1>
+
+                <div class="mt-2 text-sm text-gray-500">
+                    From:
+                    {{ $message->from_name ?: '-' }}
+                    &lt;{{ $message->from_email ?: '-' }}&gt;
+                </div>
+
+                <div class="text-sm text-gray-500">
+                    Received:
+                    {{ $message->received_at?->format('Y-m-d H:i:s') ?: '-' }}
+                </div>
+            </div>
+
+            <a
+                href="{{ route('admin.my-email.inbox') }}"
+                class="secondary-button"
+            >
+                Back
+            </a>
+        </div>
+
+        <div class="rounded-xl border bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            @if ($message->html_body)
+                <iframe
+                    title="Email content"
+                    sandbox=""
+                    style="
+                        width:100%;
+                        min-height:600px;
+                        border:0;
+                        background:white;
+                    "
+                    srcdoc="{{ e($message->html_body) }}"
+                ></iframe>
+            @else
+                <pre class="whitespace-pre-wrap font-sans text-sm">{{ $message->text_body }}</pre>
+            @endif
+        </div>
+    </div>
+</x-admin::layouts>

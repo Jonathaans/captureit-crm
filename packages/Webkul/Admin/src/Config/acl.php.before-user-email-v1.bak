@@ -1080,24 +1080,4 @@ return [
             'admin.financial-periods.destroy',
         ],
         'sort'  => 93,
-    ],
-    [
-        'key'   => 'my-email',
-        'name'  => 'My Email',
-        'route' => [
-            'admin.my-email.inbox',
-            'admin.my-email.sync',
-            'admin.my-email.messages.show',
-            'admin.my-email.settings',
-            'admin.my-email.settings.update',
-            'admin.my-email.test-imap',
-            'admin.my-email.test-smtp',
-        ],
-        'sort'  => 94,
-    ],
-    [
-        'key'   => 'system-control.email-accounts',
-        'name'  => 'User Email Connections',
-        'route' => 'admin.system-control.email-accounts',
-        'sort'  => 100,
     ],];

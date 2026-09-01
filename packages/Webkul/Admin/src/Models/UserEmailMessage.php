@@ -1,0 +1,17 @@
+<?php
+
+namespace Webkul\Admin\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class UserEmailMessage extends Model
+{
+    protected $table = 'user_email_messages';
+
+    protected $guarded = [];
+
+    protected $casts = [
+        'received_at' => 'datetime',
+        'read_at' => 'datetime',
+    ];
+}

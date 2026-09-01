@@ -64,5 +64,4 @@ return [
     \Webkul\Admin\Providers\CrmOperationsServiceProvider::class,
     \Webkul\Admin\Providers\CrmGovernanceServiceProvider::class,
     \Webkul\Admin\Providers\SalesLeadIsolationServiceProvider::class,
-    \Webkul\Admin\Providers\UserEmailIntegrationServiceProvider::class,
 ];
