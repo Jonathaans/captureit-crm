@@ -67,5 +67,4 @@ return [
     \Webkul\Admin\Providers\UserEmailIntegrationServiceProvider::class,
     \Webkul\Admin\Providers\UserEmailComposeServiceProvider::class,
     \Webkul\Admin\Providers\UserEmailMailboxServiceProvider::class,
-    \Webkul\Admin\Providers\WorkOrderIntegrationServiceProvider::class,
 ];

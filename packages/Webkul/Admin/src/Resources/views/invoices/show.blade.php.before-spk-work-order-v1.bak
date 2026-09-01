@@ -95,10 +95,10 @@
         bouncer()->hasPermission('delivery-orders.view')
     )
         <a
-            href="{{ route('admin.invoices.work-orders.open', $invoice->id) }}"
+            href="{{ route('admin.invoices.delivery-orders.index', $invoice->id) }}"
             class="secondary-button"
         >
-            View SPK
+            View Surat Jalan
         </a>
 @if (
     bouncer()->hasPermission(
@@ -108,7 +108,7 @@
     <form
         method="POST"
         action="{{ route(
-            'admin.invoices.work-orders.store',
+            'admin.invoices.delivery-order.generate',
             $invoice->id
         ) }}"
         onsubmit="
@@ -126,7 +126,7 @@
             type="submit"
             class="secondary-button"
         >
-            Open / Generate SPK
+            + Generate Additional SJ
         </button>
     </form>
 @endif
@@ -152,7 +152,7 @@
         <form
             method="POST"
             action="{{ route(
-                'admin.invoices.work-orders.store',
+                'admin.invoices.delivery-order.generate',
                 $invoice->id
             ) }}"
             style="margin: 0;"
@@ -163,7 +163,7 @@
                 type="submit"
                 class="secondary-button"
             >
-                Generate Surat Perintah Kerja
+                Generate Surat Jalan
             </button>
         </form>
     @endif

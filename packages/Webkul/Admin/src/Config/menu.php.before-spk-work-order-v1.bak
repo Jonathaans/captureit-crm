@@ -537,11 +537,4 @@ return [
         'route'      => 'admin.my-email.inbox',
         'sort'       => 89,
         'icon-class' => 'icon-mail',
-    ],
-    [
-        'key'        => 'work-orders',
-        'name'       => 'Surat Perintah Kerja',
-        'route'      => 'admin.work-orders.index',
-        'sort'       => 57,
-        'icon-class' => 'icon-note',
     ],];

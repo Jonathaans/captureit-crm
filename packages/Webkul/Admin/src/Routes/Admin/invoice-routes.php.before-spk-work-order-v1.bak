@@ -137,10 +137,11 @@ Route::controller(InvoiceController::class)
             ->name('admin.invoices.delivery-orders.index');
 
 Route::post(
-    '{id}/delivery-order',
-    [\Webkul\Admin\Http\Controllers\WorkOrder\WorkOrderController::class, 'storeFromInvoice']
-)
-    ->name('admin.invoices.delivery-order.generate');
+            '{id}/delivery-order',
+            'generateDeliveryOrder'
+        )->name(
+            'admin.invoices.delivery-order.generate'
+        );
 
         /*
         |--------------------------------------------------------------------------

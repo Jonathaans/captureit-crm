@@ -29,20 +29,8 @@ class DeliveryOrderService
      */
     public function createFromInvoice(
         Invoice $invoice,
-        ?int $createdBy = null,
-        ?int $workOrderId = null
+        ?int $createdBy = null
     ): DeliveryOrder {
-        /*
-         * SPK WORK ORDER V1 GUARD
-         *
-         * Surat Jalan is no longer allowed to be generated directly
-         * from Invoice. Every new SJ must have an SPK parent.
-         */
-        if (! $workOrderId) {
-            throw new \LogicException(
-                'Surat Jalan harus dibuat dari Surat Perintah Kerja (SPK), bukan langsung dari Invoice.'
-            );
-        }
         return DB::transaction(
             function () use (
                 $invoice,
@@ -201,14 +189,6 @@ class DeliveryOrderService
                         $createdBy,
                 ]);
 
-
-                /*
-                 * SPK WORK ORDER V1 LINK
-                 */
-                $deliveryOrder->forceFill([
-                    'work_order_id' =>
-                        $workOrderId,
-                ])->save();
                 /*
                 |--------------------------------------------------------------------------
                 | First SJ Only: Copy Standard Equipment Requirement
