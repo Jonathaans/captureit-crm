@@ -561,11 +561,7 @@ return [
     ], [
         'key' => 'contacts.organizations',
         'name' => 'admin::app.acl.organizations',
-        'route' => [
-            'admin.contacts.organizations.index',
-            'admin.contacts.persons.identity',
-            'admin.contacts.persons.identity.update',
-        ],
+        'route' => 'admin.contacts.organizations.index',
         'sort' => 2,
     ], [
         'key' => 'contacts.organizations.create',
@@ -591,11 +587,7 @@ return [
     ], [
         'key' => 'products',
         'name' => 'admin::app.acl.products',
-        'route' => [
-            'admin.products.index',
-            'admin.contacts.organizations.identity',
-            'admin.contacts.organizations.identity.update',
-        ],
+        'route' => 'admin.products.index',
         'sort' => 10,
     ], [
         'key' => 'products.create',

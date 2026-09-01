@@ -19,28 +19,7 @@ Route::prefix('contacts')->group(function () {
 
         Route::get('view/{id}', 'show')->name('admin.contacts.persons.view');
 
-        Route::get(
-            '{id}/ktp-document',
-            [\Webkul\Admin\Http\Controllers\Contact\ContactIdentityDocumentController::class, 'personKtp']
-        )
-            ->name('admin.contacts.persons.ktp');
-
         Route::get('edit/{id}', 'edit')->name('admin.contacts.persons.edit');
-
-        Route::get(
-            'identity-document/{id}',
-            [\Webkul\Admin\Http\Controllers\Contact\ContactIdentityDocumentController::class, 'editPerson']
-        )->name('admin.contacts.persons.identity');
-
-        Route::post(
-            'identity-document/{id}',
-            [\Webkul\Admin\Http\Controllers\Contact\ContactIdentityDocumentController::class, 'updatePerson']
-        )->name('admin.contacts.persons.identity.update');
-
-        Route::get(
-            'identity-document/{id}/file',
-            [\Webkul\Admin\Http\Controllers\Contact\ContactIdentityDocumentController::class, 'personKtp']
-        )->name('admin.contacts.persons.ktp');
 
         Route::put('edit/{id}', 'update')->name('admin.contacts.persons.update');
 
@@ -78,27 +57,6 @@ Route::prefix('contacts')->group(function () {
         Route::post('create', 'store')->name('admin.contacts.organizations.store');
 
         Route::get('edit/{id?}', 'edit')->name('admin.contacts.organizations.edit');
-
-        Route::get(
-            'identity-document/{id}',
-            [\Webkul\Admin\Http\Controllers\Contact\ContactIdentityDocumentController::class, 'editOrganization']
-        )->name('admin.contacts.organizations.identity');
-
-        Route::post(
-            'identity-document/{id}',
-            [\Webkul\Admin\Http\Controllers\Contact\ContactIdentityDocumentController::class, 'updateOrganization']
-        )->name('admin.contacts.organizations.identity.update');
-
-        Route::get(
-            'identity-document/{id}/file',
-            [\Webkul\Admin\Http\Controllers\Contact\ContactIdentityDocumentController::class, 'organizationNpwp']
-        )->name('admin.contacts.organizations.npwp');
-
-        Route::get(
-            '{id}/npwp-document',
-            [\Webkul\Admin\Http\Controllers\Contact\ContactIdentityDocumentController::class, 'organizationNpwp']
-        )
-            ->name('admin.contacts.organizations.npwp');
 
         Route::put('edit/{id}', 'update')->name('admin.contacts.organizations.update');
 

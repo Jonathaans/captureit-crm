@@ -72,15 +72,5 @@
         </div>
     </x-admin::form>
 
-    <!-- CONTACT IDENTITY V2.1 ORGANIZATION LINK -->
-    <div class="mt-4 flex justify-end">
-        <a
-            href="{{ route('admin.contacts.organizations.identity', $organization->id) }}"
-            class="secondary-button"
-        >
-            Manage NPWP
-        </a>
-    </div>
-
     {!! view_render_event('admin.organizations.edit.form.after') !!}
 </x-admin::layouts>

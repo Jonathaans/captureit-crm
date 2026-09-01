@@ -73,16 +73,6 @@
         </div>
     </x-admin::form>
 
-    <!-- CONTACT IDENTITY V2.1 PERSON LINK -->
-    <div class="mt-4 flex justify-end">
-        <a
-            href="{{ route('admin.contacts.persons.identity', $person->id) }}"
-            class="secondary-button"
-        >
-            Manage KTP
-        </a>
-    </div>
-
     {!! view_render_event('admin.persons.edit.form.after') !!}
 
     @pushOnce('scripts')
