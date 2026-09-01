@@ -1064,20 +1064,4 @@ return [
             'admin.crm-notifications.read-all',
         ],
         'sort'  => 91,
-    ],
-    [
-        'key'   => 'operations-dashboard',
-        'name'  => 'Operations Dashboard',
-        'route' => 'admin.operations-dashboard.index',
-        'sort'  => 92,
-    ],
-    [
-        'key'   => 'financial-periods',
-        'name'  => 'Financial Period Lock',
-        'route' => [
-            'admin.financial-periods.index',
-            'admin.financial-periods.store',
-            'admin.financial-periods.destroy',
-        ],
-        'sort'  => 93,
     ],];

@@ -1042,42 +1042,4 @@ return [
             'admin.system-control.incidents.resolve',
         ],
         'sort'  => 99,
-    ],
-    [
-        'key'   => 'vendors',
-        'name'  => 'Vendor Master',
-        'route' => [
-            'admin.vendors.index',
-            'admin.vendors.create',
-            'admin.vendors.store',
-            'admin.vendors.edit',
-            'admin.vendors.update',
-        ],
-        'sort'  => 90,
-    ],
-    [
-        'key'   => 'crm-notifications',
-        'name'  => 'CRM Notifications',
-        'route' => [
-            'admin.crm-notifications.index',
-            'admin.crm-notifications.read',
-            'admin.crm-notifications.read-all',
-        ],
-        'sort'  => 91,
-    ],
-    [
-        'key'   => 'operations-dashboard',
-        'name'  => 'Operations Dashboard',
-        'route' => 'admin.operations-dashboard.index',
-        'sort'  => 92,
-    ],
-    [
-        'key'   => 'financial-periods',
-        'name'  => 'Financial Period Lock',
-        'route' => [
-            'admin.financial-periods.index',
-            'admin.financial-periods.store',
-            'admin.financial-periods.destroy',
-        ],
-        'sort'  => 93,
     ],];

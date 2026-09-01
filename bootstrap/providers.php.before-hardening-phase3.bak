@@ -62,5 +62,4 @@ return [
     \Webkul\Admin\Providers\GoogleCalendarIntegrationServiceProvider::class,
     \Webkul\Admin\Providers\CrmHardeningCoreServiceProvider::class,
     \Webkul\Admin\Providers\CrmOperationsServiceProvider::class,
-    \Webkul\Admin\Providers\CrmGovernanceServiceProvider::class,
 ];

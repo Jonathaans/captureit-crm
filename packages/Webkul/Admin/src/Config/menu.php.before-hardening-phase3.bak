@@ -523,11 +523,4 @@ return [
         'sort'       => 14,
         'icon-class' => 'icon-help',
     ],
-
-    [
-        'key'        => 'operations-dashboard',
-        'name'       => 'Operations Dashboard',
-        'route'      => 'admin.operations-dashboard.index',
-        'sort'       => 2,
-        'icon-class' => 'icon-dashboard',
-    ],];
+];

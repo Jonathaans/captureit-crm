@@ -196,24 +196,30 @@ class LeadCalendarController extends Controller
             );
         }
 
-        /*
-         * GOOGLE CALENDAR QUEUE HARDENING V1
-         *
-         * Save first, sync through queue with retry/backoff.
-         */
-        $event->update([
-            'sync_status' => 'pending',
-            'sync_error' => null,
-        ]);
+        try {
+            $googleCalendar->sync(
+                $event
+            );
 
-        \Webkul\Admin\Jobs\SyncGoogleCalendarEventJob::dispatch(
-            (int) $event->id
-        );
+            session()->flash(
+                'success',
+                'Confirmed Event tersimpan dan Google Calendar berhasil disinkronkan.'
+            );
+        } catch (Throwable $exception) {
+            $event->update([
+                'sync_status' =>
+                    'error',
 
-        session()->flash(
-            'success',
-            'Confirmed Event tersimpan. Google Calendar sync masuk queue.'
-        );
+                'sync_error' =>
+                    $exception->getMessage(),
+            ]);
+
+            session()->flash(
+                'warning',
+                'Event tersimpan, tetapi Google Calendar sync gagal: '
+                .$exception->getMessage()
+            );
+        }
 
         return redirect()->route(
             'admin.google-calendar.leads.edit',
@@ -233,22 +239,30 @@ class LeadCalendarController extends Controller
                 )
                 ->firstOrFail();
 
-        /*
-         * GOOGLE CALENDAR QUEUE HARDENING V1 - MANUAL RETRY
-         */
-        $event->update([
-            'sync_status' => 'pending',
-            'sync_error' => null,
-        ]);
+        try {
+            $googleCalendar->sync(
+                $event
+            );
 
-        \Webkul\Admin\Jobs\SyncGoogleCalendarEventJob::dispatch(
-            (int) $event->id
-        );
+            session()->flash(
+                'success',
+                'Google Calendar berhasil disinkronkan.'
+            );
+        } catch (Throwable $exception) {
+            $event->update([
+                'sync_status' =>
+                    'error',
 
-        session()->flash(
-            'success',
-            'Google Calendar retry masuk queue.'
-        );
+                'sync_error' =>
+                    $exception->getMessage(),
+            ]);
+
+            session()->flash(
+                'warning',
+                'Google Calendar sync gagal: '
+                .$exception->getMessage()
+            );
+        }
 
         return redirect()->route(
             'admin.google-calendar.leads.edit',
