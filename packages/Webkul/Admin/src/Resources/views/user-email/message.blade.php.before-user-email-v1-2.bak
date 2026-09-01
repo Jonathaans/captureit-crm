@@ -22,23 +22,7 @@
                 </div>
             </div>
 
-                        <!-- USER EMAIL V1.2 REPLY BUTTONS -->
-            <div class="flex gap-2">
-                <a
-                    href="{{ route('admin.my-email.compose', ['reply_to' => $message->id, 'mode' => 'reply']) }}"
-                    class="primary-button"
-                >
-                    Reply
-                </a>
-
-                <a
-                    href="{{ route('admin.my-email.compose', ['reply_to' => $message->id, 'mode' => 'reply_all']) }}"
-                    class="secondary-button"
-                >
-                    Reply All
-                </a>
-            </div>
-<a
+            <a
                 href="{{ route('admin.my-email.inbox') }}"
                 class="secondary-button"
             >

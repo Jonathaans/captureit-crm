@@ -13,6 +13,5 @@ class UserEmailMessage extends Model
     protected $casts = [
         'received_at' => 'datetime',
         'read_at' => 'datetime',
-        'sent_at' => 'datetime',
     ];
 }

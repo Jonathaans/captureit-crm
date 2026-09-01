@@ -20,21 +20,7 @@
             </div>
 
             <div class="flex gap-2">
-                                <!-- USER EMAIL V1.2 COMPOSE SENT BUTTONS -->
                 <a
-                    href="{{ route('admin.my-email.compose') }}"
-                    class="primary-button"
-                >
-                    + Compose
-                </a>
-
-                <a
-                    href="{{ route('admin.my-email.sent') }}"
-                    class="secondary-button"
-                >
-                    Sent
-                </a>
-<a
                     href="{{ route('admin.my-email.settings') }}"
                     class="secondary-button"
                 >
