@@ -46,8 +46,7 @@ class DeliveryOrderService
         return DB::transaction(
             function () use (
                 $invoice,
-                $createdBy,
-                $workOrderId
+                $createdBy
             ) {
                 /*
                 |--------------------------------------------------------------------------
