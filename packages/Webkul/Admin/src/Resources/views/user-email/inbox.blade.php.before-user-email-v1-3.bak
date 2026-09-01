@@ -20,11 +20,7 @@
             </div>
 
             <div class="flex gap-2">
-                                                <!-- USER EMAIL V1.3 FOLDER NAV -->
-                <a href="{{ route('admin.my-email.drafts') }}" class="secondary-button">Draft</a>
-                <a href="{{ route('admin.my-email.outbox') }}" class="secondary-button">Outbox</a>
-                <a href="{{ route('admin.my-email.trash') }}" class="secondary-button">Trash</a>
-<!-- USER EMAIL V1.2 COMPOSE SENT BUTTONS -->
+                                <!-- USER EMAIL V1.2 COMPOSE SENT BUTTONS -->
                 <a
                     href="{{ route('admin.my-email.compose') }}"
                     class="primary-button"

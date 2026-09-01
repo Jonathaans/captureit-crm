@@ -40,8 +40,6 @@
             method="POST"
             action="{{ route('admin.my-email.send') }}"
             class="rounded-xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900"
-        
-            enctype="multipart/form-data"
         >
             @csrf
 
@@ -109,42 +107,9 @@
                         required
                     >{{ old('message', $body) }}</textarea>
                 </div>
-
-                <!-- USER EMAIL V1.3 ATTACHMENTS DRAFT -->
-                <div>
-                    <label class="mb-1.5 block text-sm font-semibold">
-                        Attachments
-                    </label>
-
-                    <input
-                        type="file"
-                        name="attachments[]"
-                        multiple
-                        class="w-full rounded-md border px-3 py-2"
-                    >
-
-                    <div class="mt-1 text-xs text-gray-500">
-                        Maximum 5 files, 10 MB each.
-                    </div>
-
-                    @if (($draftMessage ?? null))
-                        <input
-                            type="hidden"
-                            name="draft_message_id"
-                            value="{{ $draftMessage->id }}"
-                        >
-                    @endif
-                </div>
             </div>
 
-            <div class="mt-5 flex flex-wrap justify-end gap-2">
-                <button
-                    type="submit"
-                    formaction="{{ route('admin.my-email.drafts.save') }}"
-                    class="secondary-button"
-                >
-                    Save Draft
-                </button>
+            <div class="mt-5 flex justify-end">
                 <button class="primary-button">
                     Send Email
                 </button>

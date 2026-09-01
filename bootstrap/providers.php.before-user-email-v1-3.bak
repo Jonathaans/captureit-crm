@@ -66,5 +66,4 @@ return [
     \Webkul\Admin\Providers\SalesLeadIsolationServiceProvider::class,
     \Webkul\Admin\Providers\UserEmailIntegrationServiceProvider::class,
     \Webkul\Admin\Providers\UserEmailComposeServiceProvider::class,
-    \Webkul\Admin\Providers\UserEmailMailboxServiceProvider::class,
 ];

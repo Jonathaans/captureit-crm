@@ -65,45 +65,5 @@
         <div class="rounded-xl border bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <pre class="whitespace-pre-wrap font-sans text-sm">{{ $message->text_body }}</pre>
         </div>
-    
-        <!-- USER EMAIL V1.3 SENT ATTACHMENT LIST -->
-        @php
-            $attachments = \Webkul\Admin\Models\UserEmailAttachment::query()
-                ->where('user_id', auth()->guard('user')->id())
-                ->where('message_id', $message->id)
-                ->get();
-        @endphp
-
-        @if ($attachments->isNotEmpty())
-            <div class="rounded-xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
-                <h2 class="font-bold">
-                    Attachments ({{ $attachments->count() }})
-                </h2>
-
-                <div class="mt-3 flex flex-wrap gap-2">
-                    @foreach ($attachments as $attachment)
-                        <a
-                            href="{{ route('admin.my-email.attachments.download', $attachment->id) }}"
-                            class="secondary-button"
-                        >
-                            {{ $attachment->original_name }}
-                            ({{ number_format($attachment->size / 1024, 1) }} KB)
-                        </a>
-                    @endforeach
-                </div>
-            </div>
-        @endif
-
-        <div class="flex justify-end">
-            <form
-                method="POST"
-                action="{{ route('admin.my-email.trash.move', $message->id) }}"
-            >
-                @csrf
-                <button class="secondary-button">
-                    Move to Trash
-                </button>
-            </form>
-        </div>
-</div>
+    </div>
 </x-admin::layouts>

@@ -179,10 +179,8 @@ class MyEmailComposeController extends Controller
 
     public function send(
         Request $request,
-        \Webkul\Admin\Services\UserEmailDeliveryService $delivery
+        UserEmailSendService $sender
     ): RedirectResponse {
-        /* USER EMAIL V1.3 DELIVERY SERVICE */
-
         $user =
             $this->user();
 
@@ -198,37 +196,28 @@ class MyEmailComposeController extends Controller
                     'string',
                     'max:5000',
                 ],
+
                 'cc' => [
                     'nullable',
                     'string',
                     'max:5000',
                 ],
+
                 'subject' => [
                     'required',
                     'string',
                     'max:998',
                 ],
+
                 'message' => [
                     'required',
                     'string',
                     'max:200000',
                 ],
+
                 'reply_to_message_id' => [
                     'nullable',
                     'integer',
-                ],
-                'draft_message_id' => [
-                    'nullable',
-                    'integer',
-                ],
-                'attachments' => [
-                    'nullable',
-                    'array',
-                    'max:5',
-                ],
-                'attachments.*' => [
-                    'file',
-                    'max:10240',
                 ],
             ]);
 
@@ -237,7 +226,9 @@ class MyEmailComposeController extends Controller
 
             if (
                 ! empty(
-                    $validated['reply_to_message_id']
+                    $validated[
+                        'reply_to_message_id'
+                    ]
                 )
             ) {
                 $replyTo =
@@ -253,45 +244,26 @@ class MyEmailComposeController extends Controller
                         );
             }
 
-            $draft = null;
+            $to =
+                $sender->parseAddressInput(
+                    $validated['to']
+                );
 
-            if (
-                ! empty(
-                    $validated['draft_message_id']
-                )
-            ) {
-                $draft =
-                    UserEmailMessage::query()
-                        ->where(
-                            'user_id',
-                            $user->id
-                        )
-                        ->where(
-                            'folder',
-                            'DRAFT'
-                        )
-                        ->findOrFail(
-                            (int) $validated[
-                                'draft_message_id'
-                            ]
-                        );
-            }
+            $cc =
+                $sender->parseAddressInput(
+                    $validated['cc']
+                    ?? ''
+                );
 
             $sent =
-                $delivery->send(
+                $sender->send(
                     $account,
-                    $validated['to'],
-                    $validated['cc']
-                        ?? '',
+                    $to,
+                    $cc,
                     trim(
                         $validated['subject']
                     ),
                     $validated['message'],
-                    $request->file(
-                        'attachments',
-                        []
-                    ),
-                    $draft,
                     $replyTo
                 );
 
@@ -312,9 +284,8 @@ class MyEmailComposeController extends Controller
                 $exception->getMessage()
             );
 
-            return redirect()->route(
-                'admin.my-email.outbox'
-            );
+            return back()
+                ->withInput();
         }
     }
 

@@ -11,9 +11,7 @@ class UserEmailSyncService
 {
     public function __construct(
         protected PurePhpImapClient $imap,
-        protected Rfc822EmailParser $parser,
-        protected Rfc822AttachmentExtractor $attachmentExtractor,
-        protected UserEmailAttachmentService $attachmentService
+        protected Rfc822EmailParser $parser
     ) {
     }
 
@@ -101,11 +99,8 @@ class UserEmailSyncService
                     }
                 }
 
-                /* USER EMAIL V1.3 INCOMING ATTACHMENTS */
-                $storedMessage =
-                    UserEmailMessage::query()
-                        ->updateOrCreate(
-
+                UserEmailMessage::query()
+                    ->updateOrCreate(
                         [
                             'account_id' =>
                                 $account->id,
@@ -180,20 +175,6 @@ class UserEmailSyncService
                         ]
                     );
 
-
-                $incomingAttachments =
-                    $this->attachmentExtractor
-                        ->extract(
-                            $raw
-                        );
-
-                if ($incomingAttachments) {
-                    $this->attachmentService
-                        ->storeIncomingExtracted(
-                            $storedMessage,
-                            $incomingAttachments
-                        );
-                }
                 $account->imap_last_uid =
                     max(
                         (int) (
