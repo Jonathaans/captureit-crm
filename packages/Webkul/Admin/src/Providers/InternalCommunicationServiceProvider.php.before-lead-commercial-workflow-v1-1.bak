@@ -142,18 +142,115 @@ class InternalCommunicationServiceProvider extends ServiceProvider
 
     private function registerBusinessNotifications(): void
     {
-                /*
+        /*
         |--------------------------------------------------------------------------
-        | LEAD COMMERCIAL WORKFLOW DELEGATED V1.1
+        | Lead WON -> Sales Admin
         |--------------------------------------------------------------------------
-        |
-        | Lead QUOTATION and WON notifications are now handled by:
-        | LeadCommercialWorkflowServiceProvider.
-        |
-        | SPK and Surat Jalan notifications below remain unchanged.
-        |
         */
-/*
+
+        $leadClass =
+            \Webkul\Lead\Models\Lead::class;
+
+        if (class_exists($leadClass)) {
+            $leadClass::updated(
+                function ($lead) {
+                    $detector =
+                        app(
+                            LeadWonNotificationDetector::class
+                        );
+
+                    if (
+                        ! $detector->becameWon(
+                            $lead
+                        )
+                    ) {
+                        return;
+                    }
+
+                    $service =
+                        app(
+                            WorkflowNotificationService::class
+                        );
+
+                    $recipientIds =
+                        $service->usersByRoleNames([
+                            'Sales Admin',
+                        ]);
+
+                    if ($recipientIds->isEmpty()) {
+                        return;
+                    }
+
+                    $leadLabel =
+                        trim(
+                            (string) (
+                                $lead->title
+                                ?? $lead->subject
+                                ?? ''
+                            )
+                        );
+
+                    if ($leadLabel === '') {
+                        $leadLabel =
+                            'Lead #'
+                            .$lead->id;
+                    }
+
+                    $ownerName =
+                        null;
+
+                    if (
+                        ! empty(
+                            $lead->user_id
+                        )
+                    ) {
+                        $ownerName =
+                            \Illuminate\Support\Facades\DB::table(
+                                'users'
+                            )
+                                ->where(
+                                    'id',
+                                    $lead->user_id
+                                )
+                                ->value(
+                                    'name'
+                                );
+                    }
+
+                    $message =
+                        $leadLabel
+                        .(
+                            $ownerName
+                                ? ' · Sales Owner: '
+                                    .$ownerName
+                                : ''
+                        )
+                        .' · Action: buat Quotation.';
+
+                    $service->notifyUsers(
+                        $recipientIds,
+                        'lead_won',
+                        'Lead WON - Buat Quotation',
+                        $message,
+                        route(
+                            'admin.leads.view',
+                            $lead->id
+                        ),
+                        'lead-won:'
+                            .$lead->id,
+                        'lead',
+                        $lead->id,
+                        [
+                            'sales_owner_id' =>
+                                $lead->user_id
+                                ?? null,
+                        ]
+                    );
+                }
+            );
+        }
+
+        /*
         |--------------------------------------------------------------------------
         | SPK Released -> Sales Owner
         |--------------------------------------------------------------------------

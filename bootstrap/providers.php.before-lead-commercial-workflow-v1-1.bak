@@ -69,5 +69,4 @@ return [
     \Webkul\Admin\Providers\UserEmailMailboxServiceProvider::class,
     \Webkul\Admin\Providers\WorkOrderIntegrationServiceProvider::class,
     \Webkul\Admin\Providers\InternalCommunicationServiceProvider::class,
-    \Webkul\Admin\Providers\LeadCommercialWorkflowServiceProvider::class,
 ];
