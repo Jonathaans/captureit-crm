@@ -8,7 +8,6 @@ use Illuminate\Support\ServiceProvider;
 use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatAttachmentController;
 use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatController;
 use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatExperienceController;
-use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatConversationController;
 use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatAuditController;
 use Webkul\Admin\Http\Controllers\InternalCommunication\WorkflowNotificationController;
 use Webkul\Admin\Http\Middleware\InjectInternalCommunicationUi;
@@ -214,36 +213,6 @@ Route::post(
                         ]
                     )->name(
                         'admin.internal-chat.attachments.preview'
-                    );
-
-                    Route::get(
-                        'internal-chat/sidebar-summary',
-                        [
-                            InternalChatConversationController::class,
-                            'sidebarSummary',
-                        ]
-                    )->name(
-                        'admin.internal-chat.sidebar-summary'
-                    );
-
-                    Route::post(
-                        'internal-chat/{conversationId}/preference',
-                        [
-                            InternalChatConversationController::class,
-                            'updatePreference',
-                        ]
-                    )->name(
-                        'admin.internal-chat.preference'
-                    );
-
-                    Route::post(
-                        'internal-chat/presence/heartbeat',
-                        [
-                            InternalChatConversationController::class,
-                            'heartbeat',
-                        ]
-                    )->name(
-                        'admin.internal-chat.presence.heartbeat'
                     );
 
                     Route::get(

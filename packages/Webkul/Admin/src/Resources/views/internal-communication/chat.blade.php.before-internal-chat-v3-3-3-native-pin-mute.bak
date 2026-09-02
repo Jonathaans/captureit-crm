@@ -6192,339 +6192,12 @@
             */
 
             /* INTERNAL CHAT V3.3.1 COMPACT SIDEBAR */
-            /* INTERNAL CHAT V3.3.8 EXPLICIT APPLY PREFERENCES */
             const renderSidebar = (
                 rows
             ) => {
                 if (! list) {
                     return;
                 }
-
-                const configV333 =
-                    document.getElementById(
-                        'crm-chat-v333-config'
-                    );
-
-                const preferenceTemplate =
-                    String(
-                        configV333?.dataset
-                            .preferenceTemplate
-                        || ''
-                    );
-
-                const hardCsrf =
-                    String(
-                        configV333?.dataset
-                            .csrf
-                        || ''
-                    );
-
-                const preferenceUrl = (
-                    conversationId
-                ) =>
-                    preferenceTemplate.replace(
-                        '__CID__',
-                        encodeURIComponent(
-                            String(
-                                conversationId
-                            )
-                        )
-                    );
-
-                const csrfInput = () => {
-                    const token =
-                        document.createElement(
-                            'input'
-                        );
-
-                    token.type =
-                        'hidden';
-
-                    token.name =
-                        '_token';
-
-                    token.value =
-                        hardCsrf;
-
-                    return token;
-                };
-
-                const pinForm = (
-                    row
-                ) => {
-                    const form =
-                        document.createElement(
-                            'form'
-                        );
-
-                    form.method =
-                        'POST';
-
-                    form.action =
-                        preferenceUrl(
-                            row.id
-                        );
-
-                    form.style.margin =
-                        '0';
-
-                    form.style.padding =
-                        '0';
-
-                    const button =
-                        document.createElement(
-                            'button'
-                        );
-
-                    button.type =
-                        'submit';
-
-                    /*
-                     * Critical V3.3.8 change:
-                     * clicked submit button itself carries the action.
-                     */
-                    button.name =
-                        'action';
-
-                    button.value =
-                        row.pinned
-                            ? 'unpin'
-                            : 'pin';
-
-                    button.title =
-                        row.pinned
-                            ? 'Unpin'
-                            : 'Pin';
-
-                    button.textContent =
-                        row.pinned
-                            ? '📍'
-                            : '📌';
-
-                    button.style.cssText =
-                        'width:26px;'
-                        +'height:27px;'
-                        +'display:flex;'
-                        +'align-items:center;'
-                        +'justify-content:center;'
-                        +'padding:0;'
-                        +'border:1px solid #e5e7eb;'
-                        +'border-radius:8px;'
-                        +'background:#ffffff;'
-                        +'font-size:11px;'
-                        +'cursor:pointer;';
-
-                    form.appendChild(
-                        csrfInput()
-                    );
-
-                    form.appendChild(
-                        button
-                    );
-
-                    return form;
-                };
-
-                const muteForm = (
-                    row
-                ) => {
-                    const form =
-                        document.createElement(
-                            'form'
-                        );
-
-                    form.method =
-                        'POST';
-
-                    form.action =
-                        preferenceUrl(
-                            row.id
-                        );
-
-                    form.style.cssText =
-                        'margin:0;'
-                        +'padding:0;'
-                        +'display:flex;'
-                        +'align-items:center;'
-                        +'gap:4px;';
-
-                    const select =
-                        document.createElement(
-                            'select'
-                        );
-
-                    select.name =
-                        'action';
-
-                    select.required =
-                        true;
-
-                    select.title =
-                        row.muted
-                            ? (
-                                row.mute_label
-                                || 'Muted'
-                            )
-                            : 'Mute notification';
-
-                    select.style.cssText =
-                        'width:'
-                        +(
-                            row.muted
-                                ? '86px'
-                                : '70px'
-                        )
-                        +';'
-                        +'height:27px;'
-                        +'padding:0 4px;'
-                        +'border:1px solid '
-                        +(
-                            row.muted
-                                ? '#f59e0b'
-                                : '#e5e7eb'
-                        )
-                        +';'
-                        +'border-radius:8px;'
-                        +'background:'
-                        +(
-                            row.muted
-                                ? '#fffbeb'
-                                : '#ffffff'
-                        )
-                        +';'
-                        +'font-size:10px;'
-                        +'font-weight:700;'
-                        +'color:'
-                        +(
-                            row.muted
-                                ? '#92400e'
-                                : '#334155'
-                        )
-                        +';';
-
-                    const placeholder =
-                        document.createElement(
-                            'option'
-                        );
-
-                    placeholder.value =
-                        '';
-
-                    placeholder.textContent =
-                        row.muted
-                            ? '🔕 Muted'
-                            : '🔔 Mute';
-
-                    placeholder.selected =
-                        true;
-
-                    placeholder.disabled =
-                        true;
-
-                    select.appendChild(
-                        placeholder
-                    );
-
-                    [
-                        [
-                            'mute_1_hour',
-                            'Mute 1 jam',
-                        ],
-                        [
-                            'mute_today',
-                            'Sampai akhir hari',
-                        ],
-                        [
-                            'mute_forever',
-                            'Sampai diaktifkan kembali',
-                        ],
-                        [
-                            'unmute',
-                            'Unmute',
-                        ],
-                    ].forEach(
-                        ([value, label]) => {
-                            const option =
-                                document.createElement(
-                                    'option'
-                                );
-
-                            option.value =
-                                value;
-
-                            option.textContent =
-                                label;
-
-                            select.appendChild(
-                                option
-                            );
-                        }
-                    );
-
-                    const apply =
-                        document.createElement(
-                            'button'
-                        );
-
-                    apply.type =
-                        'submit';
-
-                    apply.textContent =
-                        'Apply';
-
-                    apply.title =
-                        'Apply notification setting';
-
-                    apply.style.cssText =
-                        'height:27px;'
-                        +'padding:0 8px;'
-                        +'border:1px solid #e5e7eb;'
-                        +'border-radius:8px;'
-                        +'background:#0f172a;'
-                        +'color:#ffffff;'
-                        +'font-size:9px;'
-                        +'font-weight:800;'
-                        +'cursor:pointer;';
-
-                    /*
-                     * Pause realtime redraw while the operator is choosing.
-                     * The final POST itself remains pure browser form submit.
-                     */
-                    select.addEventListener(
-                        'focus',
-                        () => {
-                            window.__crmMuteSelectOpen =
-                                true;
-                        }
-                    );
-
-                    select.addEventListener(
-                        'blur',
-                        () => {
-                            window.setTimeout(
-                                () => {
-                                    window.__crmMuteSelectOpen =
-                                        false;
-                                },
-                                150
-                            );
-                        }
-                    );
-
-                    form.appendChild(
-                        csrfInput()
-                    );
-
-                    form.appendChild(
-                        select
-                    );
-
-                    form.appendChild(
-                        apply
-                    );
-
-                    return form;
-                };
 
                 const fragment =
                     document.createDocumentFragment();
@@ -6579,12 +6252,6 @@
                             +'text-decoration:none;'
                             +'color:inherit;';
 
-                        const unread =
-                            Number(
-                                row.unread
-                                || 0
-                            );
-
                         const presenceColor =
                             row.online
                                 ? '#22c55e'
@@ -6593,6 +6260,17 @@
                                         ? '#f59e0b'
                                         : '#cbd5e1'
                                 );
+
+                        const unread =
+                            Number(
+                                row.unread
+                                || 0
+                            );
+
+                        const pinPrefix =
+                            row.pinned
+                                ? '<span title="Pinned" style="font-size:10px;">📌</span> '
+                                : '';
 
                         link.innerHTML =
                             '<div style="position:relative;flex:0 0 auto;">'
@@ -6608,11 +6286,7 @@
                             +'<div style="min-width:0;flex:1;">'
                             +'<div style="display:flex;align-items:center;justify-content:space-between;gap:7px;">'
                             +'<div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:800;color:#0f172a;">'
-                            +(
-                                row.pinned
-                                    ? '📌 '
-                                    : ''
-                            )
+                            +pinPrefix
                             +escapeHtml(
                                 row.name
                             )
@@ -6653,8 +6327,7 @@
                                     : ''
                             )
                             +'</div>'
-                            +'<div style="margin-top:1px;display:flex;align-items:center;gap:5px;overflow:hidden;white-space:nowrap;font-size:9px;line-height:12px;color:#94a3b8;">'
-                            +'<span style="overflow:hidden;text-overflow:ellipsis;">'
+                            +'<div style="margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;line-height:12px;color:#94a3b8;">'
                             +escapeHtml(
                                 row.role
                             )
@@ -6674,15 +6347,9 @@
                                 row.presence
                             )
                             +'</span>'
-                            +'</span>'
                             +(
                                 row.muted
-                                    ? '<span style="flex:0 0 auto;padding:1px 6px;border:1px solid #fde68a;border-radius:999px;background:#fffbeb;color:#92400e;font-size:8.5px;font-weight:800;">🔕 '
-                                        +escapeHtml(
-                                            row.mute_label
-                                            || 'Muted'
-                                        )
-                                        +'</span>'
+                                    ? ' · 🔕'
                                     : ''
                             )
                             +'</div>'
@@ -6697,19 +6364,134 @@
                             'flex:0 0 auto;'
                             +'display:flex;'
                             +'align-items:flex-start;'
-                            +'gap:4px;'
-                            +'padding:8px 8px 0 0;';
+                            +'gap:2px;'
+                            +'padding:8px 7px 0 0;';
 
-                        controls.appendChild(
-                            pinForm(
-                                row
-                            )
+                        const makeActionButton = (
+                            title,
+                            text
+                        ) => {
+                            const button =
+                                document.createElement(
+                                    'button'
+                                );
+
+                            button.type =
+                                'button';
+
+                            button.title =
+                                title;
+
+                            button.textContent =
+                                text;
+
+                            button.style.cssText =
+                                'width:25px;'
+                                +'height:25px;'
+                                +'display:flex;'
+                                +'align-items:center;'
+                                +'justify-content:center;'
+                                +'border:1px solid #e5e7eb;'
+                                +'border-radius:8px;'
+                                +'background:#fff;'
+                                +'font-size:11px;'
+                                +'cursor:pointer;';
+
+                            return button;
+                        };
+
+                        const pin =
+                            makeActionButton(
+                                row.pinned
+                                    ? 'Unpin conversation'
+                                    : 'Pin conversation',
+                                row.pinned
+                                    ? '📍'
+                                    : '📌'
+                            );
+
+                        pin.addEventListener(
+                            'click',
+                            async (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+
+                                pin.disabled =
+                                    true;
+
+                                try {
+                                    await preference(
+                                        row.id,
+                                        row.pinned
+                                            ? 'unpin'
+                                            : 'pin'
+                                    );
+
+                                    await refreshSidebar();
+                                } catch (error) {
+                                    console.error(
+                                        'Pin preference failed:',
+                                        error
+                                    );
+
+                                    window.alert(
+                                        'Pin conversation gagal. Refresh halaman jika sesi login berubah.'
+                                    );
+                                } finally {
+                                    pin.disabled =
+                                        false;
+                                }
+                            }
+                        );
+
+                        const mute =
+                            makeActionButton(
+                                row.muted
+                                    ? row.mute_label
+                                    : 'Mute conversation',
+                                row.muted
+                                    ? '🔕'
+                                    : '🔔'
+                            );
+
+                        mute.addEventListener(
+                            'click',
+                            (event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+
+                                muteConversationId =
+                                    Number(
+                                        row.id
+                                    );
+
+                                const name =
+                                    document.getElementById(
+                                        'crm-chat-v33-mute-name'
+                                    );
+
+                                if (name) {
+                                    name.textContent =
+                                        row.name
+                                        +(
+                                            row.muted
+                                                ? ' · '
+                                                    +row.mute_label
+                                                : ''
+                                        );
+                                }
+
+                                muteOverlay.style.display =
+                                    'flex';
+                            }
                         );
 
                         controls.appendChild(
-                            muteForm(
-                                row
-                            )
+                            pin
+                        );
+
+                        controls.appendChild(
+                            mute
                         );
 
                         wrapper.appendChild(
@@ -6747,8 +6529,7 @@
             const refreshSidebar =
                 async () => {
                     if (
-                        window.__crmMuteSelectOpen
-                        || refreshing
+                        refreshing
                         || ! summaryUrl
                     ) {
                         return;
@@ -7373,559 +7154,4 @@
             );
         })();
     </script>
-
-    {{-- INTERNAL CHAT V3.3.3 NATIVE PIN MUTE --}}
-    <div
-        id="crm-chat-v333-config"
-        data-preference-template="{{ route('admin.internal-chat.preference', ['conversationId' => '__CID__']) }}"
-        data-csrf="{{ csrf_token() }}"
-        style="display:none;"
-    ></div>
-
-    <div
-        id="crm-chat-v333-mute-modal"
-        style="
-            display:none;
-            position:fixed;
-            inset:0;
-            z-index:150;
-            align-items:center;
-            justify-content:center;
-            padding:18px;
-            background:rgba(15,23,42,.46);
-            backdrop-filter:blur(3px);
-        "
-    >
-        <form
-            id="crm-chat-v333-mute-form"
-            method="POST"
-            action=""
-            style="
-                width:min(92vw,350px);
-                overflow:hidden;
-                border:1px solid #e5e7eb;
-                border-radius:18px;
-                background:#ffffff;
-                box-shadow:0 28px 80px rgba(15,23,42,.26);
-            "
-        >
-            @csrf
-
-            <div style="padding:15px 16px;border-bottom:1px solid #e5e7eb;">
-                <div style="font-size:15px;font-weight:800;color:#0f172a;">
-                    Mute Conversation
-                </div>
-
-                <div
-                    id="crm-chat-v333-mute-name"
-                    style="margin-top:3px;font-size:12px;color:#64748b;"
-                ></div>
-            </div>
-
-            <div style="padding:8px;">
-                <button
-                    type="submit"
-                    name="action"
-                    value="mute_1_hour"
-                    style="width:100%;padding:10px 12px;text-align:left;border-radius:10px;"
-                >
-                    🔕 1 jam
-                </button>
-
-                <button
-                    type="submit"
-                    name="action"
-                    value="mute_today"
-                    style="width:100%;padding:10px 12px;text-align:left;border-radius:10px;"
-                >
-                    🔕 Sampai akhir hari
-                </button>
-
-                <button
-                    type="submit"
-                    name="action"
-                    value="mute_forever"
-                    style="width:100%;padding:10px 12px;text-align:left;border-radius:10px;"
-                >
-                    🔕 Sampai diaktifkan kembali
-                </button>
-
-                <button
-                    type="submit"
-                    name="action"
-                    value="unmute"
-                    style="width:100%;padding:10px 12px;text-align:left;border-radius:10px;"
-                >
-                    🔔 Unmute
-                </button>
-            </div>
-
-            <div
-                style="
-                    display:flex;
-                    align-items:center;
-                    justify-content:flex-end;
-                    padding:10px 16px;
-                    border-top:1px solid #e5e7eb;
-                "
-            >
-                <button
-                    type="button"
-                    id="crm-chat-v333-mute-close"
-                    class="secondary-button"
-                >
-                    Close
-                </button>
-            </div>
-        </form>
-    </div>
-
-    <script>
-        (() => {
-            const config =
-                document.getElementById(
-                    'crm-chat-v333-config'
-                );
-
-            const modal =
-                document.getElementById(
-                    'crm-chat-v333-mute-modal'
-                );
-
-            const form =
-                document.getElementById(
-                    'crm-chat-v333-mute-form'
-                );
-
-            const name =
-                document.getElementById(
-                    'crm-chat-v333-mute-name'
-                );
-
-            if (
-                ! config
-                || ! modal
-                || ! form
-            ) {
-                return;
-            }
-
-            const template =
-                String(
-                    config.dataset.preferenceTemplate
-                    || ''
-                );
-
-            const preferenceUrl = (
-                conversationId
-            ) =>
-                template.replace(
-                    '__CID__',
-                    encodeURIComponent(
-                        String(
-                            conversationId
-                        )
-                    )
-                );
-
-            window.crmChatV333OpenMute =
-                function (
-                    conversationId,
-                    conversationName,
-                    muteLabel
-                ) {
-                    form.action =
-                        preferenceUrl(
-                            conversationId
-                        );
-
-                    if (name) {
-                        name.textContent =
-                            String(
-                                conversationName
-                                || 'Conversation'
-                            )
-                            +(
-                                muteLabel
-                                    ? ' · '
-                                        +muteLabel
-                                    : ''
-                            );
-                    }
-
-                    modal.style.display =
-                        'flex';
-
-                    return false;
-                };
-
-            const close =
-                () => {
-                    modal.style.display =
-                        'none';
-
-                    form.action =
-                        '';
-                };
-
-            document
-                .getElementById(
-                    'crm-chat-v333-mute-close'
-                )
-                .addEventListener(
-                    'click',
-                    close
-                );
-
-            modal.addEventListener(
-                'click',
-                (event) => {
-                    if (
-                        event.target
-                        === modal
-                    ) {
-                        close();
-                    }
-                }
-            );
-        })();
-    </script>
-
-    {{-- INTERNAL CHAT V3.3.5 MODERN MUTE DIALOG --}}
-    <dialog
-        id="crm-chat-v335-mute-dialog"
-        style="
-            width:min(92vw,390px);
-            max-width:390px;
-            padding:0;
-            border:1px solid #e5e7eb;
-            border-radius:18px;
-            background:#ffffff;
-            box-shadow:0 28px 80px rgba(15,23,42,.28);
-            overflow:hidden;
-        "
-    >
-        <form
-            id="crm-chat-v335-mute-form"
-            method="POST"
-            action=""
-            style="margin:0;"
-        >
-            @csrf
-
-            <div
-                style="
-                    display:flex;
-                    align-items:flex-start;
-                    justify-content:space-between;
-                    gap:12px;
-                    padding:15px 16px;
-                    border-bottom:1px solid #e5e7eb;
-                    background:#ffffff;
-                "
-            >
-                <div style="min-width:0;">
-                    <div style="font-size:15px;font-weight:800;color:#0f172a;">
-                        Notification Settings
-                    </div>
-
-                    <div
-                        id="crm-chat-v335-mute-name"
-                        style="
-                            margin-top:3px;
-                            overflow:hidden;
-                            text-overflow:ellipsis;
-                            white-space:nowrap;
-                            font-size:11px;
-                            color:#64748b;
-                        "
-                    ></div>
-                </div>
-
-                <button
-                    type="button"
-                    id="crm-chat-v335-mute-close"
-                    class="secondary-button"
-                    style="flex:0 0 auto;"
-                >
-                    Close
-                </button>
-            </div>
-
-            <div style="padding:8px;background:#ffffff;">
-                <button
-                    type="submit"
-                    name="action"
-                    value="mute_1_hour"
-                    style="
-                        display:block;
-                        width:100%;
-                        padding:10px 12px;
-                        border-radius:10px;
-                        text-align:left;
-                        font-size:12px;
-                    "
-                >
-                    🔕 &nbsp;Mute 1 jam
-                </button>
-
-                <button
-                    type="submit"
-                    name="action"
-                    value="mute_today"
-                    style="
-                        display:block;
-                        width:100%;
-                        padding:10px 12px;
-                        border-radius:10px;
-                        text-align:left;
-                        font-size:12px;
-                    "
-                >
-                    🔕 &nbsp;Sampai akhir hari
-                </button>
-
-                <button
-                    type="submit"
-                    name="action"
-                    value="mute_forever"
-                    style="
-                        display:block;
-                        width:100%;
-                        padding:10px 12px;
-                        border-radius:10px;
-                        text-align:left;
-                        font-size:12px;
-                    "
-                >
-                    🔕 &nbsp;Sampai diaktifkan kembali
-                </button>
-
-                <div
-                    style="
-                        height:1px;
-                        margin:6px 3px;
-                        background:#e5e7eb;
-                    "
-                ></div>
-
-                <button
-                    type="submit"
-                    name="action"
-                    value="unmute"
-                    style="
-                        display:block;
-                        width:100%;
-                        padding:10px 12px;
-                        border-radius:10px;
-                        text-align:left;
-                        font-size:12px;
-                    "
-                >
-                    🔔 &nbsp;Unmute
-                </button>
-            </div>
-        </form>
-    </dialog>
-
-    <script>
-        (() => {
-            const dialog =
-                document.getElementById(
-                    'crm-chat-v335-mute-dialog'
-                );
-
-            const form =
-                document.getElementById(
-                    'crm-chat-v335-mute-form'
-                );
-
-            const name =
-                document.getElementById(
-                    'crm-chat-v335-mute-name'
-                );
-
-            const config =
-                document.getElementById(
-                    'crm-chat-v333-config'
-                );
-
-            if (
-                ! dialog
-                || ! form
-                || ! config
-            ) {
-                return;
-            }
-
-            const template =
-                String(
-                    config.dataset.preferenceTemplate
-                    || ''
-                );
-
-            const preferenceUrl = (
-                conversationId
-            ) =>
-                template.replace(
-                    '__CID__',
-                    encodeURIComponent(
-                        String(
-                            conversationId
-                        )
-                    )
-                );
-
-            window.crmChatV335OpenMute =
-                function (
-                    conversationId,
-                    conversationName,
-                    muteLabel
-                ) {
-                    form.action =
-                        preferenceUrl(
-                            conversationId
-                        );
-
-                    if (name) {
-                        name.textContent =
-                            String(
-                                conversationName
-                                || 'Conversation'
-                            )
-                            +(
-                                muteLabel
-                                    ? ' · '
-                                        +muteLabel
-                                    : ''
-                            );
-                    }
-
-                    if (
-                        typeof dialog.showModal
-                        === 'function'
-                    ) {
-                        if (! dialog.open) {
-                            dialog.showModal();
-                        }
-                    } else {
-                        dialog.setAttribute(
-                            'open',
-                            'open'
-                        );
-
-                        dialog.style.position =
-                            'fixed';
-
-                        dialog.style.left =
-                            '50%';
-
-                        dialog.style.top =
-                            '50%';
-
-                        dialog.style.transform =
-                            'translate(-50%,-50%)';
-
-                        dialog.style.zIndex =
-                            '160';
-                    }
-
-                    return false;
-                };
-
-            const close =
-                () => {
-                    if (
-                        typeof dialog.close
-                        === 'function'
-                        && dialog.open
-                    ) {
-                        dialog.close();
-                    } else {
-                        dialog.removeAttribute(
-                            'open'
-                        );
-                    }
-
-                    form.action =
-                        '';
-                };
-
-            document
-                .getElementById(
-                    'crm-chat-v335-mute-close'
-                )
-                .addEventListener(
-                    'click',
-                    close
-                );
-
-            dialog.addEventListener(
-                'click',
-                (event) => {
-                    const rect =
-                        dialog.getBoundingClientRect();
-
-                    const inside =
-                        event.clientX >= rect.left
-                        && event.clientX <= rect.right
-                        && event.clientY >= rect.top
-                        && event.clientY <= rect.bottom;
-
-                    if (! inside) {
-                        close();
-                    }
-                }
-            );
-
-            dialog.addEventListener(
-                'cancel',
-                (event) => {
-                    event.preventDefault();
-                    close();
-                }
-            );
-        })();
-    </script>
-
-    {{-- INTERNAL CHAT V3.3.6 NATIVE MUTE SELECT FINAL --}}
-    {{-- INTERNAL CHAT V3.3.7 PREFERENCE TOAST --}}
-    @if (session('internal_chat_preference_notice'))
-        <div
-            id="crm-chat-v337-toast"
-            style="
-                position:fixed;
-                right:22px;
-                top:92px;
-                z-index:180;
-                max-width:360px;
-                padding:11px 14px;
-                border:1px solid #bbf7d0;
-                border-radius:12px;
-                background:#f0fdf4;
-                color:#166534;
-                box-shadow:0 14px 36px rgba(15,23,42,.15);
-                font-size:12px;
-                font-weight:700;
-            "
-        >
-            ✓ {{ session('internal_chat_preference_notice') }}
-        </div>
-
-        <script>
-            window.setTimeout(
-                () => {
-                    const toast =
-                        document.getElementById(
-                            'crm-chat-v337-toast'
-                        );
-
-                    if (toast) {
-                        toast.remove();
-                    }
-                },
-                3500
-            );
-        </script>
-    @endif
-    {{-- INTERNAL CHAT V3.3.8 EXPLICIT APPLY FINAL --}}</x-admin::layouts>
+</x-admin::layouts>

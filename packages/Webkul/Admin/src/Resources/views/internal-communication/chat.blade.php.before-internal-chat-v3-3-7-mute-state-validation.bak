@@ -6192,7 +6192,7 @@
             */
 
             /* INTERNAL CHAT V3.3.1 COMPACT SIDEBAR */
-            /* INTERNAL CHAT V3.3.8 EXPLICIT APPLY PREFERENCES */
+            /* INTERNAL CHAT V3.3.6 NATIVE MUTE SELECT */
             const renderSidebar = (
                 rows
             ) => {
@@ -6200,21 +6200,24 @@
                     return;
                 }
 
-                const configV333 =
-                    document.getElementById(
-                        'crm-chat-v333-config'
-                    );
-
                 const preferenceTemplate =
                     String(
-                        configV333?.dataset
+                        document
+                            .getElementById(
+                                'crm-chat-v333-config'
+                            )
+                            ?.dataset
                             .preferenceTemplate
                         || ''
                     );
 
                 const hardCsrf =
                     String(
-                        configV333?.dataset
+                        document
+                            .getElementById(
+                                'crm-chat-v333-config'
+                            )
+                            ?.dataset
                             .csrf
                         || ''
                     );
@@ -6231,7 +6234,31 @@
                         )
                     );
 
-                const csrfInput = () => {
+                const nativePreferenceForm = (
+                    conversationId,
+                    action,
+                    label,
+                    title
+                ) => {
+                    const form =
+                        document.createElement(
+                            'form'
+                        );
+
+                    form.method =
+                        'POST';
+
+                    form.action =
+                        preferenceUrl(
+                            conversationId
+                        );
+
+                    form.style.margin =
+                        '0';
+
+                    form.style.padding =
+                        '0';
+
                     const token =
                         document.createElement(
                             'input'
@@ -6246,10 +6273,63 @@
                     token.value =
                         hardCsrf;
 
-                    return token;
+                    const actionInput =
+                        document.createElement(
+                            'input'
+                        );
+
+                    actionInput.type =
+                        'hidden';
+
+                    actionInput.name =
+                        'action';
+
+                    actionInput.value =
+                        action;
+
+                    const button =
+                        document.createElement(
+                            'button'
+                        );
+
+                    button.type =
+                        'submit';
+
+                    button.title =
+                        title;
+
+                    button.textContent =
+                        label;
+
+                    button.style.cssText =
+                        'width:26px;'
+                        +'height:26px;'
+                        +'display:flex;'
+                        +'align-items:center;'
+                        +'justify-content:center;'
+                        +'padding:0;'
+                        +'border:1px solid #e5e7eb;'
+                        +'border-radius:8px;'
+                        +'background:#ffffff;'
+                        +'font-size:11px;'
+                        +'cursor:pointer;';
+
+                    form.appendChild(
+                        token
+                    );
+
+                    form.appendChild(
+                        actionInput
+                    );
+
+                    form.appendChild(
+                        button
+                    );
+
+                    return form;
                 };
 
-                const pinForm = (
+                const nativeMuteSelect = (
                     row
                 ) => {
                     const form =
@@ -6271,82 +6351,19 @@
                     form.style.padding =
                         '0';
 
-                    const button =
+                    const token =
                         document.createElement(
-                            'button'
+                            'input'
                         );
 
-                    button.type =
-                        'submit';
+                    token.type =
+                        'hidden';
 
-                    /*
-                     * Critical V3.3.8 change:
-                     * clicked submit button itself carries the action.
-                     */
-                    button.name =
-                        'action';
+                    token.name =
+                        '_token';
 
-                    button.value =
-                        row.pinned
-                            ? 'unpin'
-                            : 'pin';
-
-                    button.title =
-                        row.pinned
-                            ? 'Unpin'
-                            : 'Pin';
-
-                    button.textContent =
-                        row.pinned
-                            ? '📍'
-                            : '📌';
-
-                    button.style.cssText =
-                        'width:26px;'
-                        +'height:27px;'
-                        +'display:flex;'
-                        +'align-items:center;'
-                        +'justify-content:center;'
-                        +'padding:0;'
-                        +'border:1px solid #e5e7eb;'
-                        +'border-radius:8px;'
-                        +'background:#ffffff;'
-                        +'font-size:11px;'
-                        +'cursor:pointer;';
-
-                    form.appendChild(
-                        csrfInput()
-                    );
-
-                    form.appendChild(
-                        button
-                    );
-
-                    return form;
-                };
-
-                const muteForm = (
-                    row
-                ) => {
-                    const form =
-                        document.createElement(
-                            'form'
-                        );
-
-                    form.method =
-                        'POST';
-
-                    form.action =
-                        preferenceUrl(
-                            row.id
-                        );
-
-                    form.style.cssText =
-                        'margin:0;'
-                        +'padding:0;'
-                        +'display:flex;'
-                        +'align-items:center;'
-                        +'gap:4px;';
+                    token.value =
+                        hardCsrf;
 
                     const select =
                         document.createElement(
@@ -6356,51 +6373,31 @@
                     select.name =
                         'action';
 
-                    select.required =
-                        true;
-
                     select.title =
                         row.muted
-                            ? (
-                                row.mute_label
-                                || 'Muted'
-                            )
-                            : 'Mute notification';
+                            ? row.mute_label
+                                || 'Notification settings'
+                            : 'Notification settings';
+
+                    select.setAttribute(
+                        'aria-label',
+                        'Notification settings for '
+                        + String(
+                            row.name
+                            || 'conversation'
+                        )
+                    );
 
                     select.style.cssText =
-                        'width:'
-                        +(
-                            row.muted
-                                ? '86px'
-                                : '70px'
-                        )
-                        +';'
-                        +'height:27px;'
-                        +'padding:0 4px;'
-                        +'border:1px solid '
-                        +(
-                            row.muted
-                                ? '#f59e0b'
-                                : '#e5e7eb'
-                        )
-                        +';'
+                        'width:30px;'
+                        +'height:26px;'
+                        +'padding:0 2px;'
+                        +'border:1px solid #e5e7eb;'
                         +'border-radius:8px;'
-                        +'background:'
-                        +(
-                            row.muted
-                                ? '#fffbeb'
-                                : '#ffffff'
-                        )
-                        +';'
-                        +'font-size:10px;'
-                        +'font-weight:700;'
-                        +'color:'
-                        +(
-                            row.muted
-                                ? '#92400e'
-                                : '#334155'
-                        )
-                        +';';
+                        +'background:#ffffff;'
+                        +'font-size:11px;'
+                        +'cursor:pointer;'
+                        +'color:#334155;';
 
                     const placeholder =
                         document.createElement(
@@ -6412,8 +6409,8 @@
 
                     placeholder.textContent =
                         row.muted
-                            ? '🔕 Muted'
-                            : '🔔 Mute';
+                            ? '🔕'
+                            : '🔔';
 
                     placeholder.selected =
                         true;
@@ -6428,19 +6425,19 @@
                     [
                         [
                             'mute_1_hour',
-                            'Mute 1 jam',
+                            '🔕 Mute 1 jam',
                         ],
                         [
                             'mute_today',
-                            'Sampai akhir hari',
+                            '🔕 Sampai akhir hari',
                         ],
                         [
                             'mute_forever',
-                            'Sampai diaktifkan kembali',
+                            '🔕 Sampai diaktifkan kembali',
                         ],
                         [
                             'unmute',
-                            'Unmute',
+                            '🔔 Unmute',
                         ],
                     ].forEach(
                         ([value, label]) => {
@@ -6461,35 +6458,6 @@
                         }
                     );
 
-                    const apply =
-                        document.createElement(
-                            'button'
-                        );
-
-                    apply.type =
-                        'submit';
-
-                    apply.textContent =
-                        'Apply';
-
-                    apply.title =
-                        'Apply notification setting';
-
-                    apply.style.cssText =
-                        'height:27px;'
-                        +'padding:0 8px;'
-                        +'border:1px solid #e5e7eb;'
-                        +'border-radius:8px;'
-                        +'background:#0f172a;'
-                        +'color:#ffffff;'
-                        +'font-size:9px;'
-                        +'font-weight:800;'
-                        +'cursor:pointer;';
-
-                    /*
-                     * Pause realtime redraw while the operator is choosing.
-                     * The final POST itself remains pure browser form submit.
-                     */
                     select.addEventListener(
                         'focus',
                         () => {
@@ -6511,16 +6479,26 @@
                         }
                     );
 
+                    select.addEventListener(
+                        'change',
+                        () => {
+                            if (! select.value) {
+                                return;
+                            }
+
+                            /*
+                             * Native form POST. No fetch, no old mute listener.
+                             */
+                            form.submit();
+                        }
+                    );
+
                     form.appendChild(
-                        csrfInput()
+                        token
                     );
 
                     form.appendChild(
                         select
-                    );
-
-                    form.appendChild(
-                        apply
                     );
 
                     return form;
@@ -6548,7 +6526,7 @@
                         wrapper.style.cssText =
                             'display:flex;'
                             +'align-items:stretch;'
-                            +'min-height:62px;'
+                            +'min-height:60px;'
                             +'border-bottom:1px solid #e5e7eb;'
                             +'background:'
                             +(
@@ -6653,8 +6631,7 @@
                                     : ''
                             )
                             +'</div>'
-                            +'<div style="margin-top:1px;display:flex;align-items:center;gap:5px;overflow:hidden;white-space:nowrap;font-size:9px;line-height:12px;color:#94a3b8;">'
-                            +'<span style="overflow:hidden;text-overflow:ellipsis;">'
+                            +'<div style="margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;line-height:12px;color:#94a3b8;">'
                             +escapeHtml(
                                 row.role
                             )
@@ -6674,15 +6651,9 @@
                                 row.presence
                             )
                             +'</span>'
-                            +'</span>'
                             +(
                                 row.muted
-                                    ? '<span style="flex:0 0 auto;padding:1px 6px;border:1px solid #fde68a;border-radius:999px;background:#fffbeb;color:#92400e;font-size:8.5px;font-weight:800;">🔕 '
-                                        +escapeHtml(
-                                            row.mute_label
-                                            || 'Muted'
-                                        )
-                                        +'</span>'
+                                    ? ' · 🔕'
                                     : ''
                             )
                             +'</div>'
@@ -6701,13 +6672,22 @@
                             +'padding:8px 8px 0 0;';
 
                         controls.appendChild(
-                            pinForm(
-                                row
+                            nativePreferenceForm(
+                                row.id,
+                                row.pinned
+                                    ? 'unpin'
+                                    : 'pin',
+                                row.pinned
+                                    ? '📍'
+                                    : '📌',
+                                row.pinned
+                                    ? 'Unpin'
+                                    : 'Pin'
                             )
                         );
 
                         controls.appendChild(
-                            muteForm(
+                            nativeMuteSelect(
                                 row
                             )
                         );
@@ -7888,44 +7868,4 @@
         })();
     </script>
 
-    {{-- INTERNAL CHAT V3.3.6 NATIVE MUTE SELECT FINAL --}}
-    {{-- INTERNAL CHAT V3.3.7 PREFERENCE TOAST --}}
-    @if (session('internal_chat_preference_notice'))
-        <div
-            id="crm-chat-v337-toast"
-            style="
-                position:fixed;
-                right:22px;
-                top:92px;
-                z-index:180;
-                max-width:360px;
-                padding:11px 14px;
-                border:1px solid #bbf7d0;
-                border-radius:12px;
-                background:#f0fdf4;
-                color:#166534;
-                box-shadow:0 14px 36px rgba(15,23,42,.15);
-                font-size:12px;
-                font-weight:700;
-            "
-        >
-            ✓ {{ session('internal_chat_preference_notice') }}
-        </div>
-
-        <script>
-            window.setTimeout(
-                () => {
-                    const toast =
-                        document.getElementById(
-                            'crm-chat-v337-toast'
-                        );
-
-                    if (toast) {
-                        toast.remove();
-                    }
-                },
-                3500
-            );
-        </script>
-    @endif
-    {{-- INTERNAL CHAT V3.3.8 EXPLICIT APPLY FINAL --}}</x-admin::layouts>
+    {{-- INTERNAL CHAT V3.3.6 NATIVE MUTE SELECT FINAL --}}</x-admin::layouts>

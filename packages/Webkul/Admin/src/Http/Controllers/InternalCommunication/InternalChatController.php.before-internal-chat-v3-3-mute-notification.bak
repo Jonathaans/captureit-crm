@@ -277,55 +277,6 @@ class InternalChatController extends Controller
             ->pluck('user_id');
 
         foreach ($recipientIds as $recipientId) {
-            /* INTERNAL CHAT V3.3 MUTE NOTIFICATION GUARD */
-            if (
-                \Illuminate\Support\Facades\Schema::hasColumn(
-                    'internal_conversation_members',
-                    'mute_forever'
-                )
-                && \Illuminate\Support\Facades\Schema::hasColumn(
-                    'internal_conversation_members',
-                    'muted_until'
-                )
-            ) {
-                $memberPreference =
-                    \Illuminate\Support\Facades\DB::table(
-                        'internal_conversation_members'
-                    )
-                        ->where(
-                            'conversation_id',
-                            $conversationId
-                        )
-                        ->where(
-                            'user_id',
-                            $recipientId
-                        )
-                        ->first([
-                            'mute_forever',
-                            'muted_until',
-                        ]);
-
-                $muted =
-                    $memberPreference
-                    && (
-                        (bool) $memberPreference
-                            ->mute_forever
-                        || (
-                            $memberPreference
-                                ->muted_until
-                            && now()->lt(
-                                \Illuminate\Support\Carbon::parse(
-                                    $memberPreference
-                                        ->muted_until
-                                )
-                            )
-                        )
-                    );
-
-                if ($muted) {
-                    continue;
-                }
-            }
             $notifications->notifyUser(
                 (int) $recipientId,
                 'internal_chat',
