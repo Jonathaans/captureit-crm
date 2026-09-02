@@ -21,245 +21,138 @@ class InternalChatController extends Controller
         Request $request,
         InternalChatService $chat
     ): View {
-        $user =
-            $this->user();
+        $user = $this->user();
 
-        $conversationId =
-            $request->integer(
-                'conversation'
-            );
+        $conversationId = $request->integer('conversation');
 
-        $conversation =
-            null;
-
-        $messages =
-            collect();
+        $conversation = null;
+        $messages = collect();
 
         if ($conversationId > 0) {
-            $chat->assertMember(
-                $conversationId,
-                $user->id
-            );
+            $chat->assertMember($conversationId, $user->id);
 
-            $conversation =
-                InternalConversation::query()
-                    ->findOrFail(
-                        $conversationId
-                    );
+            $conversation = InternalConversation::query()
+                ->findOrFail($conversationId);
 
-            $messages =
-                InternalMessage::query()
-                    ->with(
-                        'attachments'
-                    )
-                    ->where(
-                        'conversation_id',
-                        $conversationId
-                    )
-                    ->whereNull(
-                        'deleted_at'
-                    )
-                    ->orderBy(
-                        'id'
-                    )
-                    ->limit(
-                        300
-                    )
-                    ->get();
+            $messages = InternalMessage::query()
+                ->with('attachments')
+                ->where('conversation_id', $conversationId)
+                ->whereNull('deleted_at')
+                ->orderBy('id')
+                ->limit(300)
+                ->get();
 
-            $chat->markRead(
-                $conversationId,
-                $user->id
-            );
+            /* Opening the conversation means all currently visible messages are read. */
+            $chat->markRead($conversationId, $user->id);
         }
 
-        $users =
-            DB::table(
-                'users'
+        $users = DB::table('users')
+            ->leftJoin('roles', 'roles.id', '=', 'users.role_id')
+            ->where('users.id', '<>', $user->id)
+            ->when(
+                Schema::hasColumn('users', 'status'),
+                fn ($query) => $query->where('users.status', 1)
             )
-                ->leftJoin(
-                    'roles',
-                    'roles.id',
-                    '=',
-                    'users.role_id'
-                )
-                ->where(
-                    'users.id',
-                    '<>',
-                    $user->id
-                )
-                ->when(
-                    Schema::hasColumn(
-                        'users',
-                        'status'
-                    ),
-                    fn ($query) =>
-                        $query->where(
-                            'users.status',
-                            1
-                        )
-                )
-                ->orderBy(
-                    'users.name'
-                )
+            ->orderBy('users.name')
+            ->select([
+                'users.id',
+                'users.name',
+                'users.email',
+                'roles.name as role_name',
+            ])
+            ->get();
+
+        $conversationRows = DB::table('internal_conversation_members as m')
+            ->join(
+                'internal_conversations as c',
+                'c.id',
+                '=',
+                'm.conversation_id'
+            )
+            ->where('m.user_id', $user->id)
+            ->where('c.type', 'direct')
+            ->orderByDesc('c.updated_at')
+            ->select([
+                'c.id',
+                'c.updated_at',
+                'm.last_read_at',
+            ])
+            ->get();
+
+        $conversationList = $conversationRows
+            ->map(
+                function ($row) use ($user) {
+                    $other = DB::table('internal_conversation_members as m')
+                        ->join('users', 'users.id', '=', 'm.user_id')
+                        ->leftJoin('roles', 'roles.id', '=', 'users.role_id')
+                        ->where('m.conversation_id', $row->id)
+                        ->where('m.user_id', '<>', $user->id)
+                        ->select([
+                            'users.id',
+                            'users.name',
+                            'users.email',
+                            'roles.name as role_name',
+                        ])
+                        ->first();
+
+                    $lastMessage = DB::table('internal_messages')
+                        ->where('conversation_id', $row->id)
+                        ->whereNull('deleted_at')
+                        ->orderByDesc('id')
+                        ->first();
+
+                    $unreadQuery = DB::table('internal_messages')
+                        ->where('conversation_id', $row->id)
+                        ->where('user_id', '<>', $user->id)
+                        ->whereNull('deleted_at');
+
+                    if ($row->last_read_at) {
+                        $unreadQuery->where('created_at', '>', $row->last_read_at);
+                    }
+
+                    return (object) [
+                        'id' => $row->id,
+                        'other' => $other,
+                        'last_message' => $lastMessage,
+                        'unread_count' => (int) $unreadQuery->count(),
+                    ];
+                }
+            );
+
+        $senderIds = $messages
+            ->pluck('user_id')
+            ->unique()
+            ->values();
+
+        $senderNames = $senderIds->isEmpty()
+            ? collect()
+            : DB::table('users')
+                ->whereIn('id', $senderIds)
+                ->pluck('name', 'id');
+
+        $activeOtherUser = null;
+        $activeReadUpToId = 0;
+
+        if ($conversation) {
+            $activeOtherUser = DB::table('internal_conversation_members as m')
+                ->join('users', 'users.id', '=', 'm.user_id')
+                ->leftJoin('roles', 'roles.id', '=', 'users.role_id')
+                ->where('m.conversation_id', $conversation->id)
+                ->where('m.user_id', '<>', $user->id)
                 ->select([
                     'users.id',
                     'users.name',
                     'users.email',
                     'roles.name as role_name',
+                    'm.last_read_at',
                 ])
-                ->get();
+                ->first();
 
-        $conversationRows =
-            DB::table(
-                'internal_conversation_members as m'
-            )
-                ->join(
-                    'internal_conversations as c',
-                    'c.id',
-                    '=',
-                    'm.conversation_id'
-                )
-                ->where(
-                    'm.user_id',
-                    $user->id
-                )
-                ->where(
-                    'c.type',
-                    'direct'
-                )
-                ->orderByDesc(
-                    'c.updated_at'
-                )
-                ->select([
-                    'c.id',
-                    'c.updated_at',
-                ])
-                ->get();
-
-        $conversationList =
-            $conversationRows
-                ->map(
-                    function ($row) use ($user) {
-                        $other =
-                            DB::table(
-                                'internal_conversation_members as m'
-                            )
-                                ->join(
-                                    'users',
-                                    'users.id',
-                                    '=',
-                                    'm.user_id'
-                                )
-                                ->leftJoin(
-                                    'roles',
-                                    'roles.id',
-                                    '=',
-                                    'users.role_id'
-                                )
-                                ->where(
-                                    'm.conversation_id',
-                                    $row->id
-                                )
-                                ->where(
-                                    'm.user_id',
-                                    '<>',
-                                    $user->id
-                                )
-                                ->select([
-                                    'users.id',
-                                    'users.name',
-                                    'users.email',
-                                    'roles.name as role_name',
-                                ])
-                                ->first();
-
-                        $lastMessage =
-                            DB::table(
-                                'internal_messages'
-                            )
-                                ->where(
-                                    'conversation_id',
-                                    $row->id
-                                )
-                                ->whereNull(
-                                    'deleted_at'
-                                )
-                                ->orderByDesc(
-                                    'id'
-                                )
-                                ->first();
-
-                        return (object) [
-                            'id' =>
-                                $row->id,
-
-                            'other' =>
-                                $other,
-
-                            'last_message' =>
-                                $lastMessage,
-                        ];
-                    }
-                );
-
-        $senderIds =
-            $messages
-                ->pluck(
-                    'user_id'
-                )
-                ->unique()
-                ->values();
-
-        $senderNames =
-            $senderIds->isEmpty()
-                ? collect()
-                : DB::table('users')
-                    ->whereIn(
-                        'id',
-                        $senderIds
-                    )
-                    ->pluck(
-                        'name',
-                        'id'
-                    );
-
-        $activeOtherUser =
-            null;
-
-        if ($conversation) {
-            $activeOtherUser =
-                DB::table(
-                    'internal_conversation_members as m'
-                )
-                    ->join(
-                        'users',
-                        'users.id',
-                        '=',
-                        'm.user_id'
-                    )
-                    ->leftJoin(
-                        'roles',
-                        'roles.id',
-                        '=',
-                        'users.role_id'
-                    )
-                    ->where(
-                        'm.conversation_id',
-                        $conversation->id
-                    )
-                    ->where(
-                        'm.user_id',
-                        '<>',
-                        $user->id
-                    )
-                    ->select([
-                        'users.id',
-                        'users.name',
-                        'users.email',
-                        'roles.name as role_name',
-                    ])
-                    ->first();
+            $activeReadUpToId = $this->readUpToMessageId(
+                (int) $conversation->id,
+                (int) $user->id,
+                $activeOtherUser?->last_read_at
+            );
         }
 
         return view(
@@ -270,6 +163,7 @@ class InternalChatController extends Controller
                 'messages',
                 'senderNames',
                 'activeOtherUser',
+                'activeReadUpToId',
                 'users'
             )
         );
@@ -279,20 +173,17 @@ class InternalChatController extends Controller
         int $userId,
         InternalChatService $chat
     ): RedirectResponse {
-        $user =
-            $this->user();
+        $user = $this->user();
 
-        $conversation =
-            $chat->directConversation(
-                $user->id,
-                $userId
-            );
+        $conversation = $chat->directConversation(
+            $user->id,
+            $userId
+        );
 
         return redirect()->route(
             'admin.internal-chat.index',
             [
-                'conversation' =>
-                    $conversation->id,
+                'conversation' => $conversation->id,
             ]
         );
     }
@@ -303,98 +194,69 @@ class InternalChatController extends Controller
         InternalChatService $chat,
         WorkflowNotificationService $notifications
     ): JsonResponse|RedirectResponse {
-        $user =
-            $this->user();
+        $user = $this->user();
 
-        $validated =
-            $request->validate([
-                'body' => [
-                    'nullable',
-                    'string',
-                    'max:20000',
-                ],
+        $validated = $request->validate([
+            'body' => [
+                'nullable',
+                'string',
+                'max:20000',
+            ],
+            'attachments' => [
+                'nullable',
+                'array',
+                'max:5',
+            ],
+            'attachments.*' => [
+                'file',
+                'max:10240',
+            ],
+        ]);
 
-                'attachments' => [
-                    'nullable',
-                    'array',
-                    'max:5',
-                ],
+        $message = $chat->sendMessage(
+            $conversationId,
+            $user->id,
+            $validated['body'] ?? null,
+            $request->file('attachments', [])
+        );
 
-                'attachments.*' => [
-                    'file',
-                    'max:10240',
-                ],
-            ]);
-
-        $message =
-            $chat->sendMessage(
-                $conversationId,
-                $user->id,
-                $validated['body']
-                    ?? null,
-                $request->file(
-                    'attachments',
-                    []
-                )
-            );
-
-        $recipientIds =
-            InternalConversationMember::query()
-                ->where(
-                    'conversation_id',
-                    $conversationId
-                )
-                ->where(
-                    'user_id',
-                    '<>',
-                    $user->id
-                )
-                ->pluck(
-                    'user_id'
-                );
+        $recipientIds = InternalConversationMember::query()
+            ->where('conversation_id', $conversationId)
+            ->where('user_id', '<>', $user->id)
+            ->pluck('user_id');
 
         foreach ($recipientIds as $recipientId) {
             $notifications->notifyUser(
                 (int) $recipientId,
                 'internal_chat',
                 'Pesan Internal Baru',
-                $user->name
-                    .' mengirim pesan internal.',
+                $user->name.' mengirim pesan internal.',
                 route(
                     'admin.internal-chat.index',
                     [
-                        'conversation' =>
-                            $conversationId,
+                        'conversation' => $conversationId,
                     ]
                 ),
-                'internal-chat-message:'
-                    .$message->id,
+                'internal-chat-message:'.$message->id,
                 'internal_message',
                 $message->id,
                 [
-                    'sender_user_id' =>
-                        $user->id,
-
-                    'conversation_id' =>
-                        $conversationId,
+                    'sender_user_id' => $user->id,
+                    'conversation_id' => $conversationId,
                 ]
             );
         }
 
         if ($request->expectsJson()) {
             return response()->json(
-                $this->messagePayload(
-                    $message,
-                    $user->name
-                )
+                $this->messagePayload($message, $user->name)
             );
         }
 
         return redirect()->route(
             'admin.internal-chat.index',
             [
-                'conversation' =>
-                    $conversationId,
+                'conversation' => $conversationId,
             ]
         );
     }
@@ -404,87 +266,79 @@ class InternalChatController extends Controller
         int $conversationId,
         InternalChatService $chat
     ): JsonResponse {
-        $user =
-            $this->user();
+        $user = $this->user();
 
-        $chat->assertMember(
-            $conversationId,
-            $user->id
-        );
+        $chat->assertMember($conversationId, $user->id);
 
-        $after =
-            max(
-                0,
-                $request->integer(
-                    'after'
-                )
-            );
+        $after = max(0, $request->integer('after'));
 
-        $messages =
-            InternalMessage::query()
-                ->with(
-                    'attachments'
-                )
-                ->where(
-                    'conversation_id',
-                    $conversationId
-                )
-                ->where(
-                    'id',
-                    '>',
-                    $after
-                )
-                ->whereNull(
-                    'deleted_at'
-                )
-                ->orderBy(
-                    'id'
-                )
-                ->limit(
-                    100
-                )
-                ->get();
+        $messages = InternalMessage::query()
+            ->with('attachments')
+            ->where('conversation_id', $conversationId)
+            ->where('id', '>', $after)
+            ->whereNull('deleted_at')
+            ->orderBy('id')
+            ->limit(100)
+            ->get();
 
-        $senderNames =
-            DB::table(
-                'users'
+        $senderNames = DB::table('users')
+            ->whereIn(
+                'id',
+                $messages
+                    ->pluck('user_id')
+                    ->unique()
+                    ->all()
             )
-                ->whereIn(
-                    'id',
-                    $messages
-                        ->pluck(
-                            'user_id'
-                        )
-                        ->unique()
-                        ->all()
-                )
-                ->pluck(
-                    'name',
-                    'id'
-                );
+            ->pluck('name', 'id');
 
-        $chat->markRead(
+        /* Polling an open conversation also counts as reading it. */
+        $chat->markRead($conversationId, $user->id);
+
+        $otherLastReadAt = InternalConversationMember::query()
+            ->where('conversation_id', $conversationId)
+            ->where('user_id', '<>', $user->id)
+            ->value('last_read_at');
+
+        $readUpToId = $this->readUpToMessageId(
             $conversationId,
-            $user->id
+            (int) $user->id,
+            $otherLastReadAt
         );
 
         return response()->json([
-            'messages' =>
-                $messages
-                    ->map(
-                        fn ($message) =>
-                            $this->messagePayload(
-                                $message,
-                                (string) (
-                                    $senderNames[
-                                        $message->user_id
-                                    ]
-                                    ?? 'User'
-                                )
-                            )
+            'messages' => $messages
+                ->map(
+                    fn ($message) => $this->messagePayload(
+                        $message,
+                        (string) (
+                            $senderNames[$message->user_id]
+                            ?? 'User'
+                        )
                     )
-                    ->values(),
+                )
+                ->values(),
+            'read_up_to_id' => $readUpToId,
         ]);
+    }
+
+    private function readUpToMessageId(
+        int $conversationId,
+        int $senderUserId,
+        mixed $otherLastReadAt
+    ): int {
+        if (! $otherLastReadAt) {
+            return 0;
+        }
+
+        return (int) (
+            InternalMessage::query()
+                ->where('conversation_id', $conversationId)
+                ->where('user_id', $senderUserId)
+                ->whereNull('deleted_at')
+                ->where('created_at', '<=', $otherLastReadAt)
+                ->max('id')
+            ?? 0
+        );
     }
 
     private function messagePayload(
@@ -492,62 +346,36 @@ class InternalChatController extends Controller
         string $senderName
     ): array {
         return [
-            'id' =>
-                $message->id,
-
-            'user_id' =>
-                $message->user_id,
-
-            'sender_name' =>
-                $senderName,
-
-            'body' =>
-                $message->body,
-
-            'created_at' =>
-                $message
-                    ->created_at
-                    ?->format(
-                        'Y-m-d H:i:s'
-                    ),
-
-            'attachments' =>
-                $message->attachments
-                    ->map(
-                        fn ($attachment) => [
-                            'id' =>
-                                $attachment->id,
-
-                            'name' =>
-                                $attachment
-                                    ->original_name,
-
-                            'size' =>
-                                $attachment
-                                    ->size,
-
-                            'download_url' =>
-                                route(
-                                    'admin.internal-chat.attachments.download',
-                                    $attachment->id
-                                ),
-                        ]
-                    )
-                    ->values(),
+            'id' => $message->id,
+            'user_id' => $message->user_id,
+            'sender_name' => $senderName,
+            'body' => $message->body,
+            'created_at' => $message
+                ->created_at
+                ?->format('Y-m-d H:i:s'),
+            'attachments' => $message->attachments
+                ->map(
+                    fn ($attachment) => [
+                        'id' => $attachment->id,
+                        'name' => $attachment->original_name,
+                        'size' => $attachment->size,
+                        'download_url' => route(
+                            'admin.internal-chat.attachments.download',
+                            $attachment->id
+                        ),
+                    ]
+                )
+                ->values(),
         ];
     }
 
     private function user()
     {
-        $user =
-            auth()
-                ->guard('user')
-                ->user();
+        $user = auth()
+            ->guard('user')
+            ->user();
 
-        abort_unless(
-            $user,
-            403
-        );
+        abort_unless($user, 403);
 
         return $user;
     }
