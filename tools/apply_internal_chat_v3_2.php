@@ -2,7 +2,7 @@
 
 /*
 |--------------------------------------------------------------------------
-| Internal Chat V3.2
+| Internal Chat V3.2.1 Installer Hotfix
 |--------------------------------------------------------------------------
 |
 | Adds:
@@ -565,6 +565,7 @@ $source =
     str_replace(
         $dynamicHref,
         $dynamicHrefNew,
+        $source,
         $dynamicAttachmentCount
     );
 

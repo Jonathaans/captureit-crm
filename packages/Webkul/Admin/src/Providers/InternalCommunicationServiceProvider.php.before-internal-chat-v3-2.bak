@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatAttachmentController;
 use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatController;
-use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatExperienceController;
 use Webkul\Admin\Http\Controllers\InternalCommunication\InternalChatAuditController;
 use Webkul\Admin\Http\Controllers\InternalCommunication\WorkflowNotificationController;
 use Webkul\Admin\Http\Middleware\InjectInternalCommunicationUi;
@@ -173,46 +172,6 @@ Route::post(
                         ]
                     )->name(
                         'admin.internal-chat.attachments.download'
-                    );
-
-                    Route::get(
-                        'internal-chat/{conversationId}/search',
-                        [
-                            InternalChatExperienceController::class,
-                            'search',
-                        ]
-                    )->name(
-                        'admin.internal-chat.search'
-                    );
-
-                    Route::post(
-                        'internal-chat/{conversationId}/typing',
-                        [
-                            InternalChatExperienceController::class,
-                            'typing',
-                        ]
-                    )->name(
-                        'admin.internal-chat.typing'
-                    );
-
-                    Route::get(
-                        'internal-chat/{conversationId}/typing-status',
-                        [
-                            InternalChatExperienceController::class,
-                            'typingStatus',
-                        ]
-                    )->name(
-                        'admin.internal-chat.typing-status'
-                    );
-
-                    Route::get(
-                        'internal-chat/attachments/{id}/preview',
-                        [
-                            InternalChatExperienceController::class,
-                            'previewAttachment',
-                        ]
-                    )->name(
-                        'admin.internal-chat.attachments.preview'
                     );
 
                     Route::get(
