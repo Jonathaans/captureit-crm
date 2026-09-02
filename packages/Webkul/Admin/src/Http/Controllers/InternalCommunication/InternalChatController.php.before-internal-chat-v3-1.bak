@@ -42,6 +42,7 @@ class InternalChatController extends Controller
                 ->limit(300)
                 ->get();
 
+            /* Opening the conversation means all currently visible messages are read. */
             $chat->markRead($conversationId, $user->id);
         }
 
@@ -129,30 +130,6 @@ class InternalChatController extends Controller
                 ->whereIn('id', $senderIds)
                 ->pluck('name', 'id');
 
-        $replyIds = $messages
-            ->pluck('reply_to_message_id')
-            ->filter()
-            ->unique()
-            ->values();
-
-        $replyMessages = $replyIds->isEmpty()
-            ? collect()
-            : InternalMessage::query()
-                ->whereIn('id', $replyIds)
-                ->get()
-                ->keyBy('id');
-
-        $replySenderIds = $replyMessages
-            ->pluck('user_id')
-            ->unique()
-            ->values();
-
-        $replySenderNames = $replySenderIds->isEmpty()
-            ? collect()
-            : DB::table('users')
-                ->whereIn('id', $replySenderIds)
-                ->pluck('name', 'id');
-
         $activeOtherUser = null;
         $activeReadUpToId = 0;
 
@@ -185,8 +162,6 @@ class InternalChatController extends Controller
                 'conversationList',
                 'messages',
                 'senderNames',
-                'replyMessages',
-                'replySenderNames',
                 'activeOtherUser',
                 'activeReadUpToId',
                 'users'
@@ -236,26 +211,7 @@ class InternalChatController extends Controller
                 'file',
                 'max:10240',
             ],
-            'reply_to_message_id' => [
-                'nullable',
-                'integer',
-                'min:1',
-            ],
         ]);
-
-        $replyToMessageId =
-            (int) (
-                $validated['reply_to_message_id']
-                ?? 0
-            );
-
-        if ($replyToMessageId > 0) {
-            InternalMessage::query()
-                ->where('id', $replyToMessageId)
-                ->where('conversation_id', $conversationId)
-                ->whereNull('deleted_at')
-                ->firstOrFail();
-        }
 
         $message = $chat->sendMessage(
             $conversationId,
@@ -263,13 +219,6 @@ class InternalChatController extends Controller
             $validated['body'] ?? null,
             $request->file('attachments', [])
         );
-
-        if ($replyToMessageId > 0) {
-            $message->reply_to_message_id =
-                $replyToMessageId;
-
-            $message->save();
-        }
 
         $recipientIds = InternalConversationMember::query()
             ->where('conversation_id', $conversationId)
@@ -300,10 +249,7 @@ class InternalChatController extends Controller
 
         if ($request->expectsJson()) {
             return response()->json(
-                $this->messagePayload(
-                    $message->fresh('attachments'),
-                    $user->name
-                )
+                $this->messagePayload($message, $user->name)
             );
         }
 
@@ -326,14 +272,6 @@ class InternalChatController extends Controller
 
         $after = max(0, $request->integer('after'));
 
-        $syncAfter =
-            trim(
-                (string) $request->query(
-                    'sync_after',
-                    ''
-                )
-            );
-
         $messages = InternalMessage::query()
             ->with('attachments')
             ->where('conversation_id', $conversationId)
@@ -353,53 +291,7 @@ class InternalChatController extends Controller
             )
             ->pluck('name', 'id');
 
-        $changedMessages = collect();
-        $deletedMessageIds = collect();
-
-        if ($syncAfter !== '') {
-            try {
-                $syncAfterDate =
-                    \Illuminate\Support\Carbon::parse(
-                        $syncAfter
-                    );
-
-                $changedMessages =
-                    InternalMessage::query()
-                        ->with('attachments')
-                        ->where('conversation_id', $conversationId)
-                        ->whereNull('deleted_at')
-                        ->whereNotNull('edited_at')
-                        ->where('edited_at', '>', $syncAfterDate)
-                        ->orderBy('id')
-                        ->limit(100)
-                        ->get();
-
-                $deletedMessageIds =
-                    InternalMessage::query()
-                        ->where('conversation_id', $conversationId)
-                        ->whereNotNull('deleted_at')
-                        ->where('deleted_at', '>', $syncAfterDate)
-                        ->orderBy('id')
-                        ->limit(100)
-                        ->pluck('id');
-            } catch (\Throwable) {
-                $changedMessages = collect();
-                $deletedMessageIds = collect();
-            }
-        }
-
-        $changedSenderNames = $changedMessages->isEmpty()
-            ? collect()
-            : DB::table('users')
-                ->whereIn(
-                    'id',
-                    $changedMessages
-                        ->pluck('user_id')
-                        ->unique()
-                        ->all()
-                )
-                ->pluck('name', 'id');
-
+        /* Polling an open conversation also counts as reading it. */
         $chat->markRead($conversationId, $user->id);
 
         $otherLastReadAt = InternalConversationMember::query()
@@ -425,139 +317,7 @@ class InternalChatController extends Controller
                     )
                 )
                 ->values(),
-
             'read_up_to_id' => $readUpToId,
-
-            'changed_messages' => $changedMessages
-                ->map(
-                    fn ($message) => $this->messagePayload(
-                        $message,
-                        (string) (
-                            $changedSenderNames[$message->user_id]
-                            ?? 'User'
-                        )
-                    )
-                )
-                ->values(),
-
-            'deleted_message_ids' => $deletedMessageIds
-                ->values(),
-
-            'sync_at' => now()->format('Y-m-d H:i:s.u'),
-        ]);
-    }
-
-    public function updateMessage(
-        Request $request,
-        int $conversationId,
-        int $messageId,
-        InternalChatService $chat
-    ): JsonResponse {
-        $user = $this->user();
-
-        $chat->assertMember($conversationId, $user->id);
-
-        $validated = $request->validate([
-            'body' => [
-                'required',
-                'string',
-                'max:20000',
-            ],
-        ]);
-
-        $message = InternalMessage::query()
-            ->with('attachments')
-            ->where('id', $messageId)
-            ->where('conversation_id', $conversationId)
-            ->where('user_id', $user->id)
-            ->whereNull('deleted_at')
-            ->firstOrFail();
-
-        $message->body =
-            trim(
-                (string) $validated['body']
-            );
-
-        $message->edited_at = now();
-        $message->save();
-
-        return response()->json(
-            $this->messagePayload(
-                $message->fresh('attachments'),
-                $user->name
-            )
-        );
-    }
-
-    public function deleteMessage(
-        int $conversationId,
-        int $messageId,
-        InternalChatService $chat
-    ): JsonResponse {
-        $user = $this->user();
-
-        $chat->assertMember($conversationId, $user->id);
-
-        $message = InternalMessage::query()
-            ->where('id', $messageId)
-            ->where('conversation_id', $conversationId)
-            ->where('user_id', $user->id)
-            ->whereNull('deleted_at')
-            ->firstOrFail();
-
-        /*
-         * Soft delete only. Content stays in DB/storage for audit.
-         */
-        $message->deleted_at = now();
-        $message->save();
-
-        return response()->json([
-            'deleted' => true,
-            'message_id' => $message->id,
-        ]);
-    }
-
-    public function unreadSummary(): JsonResponse
-    {
-        $user = $this->user();
-
-        $rows = DB::table('internal_conversation_members as cm')
-            ->join(
-                'internal_messages as im',
-                'im.conversation_id',
-                '=',
-                'cm.conversation_id'
-            )
-            ->where('cm.user_id', $user->id)
-            ->where('im.user_id', '<>', $user->id)
-            ->whereNull('im.deleted_at')
-            ->where(
-                function ($query) {
-                    $query
-                        ->whereNull('cm.last_read_at')
-                        ->orWhereColumn(
-                            'im.created_at',
-                            '>',
-                            'cm.last_read_at'
-                        );
-                }
-            )
-            ->select([
-                'cm.conversation_id',
-                DB::raw('COUNT(im.id) as unread_count'),
-            ])
-            ->groupBy('cm.conversation_id')
-            ->get();
-
-        return response()->json([
-            'total' => (int) $rows->sum('unread_count'),
-            'conversations' => $rows
-                ->mapWithKeys(
-                    fn ($row) => [
-                        (string) $row->conversation_id =>
-                            (int) $row->unread_count,
-                    ]
-                ),
         ]);
     }
 
@@ -585,44 +345,11 @@ class InternalChatController extends Controller
         InternalMessage $message,
         string $senderName
     ): array {
-        $reply = null;
-
-        if ($message->reply_to_message_id) {
-            $replyMessage = InternalMessage::query()
-                ->where(
-                    'id',
-                    $message->reply_to_message_id
-                )
-                ->first();
-
-            if ($replyMessage) {
-                $replySender = DB::table('users')
-                    ->where('id', $replyMessage->user_id)
-                    ->value('name');
-
-                $reply = [
-                    'id' => $replyMessage->id,
-                    'sender_name' => $replySender ?: 'User',
-                    'body' => $replyMessage->deleted_at
-                        ? 'Pesan telah dihapus'
-                        : (
-                            trim((string) $replyMessage->body)
-                            ?: 'Attachment'
-                        ),
-                ];
-            }
-        }
-
         return [
             'id' => $message->id,
             'user_id' => $message->user_id,
             'sender_name' => $senderName,
             'body' => $message->body,
-            'reply_to_message_id' => $message->reply_to_message_id,
-            'reply' => $reply,
-            'edited_at' => $message
-                ->edited_at
-                ?->format('Y-m-d H:i:s'),
             'created_at' => $message
                 ->created_at
                 ?->format('Y-m-d H:i:s'),

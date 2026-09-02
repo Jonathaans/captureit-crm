@@ -97,37 +97,7 @@ class InternalCommunicationServiceProvider extends ServiceProvider
                         'admin.internal-chat.index'
                     );
 
-                                        Route::get(
-                        'internal-chat/unread-summary',
-                        [
-                            InternalChatController::class,
-                            'unreadSummary',
-                        ]
-                    )->name(
-                        'admin.internal-chat.unread-summary'
-                    );
-
-                    Route::patch(
-                        'internal-chat/{conversationId}/messages/{messageId}',
-                        [
-                            InternalChatController::class,
-                            'updateMessage',
-                        ]
-                    )->name(
-                        'admin.internal-chat.messages.update'
-                    );
-
-                    Route::delete(
-                        'internal-chat/{conversationId}/messages/{messageId}',
-                        [
-                            InternalChatController::class,
-                            'deleteMessage',
-                        ]
-                    )->name(
-                        'admin.internal-chat.messages.delete'
-                    );
-
-Route::post(
+                    Route::post(
                         'internal-chat/direct/{userId}',
                         [
                             InternalChatController::class,

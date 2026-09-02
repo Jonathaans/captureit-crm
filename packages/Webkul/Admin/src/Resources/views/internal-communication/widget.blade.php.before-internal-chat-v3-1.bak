@@ -281,5 +281,3 @@
     );
 })();
 </script>
-
-@include('admin::internal-communication.chat-unread-badge')

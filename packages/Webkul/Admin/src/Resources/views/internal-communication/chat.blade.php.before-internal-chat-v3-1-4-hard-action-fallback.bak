@@ -223,7 +223,6 @@
                         data-current-user-id="{{ $currentUser->id }}"
                         data-read-up-to-id="{{ (int) $activeReadUpToId }}"
                         data-sync-at="{{ now()->format('Y-m-d H:i:s.u') }}"
-                        data-action-base="{{ url('admin/internal-chat/'.$conversation->id.'/messages') }}"
                     >
                         <div class="mb-5 text-center">
                             <span class="rounded-full bg-white px-3 py-2 text-xs font-semibold text-gray-500 shadow-sm">
@@ -349,7 +348,6 @@
                                                 type="button"
                                                 class="{{ $isMine ? 'text-gray-300' : 'text-gray-500' }} hover:underline"
                                                 data-reply-message="{{ $message->id }}"
-                                                onclick="return window.crmChatReplyAction(this, event);"
                                                 data-reply-sender="{{ $senderNames[$message->user_id] ?? 'User' }}"
                                                 data-reply-body="{{ e(trim((string) $message->body) ?: 'Attachment') }}"
                                             >
@@ -361,7 +359,6 @@
                                                     type="button"
                                                     class="text-gray-300 hover:underline"
                                                     data-edit-message="{{ $message->id }}"
-                                                    onclick="return window.crmChatEditAction(this, event);"
                                                     data-edit-body="{{ e((string) $message->body) }}"
                                                 >
                                                     Edit
@@ -371,7 +368,6 @@
                                                     type="button"
                                                     class="text-red-300 hover:underline"
                                                     data-delete-message="{{ $message->id }}"
-                                                    onclick="return window.crmChatDeleteAction(this, event);"
                                                 >
                                                     Delete
                                                 </button>
@@ -696,437 +692,6 @@
     </script>
 
     @if ($conversation)
-        {{-- INTERNAL CHAT V3.1.4 HARD ACTION FALLBACK --}}
-        <script>
-            window.crmChatStopActionEvent = function (event) {
-                if (! event) {
-                    return;
-                }
-
-                event.preventDefault();
-                event.stopPropagation();
-
-                if (
-                    typeof event.stopImmediatePropagation
-                    === 'function'
-                ) {
-                    event.stopImmediatePropagation();
-                }
-            };
-
-            window.crmChatCsrfToken = function () {
-                const token =
-                    document.querySelector(
-                        '#crm-chat-send-form input[name="_token"]'
-                    );
-
-                return token
-                    ? String(token.value || '')
-                    : '';
-            };
-
-            window.crmChatMessageActionUrl = function (messageId) {
-                const root =
-                    document.getElementById(
-                        'crm-chat-messages'
-                    );
-
-                const base =
-                    root
-                    ? String(
-                        root.dataset.actionBase
-                        || ''
-                    )
-                    : '';
-
-                return base.replace(
-                    /\/+$/,
-                    ''
-                )
-                + '/'
-                + encodeURIComponent(
-                    String(messageId)
-                );
-            };
-
-            window.crmChatReplyAction = function (button, event) {
-                window.crmChatStopActionEvent(
-                    event
-                );
-
-                const input =
-                    document.getElementById(
-                        'crm-chat-reply-to-message-id'
-                    );
-
-                const preview =
-                    document.getElementById(
-                        'crm-chat-reply-preview'
-                    );
-
-                const sender =
-                    document.getElementById(
-                        'crm-chat-reply-sender'
-                    );
-
-                const body =
-                    document.getElementById(
-                        'crm-chat-reply-body'
-                    );
-
-                const textarea =
-                    document.getElementById(
-                        'crm-chat-body'
-                    );
-
-                if (! input || ! preview) {
-                    window.alert(
-                        'Reply UI tidak ditemukan. Refresh halaman lalu coba kembali.'
-                    );
-
-                    return false;
-                }
-
-                input.value =
-                    String(
-                        button.dataset.replyMessage
-                        || ''
-                    );
-
-                if (sender) {
-                    sender.textContent =
-                        String(
-                            button.dataset.replySender
-                            || 'User'
-                        );
-                }
-
-                if (body) {
-                    body.textContent =
-                        String(
-                            button.dataset.replyBody
-                            || 'Attachment'
-                        );
-                }
-
-                preview.classList.remove(
-                    'hidden'
-                );
-
-                preview.classList.add(
-                    'flex'
-                );
-
-                const editPreview =
-                    document.getElementById(
-                        'crm-chat-edit-preview'
-                    );
-
-                if (editPreview) {
-                    editPreview.classList.add(
-                        'hidden'
-                    );
-
-                    editPreview.classList.remove(
-                        'flex'
-                    );
-                }
-
-                if (textarea) {
-                    textarea.focus();
-                }
-
-                return false;
-            };
-
-            window.crmChatEditAction = async function (button, event) {
-                window.crmChatStopActionEvent(
-                    event
-                );
-
-                const messageId =
-                    Number(
-                        button.dataset.editMessage
-                        || 0
-                    );
-
-                const currentBody =
-                    String(
-                        button.dataset.editBody
-                        || ''
-                    );
-
-                if (messageId < 1) {
-                    window.alert(
-                        'Message ID tidak valid.'
-                    );
-
-                    return false;
-                }
-
-                if (currentBody.trim() === '') {
-                    window.alert(
-                        'Pesan attachment-only tidak memiliki teks untuk diedit.'
-                    );
-
-                    return false;
-                }
-
-                const replacement =
-                    window.prompt(
-                        'Edit pesan:',
-                        currentBody
-                    );
-
-                if (replacement === null) {
-                    return false;
-                }
-
-                const body =
-                    String(
-                        replacement
-                    ).trim();
-
-                if (body === '') {
-                    window.alert(
-                        'Pesan tidak boleh kosong.'
-                    );
-
-                    return false;
-                }
-
-                button.disabled =
-                    true;
-
-                try {
-                    const response =
-                        await fetch(
-                            window.crmChatMessageActionUrl(
-                                messageId
-                            ),
-                            {
-                                method:
-                                    'PATCH',
-
-                                headers: {
-                                    'Accept':
-                                        'application/json',
-
-                                    'Content-Type':
-                                        'application/json',
-
-                                    'X-CSRF-TOKEN':
-                                        window.crmChatCsrfToken(),
-
-                                    'X-Requested-With':
-                                        'XMLHttpRequest',
-                                },
-
-                                credentials:
-                                    'same-origin',
-
-                                body:
-                                    JSON.stringify({
-                                        body:
-                                            body,
-                                    }),
-                            }
-                        );
-
-                    if (! response.ok) {
-                        throw new Error(
-                            await response.text()
-                        );
-                    }
-
-                    const wrapper =
-                        document.querySelector(
-                            '[data-message-id="'
-                            + messageId
-                            + '"]'
-                        );
-
-                    if (wrapper) {
-                        const textNode =
-                            wrapper.querySelector(
-                                '.whitespace-pre-wrap.break-words.text-sm'
-                            );
-
-                        if (textNode) {
-                            textNode.textContent =
-                                body;
-                        }
-
-                        const editButton =
-                            wrapper.querySelector(
-                                '[data-edit-message]'
-                            );
-
-                        if (editButton) {
-                            editButton.dataset.editBody =
-                                body;
-                        }
-
-                        const replyButton =
-                            wrapper.querySelector(
-                                '[data-reply-message]'
-                            );
-
-                        if (replyButton) {
-                            replyButton.dataset.replyBody =
-                                body;
-                        }
-
-                        if (
-                            ! wrapper.querySelector(
-                                '[data-message-edited-label]'
-                            )
-                        ) {
-                            const receipt =
-                                wrapper.querySelector(
-                                    '[data-read-receipt]'
-                                );
-
-                            const meta =
-                                receipt
-                                    ? receipt.parentElement
-                                    : null;
-
-                            if (meta) {
-                                const edited =
-                                    document.createElement(
-                                        'span'
-                                    );
-
-                                edited.dataset.messageEditedLabel =
-                                    '1';
-
-                                edited.className =
-                                    'text-gray-400';
-
-                                edited.textContent =
-                                    '· edited';
-
-                                if (receipt) {
-                                    meta.insertBefore(
-                                        edited,
-                                        receipt
-                                    );
-                                } else {
-                                    meta.appendChild(
-                                        edited
-                                    );
-                                }
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error(
-                        'Internal Chat edit failed:',
-                        error
-                    );
-
-                    window.alert(
-                        'Pesan gagal diedit. Lihat Console jika error berulang.'
-                    );
-                } finally {
-                    button.disabled =
-                        false;
-                }
-
-                return false;
-            };
-
-            window.crmChatDeleteAction = async function (button, event) {
-                window.crmChatStopActionEvent(
-                    event
-                );
-
-                const messageId =
-                    Number(
-                        button.dataset.deleteMessage
-                        || 0
-                    );
-
-                if (messageId < 1) {
-                    window.alert(
-                        'Message ID tidak valid.'
-                    );
-
-                    return false;
-                }
-
-                if (
-                    ! window.confirm(
-                        'Hapus pesan ini? Pesan akan disembunyikan dari conversation tetapi tetap tersimpan untuk audit.'
-                    )
-                ) {
-                    return false;
-                }
-
-                button.disabled =
-                    true;
-
-                try {
-                    const response =
-                        await fetch(
-                            window.crmChatMessageActionUrl(
-                                messageId
-                            ),
-                            {
-                                method:
-                                    'DELETE',
-
-                                headers: {
-                                    'Accept':
-                                        'application/json',
-
-                                    'X-CSRF-TOKEN':
-                                        window.crmChatCsrfToken(),
-
-                                    'X-Requested-With':
-                                        'XMLHttpRequest',
-                                },
-
-                                credentials:
-                                    'same-origin',
-                            }
-                        );
-
-                    if (! response.ok) {
-                        throw new Error(
-                            await response.text()
-                        );
-                    }
-
-                    const wrapper =
-                        document.querySelector(
-                            '[data-message-id="'
-                            + messageId
-                            + '"]'
-                        );
-
-                    if (wrapper) {
-                        wrapper.remove();
-                    }
-                } catch (error) {
-                    button.disabled =
-                        false;
-
-                    console.error(
-                        'Internal Chat delete failed:',
-                        error
-                    );
-
-                    window.alert(
-                        'Pesan gagal dihapus. Lihat Console jika error berulang.'
-                    );
-                }
-
-                return false;
-            };
-        </script>
-
         <script>
             (() => {
                 const currentUserId =
@@ -1827,14 +1392,6 @@
                     replyButton.textContent =
                         'Reply';
 
-                    replyButton.onclick =
-                        function (event) {
-                            return window.crmChatReplyAction(
-                                this,
-                                event
-                            );
-                        };
-
                     actions.appendChild(
                         replyButton
                     );
@@ -1863,14 +1420,6 @@
                         editButton.textContent =
                             'Edit';
 
-                        editButton.onclick =
-                            function (event) {
-                                return window.crmChatEditAction(
-                                    this,
-                                    event
-                                );
-                            };
-
                         actions.appendChild(
                             editButton
                         );
@@ -1893,14 +1442,6 @@
 
                         deleteButton.textContent =
                             'Delete';
-
-                        deleteButton.onclick =
-                            function (event) {
-                                return window.crmChatDeleteAction(
-                                    this,
-                                    event
-                                );
-                            };
 
                         actions.appendChild(
                             deleteButton
