@@ -544,14 +544,4 @@ return [
         'route'      => 'admin.work-orders.index',
         'sort'       => 57,
         'icon-class' => 'icon-note',
-    ],
-
-
-    [
-        'key'   => 'operations-dashboard.internal-chat-audit',
-        'name'  => 'Internal Chat Audit',
-        'route' => 'admin.operational-dashboard.internal-chat-audit.index',
-        'sort'  => 999,
-        'icon-class' => 'icon-message',
-    ],
-];
+    ],];

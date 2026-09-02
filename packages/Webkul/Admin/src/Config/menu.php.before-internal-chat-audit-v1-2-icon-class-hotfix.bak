@@ -552,6 +552,6 @@ return [
         'name'  => 'Internal Chat Audit',
         'route' => 'admin.operational-dashboard.internal-chat-audit.index',
         'sort'  => 999,
-        'icon-class' => 'icon-message',
+        'icon'  => 'icon-message',
     ],
 ];

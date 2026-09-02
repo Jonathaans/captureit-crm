@@ -1150,15 +1150,4 @@ return [
             'admin.work-orders.cancel',
         ],
         'sort'  => 6,
-    ],
-
-    [
-        'key'   => 'operational-dashboard.internal-chat-audit',
-        'name'  => 'Internal Chat Audit',
-        'route' => [
-            'admin.operational-dashboard.internal-chat-audit.index',
-            'admin.operational-dashboard.internal-chat-audit.show',
-        ],
-        'sort'  => 999,
-    ],
-];
+    ],];
