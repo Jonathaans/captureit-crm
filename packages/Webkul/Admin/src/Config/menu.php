@@ -548,7 +548,7 @@ return [
 
 
     [
-        'key'   => 'operations-dashboard.internal-chat-audit',
+        'key'   => 'internal-chat-audit',
         'name'  => 'Internal Chat Audit',
         'route' => 'admin.operational-dashboard.internal-chat-audit.index',
         'sort'  => 999,

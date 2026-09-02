@@ -6192,12 +6192,41 @@
             */
 
             /* INTERNAL CHAT V3.3.1 COMPACT SIDEBAR */
-            /* INTERNAL CHAT V3.3.8 EXPLICIT APPLY PREFERENCES */
+            /* INTERNAL CHAT V3.3.10 AUTHORITATIVE UNREAD */
             const renderSidebar = (
                 rows
             ) => {
                 if (! list) {
                     return;
+                }
+
+                list.style.width =
+                    '100%';
+
+                list.style.maxWidth =
+                    '100%';
+
+                list.style.minWidth =
+                    '0';
+
+                list.style.overflowX =
+                    'hidden';
+
+                list.style.boxSizing =
+                    'border-box';
+
+                if (list.parentElement) {
+                    list.parentElement.style.width =
+                        '100%';
+
+                    list.parentElement.style.maxWidth =
+                        '100%';
+
+                    list.parentElement.style.minWidth =
+                        '0';
+
+                    list.parentElement.style.overflowX =
+                        'hidden';
                 }
 
                 const configV333 =
@@ -6265,11 +6294,10 @@
                             row.id
                         );
 
-                    form.style.margin =
-                        '0';
-
-                    form.style.padding =
-                        '0';
+                    form.style.cssText =
+                        'margin:0;'
+                        +'padding:0;'
+                        +'flex:0 0 auto;';
 
                     const button =
                         document.createElement(
@@ -6279,10 +6307,6 @@
                     button.type =
                         'submit';
 
-                    /*
-                     * Critical V3.3.8 change:
-                     * clicked submit button itself carries the action.
-                     */
                     button.name =
                         'action';
 
@@ -6302,16 +6326,16 @@
                             : '📌';
 
                     button.style.cssText =
-                        'width:26px;'
-                        +'height:27px;'
+                        'width:23px;'
+                        +'height:24px;'
                         +'display:flex;'
                         +'align-items:center;'
                         +'justify-content:center;'
                         +'padding:0;'
                         +'border:1px solid #e5e7eb;'
-                        +'border-radius:8px;'
+                        +'border-radius:7px;'
                         +'background:#ffffff;'
-                        +'font-size:11px;'
+                        +'font-size:9px;'
                         +'cursor:pointer;';
 
                     form.appendChild(
@@ -6346,7 +6370,8 @@
                         +'padding:0;'
                         +'display:flex;'
                         +'align-items:center;'
-                        +'gap:4px;';
+                        +'gap:2px;'
+                        +'flex:0 0 auto;';
 
                     const select =
                         document.createElement(
@@ -6368,15 +6393,9 @@
                             : 'Mute notification';
 
                     select.style.cssText =
-                        'width:'
-                        +(
-                            row.muted
-                                ? '86px'
-                                : '70px'
-                        )
-                        +';'
-                        +'height:27px;'
-                        +'padding:0 4px;'
+                        'width:31px;'
+                        +'height:24px;'
+                        +'padding:0 1px;'
                         +'border:1px solid '
                         +(
                             row.muted
@@ -6384,7 +6403,7 @@
                                 : '#e5e7eb'
                         )
                         +';'
-                        +'border-radius:8px;'
+                        +'border-radius:7px;'
                         +'background:'
                         +(
                             row.muted
@@ -6392,15 +6411,10 @@
                                 : '#ffffff'
                         )
                         +';'
-                        +'font-size:10px;'
+                        +'font-size:9px;'
                         +'font-weight:700;'
-                        +'color:'
-                        +(
-                            row.muted
-                                ? '#92400e'
-                                : '#334155'
-                        )
-                        +';';
+                        +'color:#334155;'
+                        +'cursor:pointer;';
 
                     const placeholder =
                         document.createElement(
@@ -6412,8 +6426,8 @@
 
                     placeholder.textContent =
                         row.muted
-                            ? '🔕 Muted'
-                            : '🔔 Mute';
+                            ? '🔕'
+                            : '🔔';
 
                     placeholder.selected =
                         true;
@@ -6470,26 +6484,23 @@
                         'submit';
 
                     apply.textContent =
-                        'Apply';
+                        '✓';
 
                     apply.title =
                         'Apply notification setting';
 
                     apply.style.cssText =
-                        'height:27px;'
-                        +'padding:0 8px;'
-                        +'border:1px solid #e5e7eb;'
-                        +'border-radius:8px;'
+                        'width:23px;'
+                        +'height:24px;'
+                        +'padding:0;'
+                        +'border:1px solid #0f172a;'
+                        +'border-radius:7px;'
                         +'background:#0f172a;'
                         +'color:#ffffff;'
                         +'font-size:9px;'
-                        +'font-weight:800;'
+                        +'font-weight:900;'
                         +'cursor:pointer;';
 
-                    /*
-                     * Pause realtime redraw while the operator is choosing.
-                     * The final POST itself remains pure browser form submit.
-                     */
                     select.addEventListener(
                         'focus',
                         () => {
@@ -6536,6 +6547,11 @@
                                 'div'
                             );
 
+                        wrapper.dataset.crmV3310Row =
+                            String(
+                                row.id
+                            );
+
                         wrapper.dataset.conversationSearch =
                             String(
                                 row.name
@@ -6546,9 +6562,14 @@
                             ).toLowerCase();
 
                         wrapper.style.cssText =
-                            'display:flex;'
-                            +'align-items:stretch;'
-                            +'min-height:62px;'
+                            'display:grid;'
+                            +'grid-template-columns:minmax(0,1fr) 82px;'
+                            +'align-items:center;'
+                            +'width:100%;'
+                            +'max-width:100%;'
+                            +'min-width:0;'
+                            +'box-sizing:border-box;'
+                            +'overflow:hidden;'
                             +'border-bottom:1px solid #e5e7eb;'
                             +'background:'
                             +(
@@ -6571,18 +6592,23 @@
 
                         link.style.cssText =
                             'min-width:0;'
-                            +'flex:1 1 auto;'
+                            +'max-width:100%;'
+                            +'overflow:hidden;'
                             +'display:flex;'
                             +'align-items:center;'
-                            +'gap:9px;'
-                            +'padding:8px 6px 8px 10px;'
+                            +'gap:7px;'
+                            +'padding:7px 4px 7px 9px;'
                             +'text-decoration:none;'
-                            +'color:inherit;';
+                            +'color:inherit;'
+                            +'box-sizing:border-box;';
 
                         const unread =
-                            Number(
-                                row.unread
-                                || 0
+                            Math.max(
+                                0,
+                                Number(
+                                    row.unread
+                                    || 0
+                                )
                             );
 
                         const presenceColor =
@@ -6596,18 +6622,18 @@
 
                         link.innerHTML =
                             '<div style="position:relative;flex:0 0 auto;">'
-                            +'<div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#334155;font-size:10px;font-weight:800;">'
+                            +'<div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#f1f5f9;color:#334155;font-size:9px;font-weight:800;">'
                             +escapeHtml(
                                 row.initials
                             )
                             +'</div>'
-                            +'<span style="position:absolute;right:-1px;bottom:0;width:9px;height:9px;border:2px solid #fff;border-radius:50%;background:'
+                            +'<span style="position:absolute;right:-1px;bottom:0;width:8px;height:8px;border:2px solid #fff;border-radius:50%;background:'
                             +presenceColor
                             +';"></span>'
                             +'</div>'
-                            +'<div style="min-width:0;flex:1;">'
-                            +'<div style="display:flex;align-items:center;justify-content:space-between;gap:7px;">'
-                            +'<div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:800;color:#0f172a;">'
+                            +'<div style="min-width:0;max-width:100%;overflow:hidden;flex:1;">'
+                            +'<div style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:5px;min-width:0;">'
+                            +'<div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:800;color:#0f172a;">'
                             +(
                                 row.pinned
                                     ? '📌 '
@@ -6617,14 +6643,24 @@
                                 row.name
                             )
                             +'</div>'
-                            +'<div style="flex:0 0 auto;font-size:9px;color:#94a3b8;">'
+                            +(
+                                row.muted
+                                    ? '<span title="'
+                                        +escapeHtml(
+                                            row.mute_label
+                                            || 'Muted'
+                                        )
+                                        +'" style="flex:0 0 auto;padding:1px 4px;border:1px solid #fde68a;border-radius:999px;background:#fffbeb;color:#92400e;font-size:7.5px;font-weight:800;">🔕 Muted</span>'
+                                    : ''
+                            )
+                            +'<div style="flex:0 0 auto;font-size:8px;color:#94a3b8;">'
                             +escapeHtml(
                                 row.time
                             )
                             +'</div>'
                             +'</div>'
-                            +'<div style="margin-top:1px;display:flex;align-items:center;gap:6px;">'
-                            +'<div style="min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;line-height:14px;color:'
+                            +'<div style="margin-top:1px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:5px;min-width:0;">'
+                            +'<div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9.5px;line-height:12px;color:'
                             +(
                                 unread > 0
                                     ? '#0f172a'
@@ -6643,18 +6679,19 @@
                             +'</div>'
                             +(
                                 unread > 0
-                                    ? '<div style="flex:0 0 auto;min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#fff;font-size:9px;font-weight:800;">'
+                                    ? '<span data-crm-v3310-unread="1" title="'
+                                        +unread
+                                        +' unread message(s)" style="position:static;flex:0 0 auto;min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;background:#dc2626;color:#fff;font-size:8.5px;font-weight:900;line-height:18px;">'
                                         +(
                                             unread > 99
                                                 ? '99+'
                                                 : unread
                                         )
-                                        +'</div>'
+                                        +'</span>'
                                     : ''
                             )
                             +'</div>'
-                            +'<div style="margin-top:1px;display:flex;align-items:center;gap:5px;overflow:hidden;white-space:nowrap;font-size:9px;line-height:12px;color:#94a3b8;">'
-                            +'<span style="overflow:hidden;text-overflow:ellipsis;">'
+                            +'<div style="margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;line-height:10px;color:#94a3b8;">'
                             +escapeHtml(
                                 row.role
                             )
@@ -6674,17 +6711,6 @@
                                 row.presence
                             )
                             +'</span>'
-                            +'</span>'
-                            +(
-                                row.muted
-                                    ? '<span style="flex:0 0 auto;padding:1px 6px;border:1px solid #fde68a;border-radius:999px;background:#fffbeb;color:#92400e;font-size:8.5px;font-weight:800;">🔕 '
-                                        +escapeHtml(
-                                            row.mute_label
-                                            || 'Muted'
-                                        )
-                                        +'</span>'
-                                    : ''
-                            )
                             +'</div>'
                             +'</div>';
 
@@ -6694,11 +6720,16 @@
                             );
 
                         controls.style.cssText =
-                            'flex:0 0 auto;'
-                            +'display:flex;'
-                            +'align-items:flex-start;'
-                            +'gap:4px;'
-                            +'padding:8px 8px 0 0;';
+                            'display:flex;'
+                            +'align-items:center;'
+                            +'justify-content:flex-end;'
+                            +'gap:2px;'
+                            +'width:82px;'
+                            +'max-width:82px;'
+                            +'min-width:82px;'
+                            +'overflow:visible;'
+                            +'padding:0 4px 0 2px;'
+                            +'box-sizing:border-box;';
 
                         controls.appendChild(
                             pinForm(
@@ -6732,6 +6763,8 @@
                 list.appendChild(
                     fragment
                 );
+
+                window.crmChatV3310CleanupLegacyUnread?.();
 
                 if (search) {
                     search.dispatchEvent(
@@ -7928,4 +7961,190 @@
             );
         </script>
     @endif
-    {{-- INTERNAL CHAT V3.3.8 EXPLICIT APPLY FINAL --}}</x-admin::layouts>
+    {{-- INTERNAL CHAT V3.3.8 EXPLICIT APPLY FINAL --}}
+    {{-- INTERNAL CHAT V3.3.10 LEGACY UNREAD CLEANUP --}}
+    <script>
+        (() => {
+            const list =
+                document.getElementById(
+                    'crm-wa-conversation-list'
+                );
+
+            if (! list) {
+                return;
+            }
+
+            const isRedBadge = (
+                element
+            ) => {
+                if (
+                    ! element
+                    || element.nodeType !== 1
+                ) {
+                    return false;
+                }
+
+                if (
+                    element.matches(
+                        '[data-crm-v3310-unread]'
+                    )
+                    || element.closest(
+                        '[data-crm-v3310-unread]'
+                    )
+                ) {
+                    return false;
+                }
+
+                const text =
+                    String(
+                        element.textContent
+                        || ''
+                    ).trim();
+
+                if (
+                    ! /^(?:\d{1,2}|99\+)$/.test(
+                        text
+                    )
+                ) {
+                    return false;
+                }
+
+                const className =
+                    String(
+                        element.className
+                        || ''
+                    ).toLowerCase();
+
+                const styleText =
+                    String(
+                        element.getAttribute(
+                            'style'
+                        )
+                        || ''
+                    ).toLowerCase();
+
+                let background =
+                    '';
+
+                try {
+                    background =
+                        String(
+                            window.getComputedStyle(
+                                element
+                            ).backgroundColor
+                            || ''
+                        ).toLowerCase();
+                } catch (error) {
+                    background =
+                        '';
+                }
+
+                const hasBadgeHint =
+                    className.includes(
+                        'unread'
+                    )
+                    || className.includes(
+                        'badge'
+                    )
+                    || styleText.includes(
+                        '#dc2626'
+                    )
+                    || styleText.includes(
+                        '#ef4444'
+                    )
+                    || styleText.includes(
+                        'red'
+                    )
+                    || background ===
+                        'rgb(220, 38, 38)'
+                    || background ===
+                        'rgb(239, 68, 68)'
+                    || background ===
+                        'rgb(220, 53, 69)'
+                    || background ===
+                        'rgb(255, 0, 0)';
+
+                return hasBadgeHint;
+            };
+
+            const cleanup =
+                () => {
+                    list
+                        .querySelectorAll(
+                            '*'
+                        )
+                        .forEach(
+                            (element) => {
+                                if (
+                                    isRedBadge(
+                                        element
+                                    )
+                                ) {
+                                    element.remove();
+                                }
+                            }
+                        );
+
+                    list.style.overflowX =
+                        'hidden';
+
+                    list.style.maxWidth =
+                        '100%';
+
+                    list
+                        .querySelectorAll(
+                            '[data-crm-v3310-row]'
+                        )
+                        .forEach(
+                            (row) => {
+                                row.style.maxWidth =
+                                    '100%';
+
+                                row.style.overflow =
+                                    'hidden';
+                            }
+                        );
+                };
+
+            window.crmChatV3310CleanupLegacyUnread =
+                cleanup;
+
+            cleanup();
+
+            let scheduled =
+                false;
+
+            const observer =
+                new MutationObserver(
+                    () => {
+                        if (scheduled) {
+                            return;
+                        }
+
+                        scheduled =
+                            true;
+
+                        window.requestAnimationFrame(
+                            () => {
+                                scheduled =
+                                    false;
+
+                                cleanup();
+                            }
+                        );
+                    }
+                );
+
+            observer.observe(
+                list,
+                {
+                    childList:
+                        true,
+
+                    subtree:
+                        true,
+                }
+            );
+        })();
+    </script>
+</x-admin::layouts>

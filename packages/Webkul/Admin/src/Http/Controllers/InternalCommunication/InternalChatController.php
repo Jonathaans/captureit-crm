@@ -43,6 +43,12 @@ class InternalChatController extends Controller
                 ->get();
 
             $chat->markRead($conversationId, $user->id);
+
+            /* INTERNAL CHAT V3.3.9 READ CURSOR SYNC */
+            $this->syncReadMessageCursor(
+                $conversationId,
+                (int) $user->id
+            );
         }
 
         $users = DB::table('users')
@@ -451,6 +457,12 @@ class InternalChatController extends Controller
 
         $chat->markRead($conversationId, $user->id);
 
+            /* INTERNAL CHAT V3.3.9 READ CURSOR SYNC */
+            $this->syncReadMessageCursor(
+                $conversationId,
+                (int) $user->id
+            );
+
         $otherLastReadAt = InternalConversationMember::query()
             ->where('conversation_id', $conversationId)
             ->where('user_id', '<>', $user->id)
@@ -689,6 +701,60 @@ class InternalChatController extends Controller
                 )
                 ->values(),
         ];
+    }
+
+    /**
+     * Keep unread state deterministic per conversation.
+     *
+     * last_read_at remains for read receipts; last_read_message_id is the
+     * sidebar unread cursor.
+     */
+    private function syncReadMessageCursor(
+        int $conversationId,
+        int $userId
+    ): void {
+        if (
+            ! \Illuminate\Support\Facades\Schema::hasColumn(
+                'internal_conversation_members',
+                'last_read_message_id'
+            )
+        ) {
+            return;
+        }
+
+        $maxMessageId =
+            (int) (
+                \Illuminate\Support\Facades\DB::table(
+                    'internal_messages'
+                )
+                    ->where(
+                        'conversation_id',
+                        $conversationId
+                    )
+                    ->whereNull(
+                        'deleted_at'
+                    )
+                    ->max(
+                        'id'
+                    )
+                ?? 0
+            );
+
+        \Illuminate\Support\Facades\DB::table(
+            'internal_conversation_members'
+        )
+            ->where(
+                'conversation_id',
+                $conversationId
+            )
+            ->where(
+                'user_id',
+                $userId
+            )
+            ->update([
+                'last_read_message_id' =>
+                    $maxMessageId,
+            ]);
     }
 
     private function user()

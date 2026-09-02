@@ -10,6 +10,7 @@
         );
 @endphp
 
+{{-- INTERNAL CHAT V3.3.11 GLOBAL UNREAD TARGET ISOLATION --}}
 <script>
     (() => {
         const chatUrl =
@@ -22,6 +23,83 @@
                 $internalChatUnreadUrl
             );
 
+        const normalizedPath = (
+            value
+        ) => {
+            try {
+                const parsed =
+                    new URL(
+                        value,
+                        window.location.origin
+                    );
+
+                return parsed.pathname
+                    .replace(
+                        /\/+$/,
+                        ''
+                    ) || '/';
+            } catch (error) {
+                return '';
+            }
+        };
+
+        const chatPath =
+            normalizedPath(
+                chatUrl
+            );
+
+        /*
+         * IMPORTANT:
+         * Global unread belongs only to the global floating Chat launcher.
+         * Conversation links such as:
+         *   /admin/internal-chat?conversation=4
+         * are NOT global targets.
+         */
+        const isExactChatLauncher = (
+            node
+        ) => {
+            if (
+                ! node
+                || node.nodeType !== 1
+                || node.closest(
+                    '#crm-wa-conversation-list'
+                )
+                || node.closest(
+                    '[data-crm-v3310-row]'
+                )
+            ) {
+                return false;
+            }
+
+            const href =
+                String(
+                    node.getAttribute(
+                        'href'
+                    )
+                    || ''
+                ).trim();
+
+            if (href === '') {
+                return false;
+            }
+
+            try {
+                const parsed =
+                    new URL(
+                        href,
+                        window.location.origin
+                    );
+
+                return normalizedPath(
+                    parsed.href
+                ) === chatPath
+                    && parsed.search === ''
+                    && parsed.hash === '';
+            } catch (error) {
+                return false;
+            }
+        };
+
         const locateChatTargets = () => {
             const direct =
                 Array.from(
@@ -30,39 +108,55 @@
                     )
                 )
                     .filter(
-                        (node) => {
-                            const href =
-                                String(
-                                    node.href
-                                    || ''
-                                );
-
-                            return href === chatUrl
-                                || href.startsWith(
-                                    chatUrl
-                                    + '?'
-                                );
-                        }
+                        isExactChatLauncher
                     );
 
             if (direct.length) {
                 return direct;
             }
 
+            /*
+             * Fallback for a customized launcher rendered as a button.
+             * Never inspect the conversation list itself.
+             */
             return Array.from(
                 document.querySelectorAll(
-                    'a, button'
+                    'button, [role="button"]'
                 )
             )
                 .filter(
-                    (node) =>
-                        String(
+                    (node) => {
+                        if (
+                            node.closest(
+                                '#crm-wa-conversation-list'
+                            )
+                            || node.closest(
+                                '[data-crm-v3310-row]'
+                            )
+                        ) {
+                            return false;
+                        }
+
+                        return String(
                             node.textContent
                             || ''
                         )
                             .trim()
                             .toLowerCase()
-                        === 'chat'
+                            === 'chat';
+                    }
+                );
+        };
+
+        const removeWrongRowBadges = () => {
+            document
+                .querySelectorAll(
+                    '#crm-wa-conversation-list [data-global-chat-unread-badge], '
+                    +'[data-crm-v3310-row] [data-global-chat-unread-badge]'
+                )
+                .forEach(
+                    (badge) =>
+                        badge.remove()
                 );
         };
 
@@ -71,7 +165,7 @@
         ) => {
             let badge =
                 target.querySelector(
-                    '[data-global-chat-unread-badge]'
+                    ':scope > [data-global-chat-unread-badge]'
                 );
 
             if (badge) {
@@ -89,6 +183,9 @@
 
             badge.dataset.globalChatUnreadBadge =
                 '1';
+
+            badge.dataset.globalChatUnreadOwner =
+                'launcher';
 
             badge.style.position =
                 'absolute';
@@ -135,6 +232,9 @@
             badge.style.display =
                 'none';
 
+            badge.style.zIndex =
+                '3';
+
             target.appendChild(
                 badge
             );
@@ -145,6 +245,11 @@
         const renderCount = (
             count
         ) => {
+            /*
+             * Defensive cleanup for DOM left by the old V3.1 selector.
+             */
+            removeWrongRowBadges();
+
             locateChatTargets()
                 .forEach(
                     (target) => {
@@ -202,15 +307,20 @@
                         await response.json();
 
                     renderCount(
-                        Number(
-                            data.total
-                            || 0
+                        Math.max(
+                            0,
+                            Number(
+                                data.total
+                                || 0
+                            )
                         )
                     );
                 } catch (error) {
-                    // A failed badge poll must never break the CRM page.
+                    // Badge polling must never break the CRM page.
                 }
             };
+
+        removeWrongRowBadges();
 
         pollUnread();
 

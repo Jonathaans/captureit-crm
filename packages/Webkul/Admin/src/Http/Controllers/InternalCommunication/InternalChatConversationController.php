@@ -18,6 +18,26 @@ class InternalChatConversationController extends Controller
         $user =
             $this->user();
 
+        $hasCursor =
+            Schema::hasColumn(
+                'internal_conversation_members',
+                'last_read_message_id'
+            );
+
+        $select = [
+            'conversation.id',
+            'conversation.updated_at',
+            'member.last_read_at',
+            'member.pinned_at',
+            'member.muted_until',
+            'member.mute_forever',
+        ];
+
+        if ($hasCursor) {
+            $select[] =
+                'member.last_read_message_id';
+        }
+
         $rows =
             DB::table(
                 'internal_conversation_members as member'
@@ -36,14 +56,9 @@ class InternalChatConversationController extends Controller
                     'conversation.type',
                     'direct'
                 )
-                ->select([
-                    'conversation.id',
-                    'conversation.updated_at',
-                    'member.last_read_at',
-                    'member.pinned_at',
-                    'member.muted_until',
-                    'member.mute_forever',
-                ])
+                ->select(
+                    $select
+                )
                 ->get();
 
         $hasPresenceTable =
@@ -56,7 +71,8 @@ class InternalChatConversationController extends Controller
                 ->map(
                     function ($row) use (
                         $user,
-                        $hasPresenceTable
+                        $hasPresenceTable,
+                        $hasCursor
                     ) {
                         $other =
                             DB::table(
@@ -112,6 +128,25 @@ class InternalChatConversationController extends Controller
                                     'created_at',
                                 ]);
 
+                        /*
+                         * V3.3.9 unread cursor.
+                         *
+                         * Timestamp-only unread tracking is ambiguous when
+                         * last_read_at is null and can make old messages appear
+                         * unread in every conversation. Message-id cursor makes
+                         * unread state conversation-specific and deterministic.
+                         */
+                        $readCursor =
+                            $hasCursor
+                                ? max(
+                                    0,
+                                    (int) (
+                                        $row->last_read_message_id
+                                        ?? 0
+                                    )
+                                )
+                                : 0;
+
                         $unreadQuery =
                             DB::table(
                                 'internal_messages'
@@ -129,7 +164,13 @@ class InternalChatConversationController extends Controller
                                     'deleted_at'
                                 );
 
-                        if (
+                        if ($hasCursor) {
+                            $unreadQuery->where(
+                                'id',
+                                '>',
+                                $readCursor
+                            );
+                        } elseif (
                             ! empty(
                                 $row->last_read_at
                             )
@@ -257,7 +298,7 @@ class InternalChatConversationController extends Controller
                                         $preview
                                     ),
                                     0,
-                                    68,
+                                    56,
                                     '…'
                                 ),
 
@@ -266,6 +307,9 @@ class InternalChatConversationController extends Controller
 
                             'unread' =>
                                 $unread,
+
+                            'read_cursor' =>
+                                $readCursor,
 
                             'pinned' =>
                                 ! empty(
@@ -496,10 +540,6 @@ class InternalChatConversationController extends Controller
         $user =
             $this->user();
 
-        /*
-         * V3.3/V3.3.1 had legacy heartbeat calls that sent an empty JSON body.
-         * Ignore those so they cannot keep an inactive browser "Online".
-         */
         if (
             ! $request->has(
                 'idle_seconds'
@@ -560,9 +600,6 @@ class InternalChatConversationController extends Controller
             )
         );
 
-        /*
-         * Store the actual activity moment, not every heartbeat.
-         */
         if (
             $idleSeconds <= 60
             && Schema::hasTable(
