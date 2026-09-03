@@ -91,6 +91,22 @@ Route::controller(
         Route::get('{id}', 'show')
             ->name('admin.purchase-orders.show');
     });
+/*
+|--------------------------------------------------------------------------
+| EXPORT ALL EXPENSES CSV V1
+|--------------------------------------------------------------------------
+| This static route must be declared before the dynamic invoices/{id} route.
+*/
+
+Route::controller(
+    \Webkul\Admin\Http\Controllers\Invoice\ExpenseExportController::class
+)
+    ->prefix('invoices')
+    ->group(function () {
+        Route::get('expenses/export-all', 'export')
+            ->name('admin.invoices.expenses.export-all');
+    });
+
 Route::controller(InvoiceController::class)
     ->prefix('invoices')
     ->group(function () {

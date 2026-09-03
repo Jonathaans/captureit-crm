@@ -67,6 +67,11 @@
                     >
                         Export CSV
                     </a>
+
+            {{-- FINANCIAL REPORT EXPORT ALL EXPENSES V1 --}}
+            <a href="{{ route('admin.invoices.financial-report.expenses.export') }}" class="primary-button">
+                Export All Expenses
+            </a>
                 @endif
             </div>
 

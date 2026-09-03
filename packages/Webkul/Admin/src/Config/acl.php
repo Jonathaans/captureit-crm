@@ -1153,7 +1153,7 @@ return [
     ],
 
     [
-        'key'   => 'operational-dashboard.internal-chat-audit',
+        'key'   => 'internal-chat-audit',
         'name'  => 'Internal Chat Audit',
         'route' => [
             'admin.operational-dashboard.internal-chat-audit.index',
@@ -1161,4 +1161,13 @@ return [
         ],
         'sort'  => 999,
     ],
+[
+    /**
+     * Export All Expenses CSV.
+     */
+    'key'   => 'invoices.expense.export-all',
+    'name'  => 'Export All Expenses',
+    'route' => 'admin.invoices.expenses.export-all',
+    'sort'  => 3,
+],
 ];

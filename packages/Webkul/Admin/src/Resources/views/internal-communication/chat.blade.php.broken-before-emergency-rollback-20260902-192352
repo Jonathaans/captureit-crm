@@ -3519,7 +3519,7 @@
                 messagesRoot.scrollTop =
                     messagesRoot.scrollHeight;
 
-                updateReadReceipts(
+updateReadReceipts(
                     Number(
                         messagesRoot.dataset.readUpToId
                         || 0
@@ -7982,392 +7982,13 @@
     {{-- INTERNAL CHAT V3.3.8 EXPLICIT APPLY FINAL --}}
     {{-- INTERNAL CHAT V3.3.10 LEGACY UNREAD CLEANUP --}}
     
+    @endif
 
-    {{-- INTERNAL CHAT BOTTOM STICKY V1.6 --}}
-    <script>
-        (() => {
-            const bootInternalChatBottomStickyV16 = () => {
-                const root =
-                    document.getElementById(
-                        'crm-chat-messages'
-                    );
-
-                const form =
-                    document.getElementById(
-                        'crm-chat-send-form'
-                    );
-
-                if (
-                    !root
-                    || root.dataset.bottomStickyV16 === '1'
-                ) {
-                    return;
-                }
-
-                root.dataset.bottomStickyV16 =
-                    '1';
-
-                let stickToBottom =
-                    true;
-
-                let programmaticUntil =
-                    0;
-
-                const distanceFromBottom = (
-                    element
-                ) =>
-                    Math.max(
-                        0,
-                        element.scrollHeight
-                        - element.clientHeight
-                        - element.scrollTop
-                    );
-
-                const isScrollable = (
-                    element
-                ) => {
-                    if (!element) {
-                        return false;
-                    }
-
-                    const style =
-                        window.getComputedStyle(
-                            element
-                        );
-
-                    const overflowY =
-                        style.overflowY;
-
-                    return (
-                        overflowY === 'auto'
-                        || overflowY === 'scroll'
-                    )
-                    && element.scrollHeight
-                        > element.clientHeight + 2;
-                };
-
-                /*
-                 * Prefer #crm-chat-messages. If a future CSS change moves
-                 * scrolling to an ancestor, find that ancestor instead.
-                 */
-                const findScroller = () => {
-                    if (isScrollable(root)) {
-                        return root;
-                    }
-
-                    let node =
-                        root.parentElement;
-
-                    while (
-                        node
-                        && node !== document.body
-                    ) {
-                        if (isScrollable(node)) {
-                            return node;
-                        }
-
-                        node =
-                            node.parentElement;
-                    }
-
-                    return root;
-                };
-
-                const ensureSentinel = () => {
-                    let sentinel =
-                        document.getElementById(
-                            'crm-chat-scroll-end-v16'
-                        );
-
-                    if (!sentinel) {
-                        sentinel =
-                            document.createElement(
-                                'div'
-                            );
-
-                        sentinel.id =
-                            'crm-chat-scroll-end-v16';
-
-                        sentinel.setAttribute(
-                            'aria-hidden',
-                            'true'
-                        );
-
-                        sentinel.style.height =
-                            '1px';
-
-                        sentinel.style.flex =
-                            '0 0 auto';
-
-                        root.appendChild(
-                            sentinel
-                        );
-                    }
-
-                    return sentinel;
-                };
-
-                const sentinel =
-                    ensureSentinel();
-
-                const goBottom = () => {
-                    const scroller =
-                        findScroller();
-
-                    programmaticUntil =
-                        Date.now() + 160;
-
-                    scroller.scrollTop =
-                        scroller.scrollHeight;
-
-                    /*
-                     * Flush layout, then assign once more.
-                     */
-                    void scroller.offsetHeight;
-
-                    scroller.scrollTop =
-                        scroller.scrollHeight;
-
-                    if (
-                        distanceFromBottom(
-                            scroller
-                        ) > 4
-                    ) {
-                        sentinel.scrollIntoView({
-                            behavior:
-                                'auto',
-
-                            block:
-                                'end',
-
-                            inline:
-                                'nearest',
-                        });
-
-                        scroller.scrollTop =
-                            scroller.scrollHeight;
-                    }
-                };
-
-                /*
-                 * Track whether user deliberately moved away from bottom.
-                 */
-                const bindScrollState = () => {
-                    const scroller =
-                        findScroller();
-
-                    if (
-                        scroller.dataset.bottomStickyStateV16
-                        === '1'
-                    ) {
-                        return;
-                    }
-
-                    scroller.dataset.bottomStickyStateV16 =
-                        '1';
-
-                    scroller.addEventListener(
-                        'scroll',
-                        () => {
-                            if (
-                                Date.now()
-                                < programmaticUntil
-                            ) {
-                                return;
-                            }
-
-                            stickToBottom =
-                                distanceFromBottom(
-                                    scroller
-                                ) <= 90;
-                        },
-                        {
-                            passive:
-                                true,
-                        }
-                    );
-                };
-
-                bindScrollState();
-
-                /*
-                 * Initial open: force bottom through paint/font settling.
-                 */
-                goBottom();
-
-                window.requestAnimationFrame(
-                    () => {
-                        goBottom();
-
-                        window.requestAnimationFrame(
-                            goBottom
-                        );
-                    }
-                );
-
-                [
-                    60,
-                    140,
-                    300,
-                    650,
-                    1100,
-                ].forEach(
-                    (delay) => {
-                        window.setTimeout(
-                            goBottom,
-                            delay
-                        );
-                    }
-                );
-
-                window.addEventListener(
-                    'load',
-                    goBottom,
-                    {
-                        once:
-                            true,
-                    }
-                );
-
-                window.addEventListener(
-                    'pageshow',
-                    goBottom,
-                    {
-                        once:
-                            true,
-                    }
-                );
-
-                /*
-                 * Sending a message should always continue at the bottom.
-                 * Capture phase means this runs even if the main chat submit
-                 * handler is defined elsewhere.
-                 */
-                if (form) {
-                    form.addEventListener(
-                        'submit',
-                        () => {
-                            stickToBottom =
-                                true;
-
-                            goBottom();
-
-                            window.setTimeout(
-                                goBottom,
-                                0
-                            );
-
-                            window.setTimeout(
-                                goBottom,
-                                120
-                            );
-                        },
-                        true
-                    );
-                }
-
-                /*
-                 * Handles both:
-                 * - AJAX send append
-                 * - polling incoming append
-                 *
-                 * If user is reading older history, incoming messages do not
-                 * yank them down. If already near bottom, stay pinned.
-                 */
-                const observer =
-                    new MutationObserver(
-                        (mutations) => {
-                            let messageAdded =
-                                false;
-
-                            for (
-                                const mutation
-                                of mutations
-                            ) {
-                                for (
-                                    const node
-                                    of mutation.addedNodes
-                                ) {
-                                    if (
-                                        node.nodeType
-                                        !== Node.ELEMENT_NODE
-                                    ) {
-                                        continue;
-                                    }
-
-                                    if (
-                                        node.id
-                                        === 'crm-chat-scroll-end-v16'
-                                    ) {
-                                        continue;
-                                    }
-
-                                    if (
-                                        node.matches?.(
-                                            '[data-message-id]'
-                                        )
-                                        || node.querySelector?.(
-                                            '[data-message-id]'
-                                        )
-                                    ) {
-                                        messageAdded =
-                                            true;
-
-                                        break;
-                                    }
-                                }
-
-                                if (messageAdded) {
-                                    break;
-                                }
-                            }
-
-                            if (
-                                messageAdded
-                                && stickToBottom
-                            ) {
-                                window.requestAnimationFrame(
-                                    goBottom
-                                );
-                            }
-                        }
-                    );
-
-                observer.observe(
-                    root,
-                    {
-                        childList:
-                            true,
-
-                        subtree:
-                            true,
-                    }
-                );
-            };
-
-            if (
-                document.readyState
-                === 'loading'
-            ) {
-                document.addEventListener(
-                    'DOMContentLoaded',
-                    bootInternalChatBottomStickyV16,
-                    {
-                        once:
-                            true,
-                    }
-                );
-            } else {
-                bootInternalChatBottomStickyV16();
-            }
-        })();
-    </script>
-
-    {{-- INTERNAL CHAT LATEST50 BOTTOM V1.5 --}}
+    {{-- INTERNAL CHAT WHATSAPP FINAL SCROLL V1.4.1 --}}
     @if ($conversation)
         <script>
             (() => {
-                const bootLatest50BottomV15 = () => {
+                const bootWhatsAppFinalScrollV141 = () => {
                     const root =
                         document.getElementById(
                             'crm-chat-messages'
@@ -8387,34 +8008,21 @@
                         !root
                         || !stack
                         || !bottom
-                        || root.dataset.latest50BottomV15
+                        || root.dataset.finalScrollV141
                             === '1'
                     ) {
                         return;
                     }
 
-                    root.dataset.latest50BottomV15 =
+                    root.dataset.finalScrollV141 =
                         '1';
 
                     /*
-                     * WhatsApp behavior:
-                     * short history menempel ke bawah;
-                     * long history tetap scroll normal.
+                     * Short history stays anchored to composer/bottom.
+                     * Chronological order remains untouched.
                      */
-                    stack.style.minHeight =
-                        '100%';
-
                     stack.style.marginTop =
-                        '0';
-
-                    stack.style.justifyContent =
-                        'flex-end';
-
-                    stack.style.flexShrink =
-                        '0';
-
-                    root.style.overflowAnchor =
-                        'none';
+                        'auto';
 
                     if (
                         'scrollRestoration'
@@ -8424,100 +8032,117 @@
                             'manual';
                     }
 
-                    const pinBottom = () => {
-                        void stack.offsetHeight;
+                    const atBottom = () =>
+                        (
+                            root.scrollHeight
+                            - root.clientHeight
+                            - root.scrollTop
+                        )
+                        <= 4;
+
+                    const pinToNewest = () => {
+                        /*
+                         * Root is already the visible scroll panel in the
+                         * current CRM layout. Assign twice around one layout
+                         * flush to survive late sizing.
+                         */
+                        root.scrollTop =
+                            root.scrollHeight;
+
+                        void root.offsetHeight;
 
                         root.scrollTop =
                             root.scrollHeight;
 
-                        bottom.scrollIntoView({
-                            behavior:
-                                'auto',
+                        if (!atBottom()) {
+                            bottom.scrollIntoView({
+                                behavior:
+                                    'auto',
 
-                            block:
-                                'end',
+                                block:
+                                    'end',
 
-                            inline:
-                                'nearest',
-                        });
+                                inline:
+                                    'nearest',
+                            });
 
-                        root.scrollTop =
-                            root.scrollHeight;
+                            root.scrollTop =
+                                root.scrollHeight;
+                        }
                     };
 
-                    let userScrolled =
+                    let userTouchedHistory =
                         false;
 
                     let interval =
                         null;
 
-                    const stopPin = () => {
-                        userScrolled =
+                    const stopInitialPin = () => {
+                        userTouchedHistory =
                             true;
 
                         if (interval) {
-                            clearInterval(
+                            window.clearInterval(
                                 interval
                             );
 
                             interval =
                                 null;
                         }
-
-                        root.style.overflowAnchor =
-                            '';
                     };
 
-                    root.addEventListener(
+                    [
                         'wheel',
-                        stopPin,
-                        {
-                            once:
-                                true,
-
-                            passive:
-                                true,
-                        }
-                    );
-
-                    root.addEventListener(
                         'touchstart',
-                        stopPin,
-                        {
-                            once:
-                                true,
+                    ].forEach(
+                        (eventName) => {
+                            root.addEventListener(
+                                eventName,
+                                stopInitialPin,
+                                {
+                                    once:
+                                        true,
 
-                            passive:
-                                true,
-                        }
-                    );
-
-                    pinBottom();
-
-                    requestAnimationFrame(
-                        () => {
-                            pinBottom();
-
-                            requestAnimationFrame(
-                                pinBottom
+                                    passive:
+                                        true,
+                                }
                             );
                         }
                     );
 
+                    /*
+                     * Immediate + two animation frames.
+                     */
+                    pinToNewest();
+
+                    window.requestAnimationFrame(
+                        () => {
+                            pinToNewest();
+
+                            window.requestAnimationFrame(
+                                pinToNewest
+                            );
+                        }
+                    );
+
+                    /*
+                     * Retry briefly while browser restores layout/font state.
+                     * Stop as soon as user deliberately scrolls history.
+                     */
                     const startedAt =
                         Date.now();
 
                     interval =
-                        setInterval(
+                        window.setInterval(
                             () => {
                                 if (
-                                    userScrolled
+                                    userTouchedHistory
                                     || Date.now()
                                         - startedAt
-                                        > 1200
+                                        > 1500
                                 ) {
                                     if (interval) {
-                                        clearInterval(
+                                        window.clearInterval(
                                             interval
                                         );
 
@@ -8525,22 +8150,19 @@
                                             null;
                                     }
 
-                                    root.style.overflowAnchor =
-                                        '';
-
                                     return;
                                 }
 
-                                pinBottom();
+                                pinToNewest();
                             },
                             40
                         );
 
-                    addEventListener(
+                    window.addEventListener(
                         'load',
                         () => {
-                            if (!userScrolled) {
-                                pinBottom();
+                            if (!userTouchedHistory) {
+                                pinToNewest();
                             }
                         },
                         {
@@ -8549,11 +8171,11 @@
                         }
                     );
 
-                    addEventListener(
+                    window.addEventListener(
                         'pageshow',
                         () => {
-                            if (!userScrolled) {
-                                pinBottom();
+                            if (!userTouchedHistory) {
+                                pinToNewest();
                             }
                         },
                         {
@@ -8566,8 +8188,8 @@
                         ?.ready
                         ?.then(
                             () => {
-                                if (!userScrolled) {
-                                    pinBottom();
+                                if (!userTouchedHistory) {
+                                    pinToNewest();
                                 }
                             }
                         );
@@ -8579,367 +8201,16 @@
                 ) {
                     document.addEventListener(
                         'DOMContentLoaded',
-                        bootLatest50BottomV15,
+                        bootWhatsAppFinalScrollV141,
                         {
                             once:
                                 true,
                         }
                     );
                 } else {
-                    bootLatest50BottomV15();
+                    bootWhatsAppFinalScrollV141();
                 }
             })();
         </script>
     @endif
-
-    {{-- INTERNAL CHAT SCROLL GUARD LATEST50 V1.7 --}}
-    <script>
-        (() => {
-            const bootInternalChatScrollGuardV17 = () => {
-                const root =
-                    document.getElementById(
-                        'crm-chat-messages'
-                    );
-
-                const stack =
-                    document.getElementById(
-                        'crm-chat-message-stack'
-                    );
-
-                if (
-                    !root
-                    || !stack
-                    || root.dataset.scrollGuardV17
-                        === '1'
-                ) {
-                    return;
-                }
-
-                root.dataset.scrollGuardV17 =
-                    '1';
-
-                /*
-                 * Do NOT reorder messages.
-                 *
-                 * DOM remains:
-                 * oldest
-                 * ...
-                 * newest
-                 *
-                 * Short history is merely positioned at the bottom.
-                 */
-                stack.style.minHeight =
-                    '100%';
-
-                stack.style.marginTop =
-                    '0';
-
-                stack.style.justifyContent =
-                    'flex-end';
-
-                stack.style.flexShrink =
-                    '0';
-
-                root.style.scrollBehavior =
-                    'auto';
-
-                if (
-                    'scrollRestoration'
-                    in history
-                ) {
-                    history.scrollRestoration =
-                        'manual';
-                }
-
-                const maxScrollTop = () =>
-                    Math.max(
-                        0,
-                        root.scrollHeight
-                        - root.clientHeight
-                    );
-
-                const distanceFromBottom = () =>
-                    Math.max(
-                        0,
-                        maxScrollTop()
-                        - root.scrollTop
-                    );
-
-                let followNewest =
-                    true;
-
-                let programmaticScroll =
-                    false;
-
-                let recentUserIntentAt =
-                    0;
-
-                const goBottom = () => {
-                    if (!followNewest) {
-                        return;
-                    }
-
-                    programmaticScroll =
-                        true;
-
-                    /*
-                     * Flush layout after min-height / justify-end.
-                     */
-                    void stack.offsetHeight;
-
-                    root.scrollTop =
-                        maxScrollTop();
-
-                    window.requestAnimationFrame(
-                        () => {
-                            root.scrollTop =
-                                maxScrollTop();
-
-                            programmaticScroll =
-                                false;
-                        }
-                    );
-                };
-
-                /*
-                 * Initial room open.
-                 * Repeat across the common layout/hydration windows.
-                 */
-                goBottom();
-
-                [
-                    0,
-                    30,
-                    80,
-                    160,
-                    320,
-                    650,
-                    1200,
-                    2200,
-                    5200,
-                ].forEach(
-                    (delay) => {
-                        window.setTimeout(
-                            goBottom,
-                            delay
-                        );
-                    }
-                );
-
-                /*
-                 * User scroll-up intent disables following newest.
-                 * Programmatic scroll changes from existing chat code/polling
-                 * do NOT disable it.
-                 */
-                root.addEventListener(
-                    'wheel',
-                    (event) => {
-                        recentUserIntentAt =
-                            Date.now();
-
-                        if (event.deltaY < 0) {
-                            followNewest =
-                                false;
-                        }
-                    },
-                    {
-                        passive:
-                            true,
-                    }
-                );
-
-                let touchStartY =
-                    null;
-
-                root.addEventListener(
-                    'touchstart',
-                    (event) => {
-                        recentUserIntentAt =
-                            Date.now();
-
-                        touchStartY =
-                            event.touches?.[0]?.clientY
-                            ?? null;
-                    },
-                    {
-                        passive:
-                            true,
-                    }
-                );
-
-                root.addEventListener(
-                    'touchmove',
-                    (event) => {
-                        recentUserIntentAt =
-                            Date.now();
-
-                        const y =
-                            event.touches?.[0]?.clientY
-                            ?? null;
-
-                        if (
-                            touchStartY !== null
-                            && y !== null
-                            && y > touchStartY + 4
-                        ) {
-                            followNewest =
-                                false;
-                        }
-                    },
-                    {
-                        passive:
-                            true,
-                    }
-                );
-
-                root.addEventListener(
-                    'scroll',
-                    () => {
-                        if (programmaticScroll) {
-                            return;
-                        }
-
-                        const nearBottom =
-                            distanceFromBottom()
-                            <= 24;
-
-                        if (nearBottom) {
-                            /*
-                             * Once user returns to bottom, resume normal
-                             * WhatsApp-style following of incoming messages.
-                             */
-                            followNewest =
-                                true;
-
-                            return;
-                        }
-
-                        /*
-                         * Only treat a non-bottom scroll as deliberate when it
-                         * follows a recent human gesture.
-                         */
-                        if (
-                            Date.now()
-                            - recentUserIntentAt
-                            < 500
-                        ) {
-                            followNewest =
-                                false;
-                        }
-                    },
-                    {
-                        passive:
-                            true,
-                    }
-                );
-
-                /*
-                 * Existing polling/appending can mutate the DOM after open.
-                 * Keep newest visible only while the user is following newest.
-                 */
-                const mutationObserver =
-                    new MutationObserver(
-                        () => {
-                            if (followNewest) {
-                                goBottom();
-                            }
-                        }
-                    );
-
-                mutationObserver.observe(
-                    stack,
-                    {
-                        childList:
-                            true,
-
-                        subtree:
-                            true,
-                    }
-                );
-
-                /*
-                 * Font/attachment/layout changes can increase scrollHeight
-                 * without adding a new message.
-                 */
-                if (
-                    'ResizeObserver'
-                    in window
-                ) {
-                    const resizeObserver =
-                        new ResizeObserver(
-                            () => {
-                                if (followNewest) {
-                                    goBottom();
-                                }
-                            }
-                        );
-
-                    resizeObserver.observe(
-                        stack
-                    );
-                }
-
-                /*
-                 * Persistent low-frequency guard.
-                 *
-                 * Diagnostic proved the main chat script already tries one
-                 * initial scroll, yet QA still lands at top. This guard makes
-                 * the expected bottom position authoritative while the user
-                 * is following newest, including after the 5-second poll.
-                 */
-                window.setInterval(
-                    () => {
-                        if (
-                            followNewest
-                            && distanceFromBottom()
-                                > 6
-                        ) {
-                            goBottom();
-                        }
-                    },
-                    600
-                );
-
-                window.addEventListener(
-                    'load',
-                    goBottom,
-                    {
-                        once:
-                            true,
-                    }
-                );
-
-                window.addEventListener(
-                    'pageshow',
-                    goBottom,
-                    {
-                        once:
-                            true,
-                    }
-                );
-
-                document.fonts
-                    ?.ready
-                    ?.then(
-                        goBottom
-                    );
-            };
-
-            if (
-                document.readyState
-                === 'loading'
-            ) {
-                document.addEventListener(
-                    'DOMContentLoaded',
-                    bootInternalChatScrollGuardV17,
-                    {
-                        once:
-                            true,
-                    }
-                );
-            } else {
-                bootInternalChatScrollGuardV17();
-            }
-        })();
-    </script>
 </x-admin::layouts>

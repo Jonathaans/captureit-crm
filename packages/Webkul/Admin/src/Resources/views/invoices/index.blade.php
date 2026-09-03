@@ -21,6 +21,17 @@
                 Manage invoice, project, event status, payment, and expense.
             </p>
         </div>
+        {{-- EXPORT ALL EXPENSES CSV V1 --}}
+        @if (bouncer()->hasPermission('invoices.expense.export-all'))
+            <div class="flex items-center gap-2 max-sm:w-full">
+                <a
+                    href="{{ route('admin.invoices.expenses.export-all') }}"
+                    class="primary-button max-sm:w-full max-sm:justify-center"
+                >
+                    Export All Expenses
+                </a>
+            </div>
+        @endif
     </div>
 
     {!! view_render_event('admin.invoices.index.header.after') !!}

@@ -26,7 +26,11 @@ class InternalChatController extends Controller
         $conversationId = $request->integer('conversation');
 
         $conversation = null;
-        $messages = collect();
+                    /*
+             * INTERNAL CHAT LATEST 50 V1.5
+             * Initial room memuat 50 pesan terbaru saja.
+             */
+$messages = collect();
 
         if ($conversationId > 0) {
             $chat->assertMember($conversationId, $user->id);
@@ -34,13 +38,34 @@ class InternalChatController extends Controller
             $conversation = InternalConversation::query()
                 ->findOrFail($conversationId);
 
-            $messages = InternalMessage::query()
-                ->with('attachments')
-                ->where('conversation_id', $conversationId)
-                ->whereNull('deleted_at')
-                ->orderBy('id')
-                ->limit(300)
-                ->get();
+                        /*
+             * INTERNAL CHAT OPEN LATEST V1.1
+             * Initial render mengambil 300 pesan terbaru lalu menampilkannya
+             * kembali secara ascending.
+             */
+$messages =
+                InternalMessage::query()
+                    ->with(
+                        'attachments'
+                    )
+                    ->where(
+                        'conversation_id',
+                        $conversationId
+                    )
+                    ->whereNull(
+                        'deleted_at'
+                    )
+                    ->orderByDesc(
+                        'id'
+                    )
+                    ->limit(
+                        50
+                    )
+                    ->get()
+                    ->sortBy(
+                        'id'
+                    )
+                    ->values();
 
             $chat->markRead($conversationId, $user->id);
 

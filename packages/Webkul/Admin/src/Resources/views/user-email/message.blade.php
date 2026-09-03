@@ -57,7 +57,7 @@
                         border:0;
                         background:white;
                     "
-                    srcdoc="{{ e($message->html_body) }}"
+                    srcdoc="{{ $message->html_body }}"
                 ></iframe>
             @else
                 <pre class="whitespace-pre-wrap font-sans text-sm">{{ $message->text_body }}</pre>
@@ -104,4 +104,6 @@
             </form>
         </div>
 </div>
+
+{{-- MY EMAIL DOUBLE ESCAPE FIX V5.1 --}}
 </x-admin::layouts>

@@ -535,7 +535,7 @@ return [
         'key'        => 'my-email',
         'name'       => 'My Email',
         'route'      => 'admin.my-email.inbox',
-        'sort'       => 89,
+        'sort'       => 8.1,
         'icon-class' => 'icon-mail',
     ],
     [
@@ -551,7 +551,7 @@ return [
         'key'   => 'internal-chat-audit',
         'name'  => 'Internal Chat Audit',
         'route' => 'admin.operational-dashboard.internal-chat-audit.index',
-        'sort'  => 999,
+        'sort'       => 2.1,
         'icon-class' => 'icon-message',
     ],
 ];
