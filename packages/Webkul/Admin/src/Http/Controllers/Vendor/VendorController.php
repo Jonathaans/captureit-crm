@@ -8,6 +8,7 @@ use Illuminate\View\View;
 use Webkul\Admin\Http\Controllers\Controller;
 use Webkul\Admin\Models\Vendor;
 use Webkul\Admin\Services\VendorSyncService;
+use Webkul\Admin\Services\VendorNpwpImageService;
 
 class VendorController extends Controller
 {
@@ -72,12 +73,26 @@ class VendorController extends Controller
         $data =
             $this->validated($request);
 
+        /* VENDOR NPWP NON COLUMN FIELDS V1 */
+        unset(
+            $data['npwp_image'],
+            $data['remove_npwp_image']
+        );
+
         $data['normalized_name'] =
             $sync->normalize(
                 $data['name']
             );
 
-        Vendor::query()->create($data);
+        $vendor = Vendor::query()->create($data);
+
+        /* VENDOR NPWP STORE V1 */
+        if ($request->hasFile('npwp_image')) {
+            VendorNpwpImageService::store(
+                $vendor,
+                $request->file('npwp_image')
+            );
+        }
 
         session()->flash(
             'success',
@@ -118,12 +133,30 @@ class VendorController extends Controller
         $data =
             $this->validated($request);
 
+        /* VENDOR NPWP NON COLUMN FIELDS V1 */
+        unset(
+            $data['npwp_image'],
+            $data['remove_npwp_image']
+        );
+
         $data['normalized_name'] =
             $sync->normalize(
                 $data['name']
             );
 
         $vendor->update($data);
+
+        /* VENDOR NPWP UPDATE V1 */
+        if ($request->boolean('remove_npwp_image')) {
+            VendorNpwpImageService::delete($vendor);
+        }
+
+        if ($request->hasFile('npwp_image')) {
+            VendorNpwpImageService::store(
+                $vendor,
+                $request->file('npwp_image')
+            );
+        }
 
         session()->flash(
             'success',
@@ -135,6 +168,15 @@ class VendorController extends Controller
         );
     }
 
+    /** VENDOR NPWP PRIVATE VIEW V1 */
+    public function npwpImage(int $id)
+    {
+        $this->authorizeAccess();
+
+        $vendor = Vendor::query()->findOrFail($id);
+
+        return VendorNpwpImageService::response($vendor);
+    }
     private function validated(
         Request $request
     ): array {
@@ -149,7 +191,16 @@ class VendorController extends Controller
                 'string',
                 'max:100',
             ],
-            'pic_name' => [
+            'npwp_image' => [
+                'nullable',
+                'image',
+                'mimes:jpg,jpeg,png,webp',
+                'max:5120',
+            ],
+            'remove_npwp_image' => [
+                'nullable',
+                'boolean',
+            ],            'pic_name' => [
                 'nullable',
                 'string',
                 'max:255',
@@ -210,6 +261,9 @@ class VendorController extends Controller
             function_exists('bouncer')
             && ! bouncer()->hasPermission(
                 'vendors'
+            )
+            && ! bouncer()->hasPermission(
+                'contacts.vendors'
             )
         ) {
             abort(403);

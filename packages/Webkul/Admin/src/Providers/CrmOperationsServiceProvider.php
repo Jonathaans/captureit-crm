@@ -18,10 +18,13 @@ class CrmOperationsServiceProvider extends ServiceProvider
     {
         PurchaseOrder::saving(
             function (PurchaseOrder $purchaseOrder) {
-                if (
-                    empty($purchaseOrder->vendor_id)
-                    && ! empty($purchaseOrder->vendor_name)
-                ) {
+                /* PO VENDOR MASTER SYNC V1.1
+                 *
+                 * vendor_name is the source of truth entered in the PO.
+                 * Resolve it on every save so a stale vendor_id cannot prevent
+                 * a newly typed/renamed vendor from entering Vendor Master.
+                 */
+                if (! empty($purchaseOrder->vendor_name)) {
                     $vendor =
                         app(
                             VendorSyncService::class
@@ -41,6 +44,17 @@ class CrmOperationsServiceProvider extends ServiceProvider
             ->prefix('admin')
             ->group(
                 function () {
+                    /* VENDOR NPWP PRIVATE IMAGE V1 */
+                    Route::get(
+                        'vendors/{id}/npwp-image',
+                        [
+                            VendorController::class,
+                            'npwpImage',
+                        ]
+                    )->name(
+                        'admin.vendors.npwp-image'
+                    );
+
                     Route::get(
                         'vendors',
                         [

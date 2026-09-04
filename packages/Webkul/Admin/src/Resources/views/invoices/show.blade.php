@@ -937,8 +937,19 @@
 
                             <!-- VIEW BON -->
                             @if ($expense->receipt_path)
+                                @php
+                                    /* PURCHASE ORDER PAID PDF RECEIPT V1 */
+                                    $receiptPath = trim((string) $expense->receipt_path);
+                                    $isPoPaymentProof = preg_match(
+                                        '~/admin/purchase-orders/\d+/payment-proof(?:\?.*)?$~i',
+                                        $receiptPath
+                                    ) === 1;
+                                    $receiptUrl = $isPoPaymentProof
+                                        ? (parse_url($receiptPath, PHP_URL_PATH) ?: $receiptPath)
+                                        : asset('storage/'.ltrim($receiptPath, '/'));
+                                @endphp
                                 <a
-                                    href="{{ asset('storage/'.$expense->receipt_path) }}"
+                                    href="{{ $receiptUrl }}"
                                     target="_blank"
                                     rel="noopener"
                                     class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"

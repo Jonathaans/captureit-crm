@@ -143,7 +143,20 @@
     </div>
 
     <!-- CRM GOOGLE CALENDAR LEAD BUTTON V1 -->
+    <!-- LEAD_CALENDAR_ACTION_LAYOUT_V1 -->
+    <style id="crm-lead-calendar-action-layout-v1">
+        @media (max-width: 720px) {
+            #crm-lead-calendar-action-v1 {
+                right: 12px !important;
+                bottom: 82px !important;
+                max-width: calc(100vw - 24px);
+                white-space: normal;
+                text-align: center;
+            }
+        }
+    </style>
     <a
+        id="crm-lead-calendar-action-v1"
         href="{{ route(
             'admin.google-calendar.leads.edit',
             $lead->id
@@ -152,9 +165,12 @@
         style="
             position:fixed;
             right:24px;
-            bottom:24px;
+            bottom:88px;
             z-index:40;
             box-shadow:0 8px 24px rgba(0,0,0,.18);
+            max-width:calc(100vw - 48px);
+            white-space:normal;
+            text-align:center;
         "
     >
         Confirm Event / Google Calendar

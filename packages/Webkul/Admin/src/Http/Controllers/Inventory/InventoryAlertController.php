@@ -71,6 +71,8 @@ class InventoryAlertController extends Controller
                                         $alert['warehouse'],
                                         $alert['current'],
                                         $alert['recommended_action'],
+                                        $alert['damage_reason'] ?? '',
+                                        $alert['damage_reference'] ?? '',
                                     ]
                                 )
                             );
@@ -139,6 +141,8 @@ class InventoryAlertController extends Controller
                         'Current Stock / Status',
                         'Detail',
                         'Recommended Action',
+                        'Damage Reason',
+                        'Damage Reference',
                         'Last Updated',
                     ],
                     ',',
@@ -166,6 +170,8 @@ class InventoryAlertController extends Controller
                             $alert['current'],
                             $alert['detail'],
                             $alert['recommended_action'],
+                            $alert['damage_reason'] ?? '',
+                            $alert['damage_reference'] ?? '',
                             $alert['updated_at']
                                 instanceof Carbon
                                 ? $alert['updated_at']->format(
@@ -308,6 +314,21 @@ class InventoryAlertController extends Controller
             ]);
         }
 
+        /* INVENTORY DAMAGE ALERT REASON V1 */
+        $latestDamageNotes = DB::table(
+            'delivery_order_inventory_allocations'
+        )
+            ->select(
+                'inventory_asset_id',
+                DB::raw('MAX(id) as allocation_id')
+            )
+            ->where('tracking_type', 'serialized')
+            ->where('status', 'returned')
+            ->where('return_condition', 'damaged')
+            ->whereNotNull('return_notes')
+            ->where('return_notes', '<>', '')
+            ->groupBy('inventory_asset_id');
+
         $problemAssets = DB::table('inventory_assets')
             ->join(
                 'inventory_items',
@@ -320,6 +341,27 @@ class InventoryAlertController extends Controller
                 'inventory_assets.warehouse_id',
                 '=',
                 'warehouses.id'
+            )
+            ->leftJoinSub(
+                $latestDamageNotes,
+                'latest_damage_notes',
+                fn ($join) => $join->on(
+                    'latest_damage_notes.inventory_asset_id',
+                    '=',
+                    'inventory_assets.id'
+                )
+            )
+            ->leftJoin(
+                'delivery_order_inventory_allocations as damage_allocations',
+                'damage_allocations.id',
+                '=',
+                'latest_damage_notes.allocation_id'
+            )
+            ->leftJoin(
+                'delivery_orders as damage_delivery_orders',
+                'damage_delivery_orders.id',
+                '=',
+                'damage_allocations.delivery_order_id'
             )
             ->whereIn(
                 'inventory_assets.status',
@@ -338,6 +380,9 @@ class InventoryAlertController extends Controller
                 'inventory_assets.updated_at',
                 'inventory_items.name as item_name',
                 'warehouses.name as warehouse_name',
+                'damage_allocations.return_notes as damage_reason',
+                'damage_allocations.checked_in_at as damage_recorded_at',
+                'damage_delivery_orders.delivery_order_number as damage_reference',
             ])
             ->orderByDesc(
                 'inventory_assets.updated_at'
@@ -407,6 +452,9 @@ class InventoryAlertController extends Controller
                             ?: '-'
                         )
                     ),
+                'damage_reason' => trim((string) ($asset->damage_reason ?? '')) ?: null,
+                'damage_reference' => trim((string) ($asset->damage_reference ?? '')) ?: null,
+                'damage_recorded_at' => $this->carbon($asset->damage_recorded_at ?? null),
                 'recommended_action' => $action,
                 'updated_at' => $this->carbon(
                     $asset->updated_at

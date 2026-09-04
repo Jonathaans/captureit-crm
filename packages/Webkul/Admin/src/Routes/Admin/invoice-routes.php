@@ -79,6 +79,13 @@ Route::controller(
         Route::post('{id}/release', 'release')
             ->name('admin.purchase-orders.release');
 
+        /* PURCHASE ORDER PAID WORKFLOW V1 ROUTES */
+        Route::post('{id}/paid', 'paid')
+            ->name('admin.purchase-orders.paid');
+
+        Route::get('{id}/payment-proof', 'paymentProof')
+            ->name('admin.purchase-orders.payment-proof');
+
         Route::post('{id}/complete', 'complete')
             ->name('admin.purchase-orders.complete');
 

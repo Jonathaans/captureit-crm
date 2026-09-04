@@ -11,7 +11,7 @@ return [
         'key'        => 'dashboard',
         'name'       => 'admin::app.layouts.dashboard',
         'route'      => 'admin.dashboard.index',
-        'sort'       => 1,
+        'sort'       => 10,
         'icon-class' => 'icon-dashboard',
     ],
 
@@ -24,7 +24,7 @@ return [
         'key'        => 'leads',
         'name'       => 'admin::app.layouts.leads',
         'route'      => 'admin.leads.index',
-        'sort'       => 2,
+        'sort'       => 20,
         'icon-class' => 'icon-leads',
     ],
 
@@ -37,7 +37,7 @@ return [
         'key'        => 'quotes',
         'name'       => 'admin::app.layouts.quotes',
         'route'      => 'admin.quotes.index',
-        'sort'       => 3,
+        'sort'       => 30,
         'icon-class' => 'icon-quote',
     ],
 
@@ -50,7 +50,7 @@ return [
     'key'        => 'invoices',
     'name'       => 'admin::app.layouts.invoices',
     'route'      => 'admin.invoices.index',
-    'sort'       => 4,
+    'sort'       => 40,
     'icon-class' => 'icon-quote',
 ],
 
@@ -63,7 +63,7 @@ return [
         'key'        => 'financial-report',
         'name'       => 'admin::app.layouts.financial-report',
         'route'      => 'admin.invoices.financial-report',
-        'sort'       => 5,
+        'sort'       => 170,
         'icon-class' => 'icon-activity',
     ],
 
@@ -77,7 +77,7 @@ return [
         'key'        => 'delivery-orders',
         'name'       => 'admin::app.layouts.delivery-orders',
         'route'      => 'admin.delivery-orders.index',
-        'sort'       => 6,
+        'sort'       => 60,
         'icon-class' => 'icon-quote',
 ],
 
@@ -91,13 +91,13 @@ return [
         'key'        => 'purchase-orders',
         'name'       => 'Purchase Orders',
         'route'      => 'admin.purchase-orders.index',
-        'sort'       => 8,
+        'sort'       => 160,
         'icon-class' => 'icon-quote',
     ],[
     'key'        => 'inventory',
     'name'       => 'Inventory',
     'route'      => 'admin.inventory.dashboard',
-    'sort'       => 7,
+    'sort'       => 70,
     'icon-class' => 'icon-settings-warehouse',
 ],
 [
@@ -145,7 +145,7 @@ return [
         'params'     => [
             'route' => 'inbox',
         ],
-        'sort'       => 8,
+        'sort'       => 90,
         'icon-class' => 'icon-mail',
     ],
 
@@ -213,7 +213,7 @@ return [
         'key'        => 'activities',
         'name'       => 'admin::app.layouts.activities',
         'route'      => 'admin.activities.index',
-        'sort'       => 9,
+        'sort'       => 100,
         'icon-class' => 'icon-activity',
     ],
 
@@ -226,7 +226,7 @@ return [
         'key'        => 'contacts',
         'name'       => 'admin::app.layouts.contacts',
         'route'      => 'admin.contacts.persons.index',
-        'sort'       => 10,
+        'sort'       => 110,
         'icon-class' => 'icon-contact',
     ],
 
@@ -246,6 +246,13 @@ return [
         'icon-class' => '',
     ],
 
+    [
+        'key'        => 'contacts.vendors',
+        'name'       => 'Vendor Master',
+        'route'      => 'admin.vendors.index',
+        'sort'       => 3,
+        'icon-class' => '',
+    ],
     /*
     |--------------------------------------------------------------------------
     | Products
@@ -255,7 +262,7 @@ return [
         'key'        => 'products',
         'name'       => 'admin::app.layouts.products',
         'route'      => 'admin.products.index',
-        'sort'       => 11,
+        'sort'       => 120,
         'icon-class' => 'icon-product',
     ],
 
@@ -268,7 +275,7 @@ return [
         'key'        => 'settings',
         'name'       => 'admin::app.layouts.settings',
         'route'      => 'admin.settings.index',
-        'sort'       => 12,
+        'sort'       => 130,
         'icon-class' => 'icon-setting',
     ],
 
@@ -507,7 +514,7 @@ return [
         'key'        => 'configuration',
         'name'       => 'admin::app.layouts.configuration',
         'route'      => 'admin.configuration.index',
-        'sort'       => 13,
+        'sort'       => 140,
         'icon-class' => 'icon-configuration',
     ],
 
@@ -520,7 +527,7 @@ return [
         'key'        => 'help',
         'name'       => 'admin::app.layouts.help',
         'route'      => 'admin.help.index',
-        'sort'       => 14,
+        'sort'       => 150,
         'icon-class' => 'icon-help',
     ],
 
@@ -528,21 +535,21 @@ return [
         'key'        => 'operations-dashboard',
         'name'       => 'Operations Dashboard',
         'route'      => 'admin.operations-dashboard.index',
-        'sort'       => 2,
+        'sort'       => 180,
         'icon-class' => 'icon-dashboard',
     ],
     [
         'key'        => 'my-email',
-        'name'       => 'My Email',
+        'name'       => 'My Mail',
         'route'      => 'admin.my-email.inbox',
-        'sort'       => 8.1,
+        'sort'       => 80,
         'icon-class' => 'icon-mail',
     ],
     [
         'key'        => 'work-orders',
         'name'       => 'Surat Perintah Kerja',
         'route'      => 'admin.work-orders.index',
-        'sort'       => 57,
+        'sort'       => 50,
         'icon-class' => 'icon-note',
     ],
 
@@ -551,7 +558,7 @@ return [
         'key'   => 'internal-chat-audit',
         'name'  => 'Internal Chat Audit',
         'route' => 'admin.operational-dashboard.internal-chat-audit.index',
-        'sort'       => 2.1,
+        'sort'       => 190,
         'icon-class' => 'icon-message',
     ],
 ];

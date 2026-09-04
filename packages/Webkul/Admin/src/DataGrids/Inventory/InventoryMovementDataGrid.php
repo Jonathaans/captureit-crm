@@ -8,6 +8,11 @@ use Webkul\DataGrid\DataGrid;
 
 class InventoryMovementDataGrid extends DataGrid
 {
+    /** INVENTORY MOVEMENT LIVE V1: newest movement first. */
+    protected $sortColumn = 'occurred_at';
+
+    protected $sortOrder = 'desc';
+
     public function prepareQueryBuilder(): Builder
     {
         $queryBuilder = DB::table('inventory_stock_movements')
@@ -55,9 +60,7 @@ class InventoryMovementDataGrid extends DataGrid
                 'inventory_assets.asset_code',
                 'warehouses.name as warehouse_name',
                 'users.name as performed_by_name'
-            )
-            ->orderByDesc('inventory_stock_movements.occurred_at')
-            ->orderByDesc('inventory_stock_movements.id');
+            );
 
         if (request()->filled('inventory_item_id')) {
             $queryBuilder->where(

@@ -7,7 +7,8 @@
 
         $badge = match ($purchaseOrder->status) {
             'released' => ['RELEASED', '#dbeafe', '#1d4ed8'],
-            'completed' => ['COMPLETED', '#dcfce7', '#15803d'],
+            'paid' => ['PAID', '#dcfce7', '#15803d'],
+            'completed' => ['COMPLETED (LEGACY)', '#f3f4f6', '#4b5563'],
             'cancelled' => ['CANCELLED', '#fee2e2', '#b91c1c'],
             default => ['DRAFT', '#f3f4f6', '#4b5563'],
         };
@@ -37,21 +38,15 @@
                     @endif
 
                     @if ($purchaseOrder->status === 'draft' && bouncer()->hasPermission('purchase-orders.release'))
-                        <form method="POST" action="{{ route('admin.purchase-orders.release', $purchaseOrder->id) }}" onsubmit="return confirm('Release PO ini? Grand Total akan langsung menjadi Expense pada Invoice terkait.');">
+                        <form method="POST" action="{{ route('admin.purchase-orders.release', $purchaseOrder->id) }}" onsubmit="return confirm('Release PO ini? Status menjadi RELEASED dan belum membuat Expense.');">
                             @csrf
                             <button type="submit" class="primary-button">Release PO</button>
                         </form>
                     @endif
 
-                    @if ($purchaseOrder->status === 'released' && bouncer()->hasPermission('purchase-orders.complete'))
-                        <form method="POST" action="{{ route('admin.purchase-orders.complete', $purchaseOrder->id) }}">
-                            @csrf
-                            <button type="submit" class="primary-button">Mark Completed</button>
-                        </form>
-                    @endif
 
                     @if (in_array($purchaseOrder->status, ['draft', 'released'], true) && bouncer()->hasPermission('purchase-orders.cancel'))
-                        <form method="POST" action="{{ route('admin.purchase-orders.cancel', $purchaseOrder->id) }}" onsubmit="return confirm('Cancel PO ini? Jika sudah RELEASED, Expense milik PO ini juga akan dihapus.');">
+                        <form method="POST" action="{{ route('admin.purchase-orders.cancel', $purchaseOrder->id) }}" onsubmit="return confirm('Cancel PO ini? PO PAID tidak dapat dibatalkan.');">
                             @csrf
                             <button type="submit" class="secondary-button">Cancel PO</button>
                         </form>
@@ -60,17 +55,84 @@
             </div>
         </section>
 
+        <!-- PURCHASE ORDER PAID PDF PROOF V1 FORM -->
+        @if ($purchaseOrder->status === 'released' && bouncer()->hasPermission('purchase-orders.paid'))
+            <section id="po-payment" class="rounded-xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900">
+                <form
+                    method="POST"
+                    action="{{ route('admin.purchase-orders.paid', $purchaseOrder->id) }}"
+                    enctype="multipart/form-data"
+                    onsubmit="return confirm('Konfirmasi pembayaran PO ini? Setelah PAID, Expense akan dibuat dan status tidak dapat dibatalkan.');"
+                    style="display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:12px;align-items:end;"
+                >
+                    @csrf
+
+                    <div>
+                        <label for="payment_proof" class="mb-1.5 block font-bold">
+                            PDF Bukti Transfer <span class="text-red-600">*</span>
+                        </label>
+                        <input
+                            id="payment_proof"
+                            name="payment_proof"
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            required
+                            class="w-full rounded-md border border-blue-200 bg-white px-3 py-2"
+                        >
+                        <p class="mt-1 text-xs text-blue-700">
+                            Hanya PDF; maksimum 10 MB. File disimpan privat dan dapat dilihat dari PO maupun Expense Invoice.
+                        </p>
+                        @error('payment_proof')
+                            <p class="mt-1 text-xs font-semibold text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <button type="submit" class="primary-button">Mark as PAID</button>
+                </form>
+            </section>
+        @endif
+
         @if ($purchaseOrder->status === 'draft')
             <section class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                <strong>DRAFT:</strong> PO belum memengaruhi Expense maupun Financial Report. Nominal baru diposting ketika Finance menekan Release PO.
+                <strong>DRAFT:</strong> PO masih dapat diedit dan belum memengaruhi Expense.
             </section>
-        @elseif ($purchaseOrder->expense_id)
+        @elseif ($purchaseOrder->status === 'released')
+            <section class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                <strong>RELEASED:</strong> PO sudah dirilis dan sedang menunggu pembayaran. Expense belum dibuat.
+            </section>
+        @elseif ($purchaseOrder->status === 'paid' && $purchaseOrder->expense_id)
             <section class="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-                <strong>EXPENSE POSTED:</strong>
+                <strong>PAID / EXPENSE POSTED:</strong>
                 {{ $money($purchaseOrder->grand_total) }}
                 sudah menjadi Expense Invoice
                 <strong>{{ $purchaseOrder->invoice_number }}</strong>
                 dengan Expense ID #{{ $purchaseOrder->expense_id }}.
+            </section>
+        @elseif ($purchaseOrder->status === 'completed' && $purchaseOrder->expense_id)
+            <section class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                <strong>LEGACY COMPLETED:</strong> PO lama ini memiliki Expense ID #{{ $purchaseOrder->expense_id }}.
+            </section>
+        @endif
+
+        @if ($purchaseOrder->payment_proof_path)
+            <!-- PURCHASE ORDER PAID PDF PROOF V1 DISPLAY -->
+            <section class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+                    <div>
+                        <p class="text-[11px] font-bold uppercase tracking-wide text-gray-500">Bukti Pembayaran</p>
+                        <p class="mt-2 text-sm text-gray-600">
+                            Bukti pembayaran tersimpan privat. Upload baru menggunakan format PDF.
+                        </p>
+                    </div>
+                    <a
+                        href="{{ route('admin.purchase-orders.payment-proof', $purchaseOrder->id) }}"
+                        target="_blank"
+                        rel="noopener"
+                        class="primary-button"
+                    >
+                        View PDF / Bukti Transfer
+                    </a>
+                </div>
             </section>
         @endif
 
@@ -175,7 +237,11 @@
                 <div><span class="text-gray-500">Created By</span><strong class="ml-2">{{ $purchaseOrder->created_by_name ?: '-' }}</strong></div>
                 <div><span class="text-gray-500">Released By</span><strong class="ml-2">{{ $purchaseOrder->released_by_name ?: '-' }}</strong></div>
                 <div><span class="text-gray-500">Released At</span><strong class="ml-2">{{ $purchaseOrder->released_at?->format('d M Y H:i') ?: '-' }}</strong></div>
-                <div><span class="text-gray-500">Completed At</span><strong class="ml-2">{{ $purchaseOrder->completed_at?->format('d M Y H:i') ?: '-' }}</strong></div>
+                <div><span class="text-gray-500">Paid By</span><strong class="ml-2">{{ $purchaseOrder->paid_by_name ?: '-' }}</strong></div>
+                <div><span class="text-gray-500">Paid At</span><strong class="ml-2">{{ $purchaseOrder->paid_at?->format('d M Y H:i') ?: '-' }}</strong></div>
+                @if ($purchaseOrder->completed_at)
+                    <div><span class="text-gray-500">Legacy Completed At</span><strong class="ml-2">{{ $purchaseOrder->completed_at?->format('d M Y H:i') }}</strong></div>
+                @endif
             </div>
         </section>
     </div>

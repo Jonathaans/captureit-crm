@@ -176,6 +176,8 @@
                         $isWaiting = $allocation->status === 'out';
                         $isReceived = $allocation->status === 'return_pending';
                         $isReturned = $allocation->status === 'returned';
+                        // RETURN DAMAGED NOTE V1
+                        $selectedCondition = old('conditions.'.$allocation->id, 'good');
                     @endphp
 
                     <div
@@ -246,9 +248,9 @@
                                         data-condition-select
                                         class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold dark:border-gray-700 dark:bg-gray-950 dark:text-white"
                                     >
-                                        <option value="good" selected>GOOD</option>
-                                        <option value="fair">FAIR</option>
-                                        <option value="damaged">DAMAGED</option>
+                                        <option value="good" @selected($selectedCondition === 'good')>GOOD</option>
+                                        <option value="fair" @selected($selectedCondition === 'fair')>FAIR</option>
+                                        <option value="damaged" @selected($selectedCondition === 'damaged')>DAMAGED</option>
                                     </select>
                                 @elseif ($isReturned)
                                     <span class="rounded-md bg-gray-100 px-3 py-2 text-xs font-bold uppercase text-gray-700 dark:bg-gray-800 dark:text-gray-300">
@@ -257,6 +259,42 @@
                                 @endif
                             </div>
                         </div>
+
+                        @if ($isReceived)
+                            <!-- RETURN DAMAGED NOTE V1 -->
+                            <div
+                                data-damage-note-container
+                                class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 {{ $selectedCondition === 'damaged' ? '' : 'hidden' }}"
+                            >
+                                <label class="mb-1 block text-xs font-bold text-red-700">
+                                    Alasan Barang Rusak <span class="text-red-600">*</span>
+                                </label>
+
+                                <textarea
+                                    name="return_notes[{{ $allocation->id }}]"
+                                    data-damage-note
+                                    rows="2"
+                                    maxlength="2000"
+                                    placeholder="Jelaskan kerusakan barang saat kembali..."
+                                    @disabled($selectedCondition !== 'damaged')
+                                    @required($selectedCondition === 'damaged')
+                                    class="w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm text-gray-800"
+                                >{{ old('return_notes.'.$allocation->id) }}</textarea>
+
+                                @error('return_notes.'.$allocation->id)
+                                    <p class="mt-1 text-xs font-semibold text-red-600">{{ $message }}</p>
+                                @enderror
+                            </div>
+                        @elseif (
+                            $isReturned
+                            && $allocation->return_condition === 'damaged'
+                            && $allocation->return_notes
+                        )
+                            <div class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                                <strong>Alasan Rusak:</strong>
+                                {{ $allocation->return_notes }}
+                            </div>
+                        @endif
 
                         @if (
                             $isWaiting
@@ -601,6 +639,81 @@
                     }
                 }
 
+                function ensureDamageNoteField(card, allocationId) {
+                    let container = card.querySelector(
+                        '[data-damage-note-container]'
+                    );
+
+                    if (container) {
+                        return container;
+                    }
+
+                    container = document.createElement('div');
+                    container.dataset.damageNoteContainer = '1';
+                    container.className = 'mt-3 hidden rounded-md border border-red-200 bg-red-50 p-3';
+                    container.innerHTML = `
+                        <label class="mb-1 block text-xs font-bold text-red-700">
+                            Alasan Barang Rusak <span class="text-red-600">*</span>
+                        </label>
+                        <textarea
+                            name="return_notes[${allocationId}]"
+                            data-damage-note
+                            rows="2"
+                            maxlength="2000"
+                            placeholder="Jelaskan kerusakan barang saat kembali..."
+                            disabled
+                            class="w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm text-gray-800"
+                        ></textarea>
+                    `;
+                    card.appendChild(container);
+
+                    return container;
+                }
+
+                function syncDamageNoteField(select) {
+                    const card = select.closest(
+                        '[data-return-allocation-id]'
+                    );
+
+                    if (! card) {
+                        return;
+                    }
+
+                    const allocationId = card.dataset.returnAllocationId;
+                    const container = ensureDamageNoteField(
+                        card,
+                        allocationId
+                    );
+                    const note = container.querySelector(
+                        '[data-damage-note]'
+                    );
+                    const damaged = select.value === 'damaged';
+
+                    container.classList.toggle('hidden', ! damaged);
+
+                    if (note) {
+                        note.disabled = ! damaged;
+                        note.required = damaged;
+
+                        if (! damaged) {
+                            note.value = '';
+                        }
+                    }
+                }
+
+                function bindConditionSelect(select) {
+                    if (select.dataset.damageNoteBound === '1') {
+                        return;
+                    }
+
+                    select.dataset.damageNoteBound = '1';
+                    select.addEventListener(
+                        'change',
+                        () => syncDamageNoteField(select)
+                    );
+                    syncDamageNoteField(select);
+                }
+
                 function updateAllocation(allocation) {
                     const card = document.querySelector(
                         `[data-return-allocation-id="${allocation.id}"]`
@@ -646,6 +759,7 @@
                             `;
 
                             actions.appendChild(select);
+                            bindConditionSelect(select);
                         }
                     }
 
@@ -819,6 +933,9 @@
                         }
                     }
                 );
+
+                document.querySelectorAll('[data-condition-select]')
+                    .forEach(bindConditionSelect);
 
                 updateCounters();
             })();

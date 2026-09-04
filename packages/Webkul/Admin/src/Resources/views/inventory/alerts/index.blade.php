@@ -463,6 +463,22 @@
                                                 <p class="mt-0.5 text-xs text-gray-500">
                                                     {{ $alert['detail'] }}
                                                 </p>
+
+                                                @if (($alert['type'] ?? null) === 'damaged_asset')
+                                                    <!-- INVENTORY DAMAGE ALERT REASON V1 -->
+                                                    <div class="mt-2 max-w-sm rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs leading-5 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+                                                        <p>
+                                                            <strong>Alasan rusak:</strong>
+                                                            {{ $alert['damage_reason'] ?? 'Belum ada alasan kerusakan yang tercatat.' }}
+                                                        </p>
+
+                                                        @if ($alert['damage_reference'] ?? null)
+                                                            <p class="mt-1 text-[11px] text-red-600 dark:text-red-300">
+                                                                Sumber Return: {{ $alert['damage_reference'] }}
+                                                            </p>
+                                                        @endif
+                                                    </div>
+                                                @endif
                                             </td>
 
                                             <td class="px-4 py-4">
@@ -552,6 +568,13 @@
                                     <p class="mt-1 text-xs leading-5 text-gray-500">
                                         {{ $alert['recommended_action'] }}
                                     </p>
+
+                                    @if (($alert['type'] ?? null) === 'damaged_asset')
+                                        <p class="mt-1 line-clamp-2 text-xs leading-5 text-red-600 dark:text-red-300">
+                                            <strong>Alasan rusak:</strong>
+                                            {{ $alert['damage_reason'] ?? 'Belum tercatat' }}
+                                        </p>
+                                    @endif
                                 </div>
 
                                 <span class="whitespace-nowrap text-[11px] text-gray-400">

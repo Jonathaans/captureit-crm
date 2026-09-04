@@ -360,11 +360,10 @@ class PurchaseOrderController extends Controller
         );
     }
 
-    /**
-     * Financial posting point.
+        /**
+     * PURCHASE ORDER PAID WORKFLOW V1
      *
-     * DRAFT    -> no Expense
-     * RELEASED -> one Expense on the related Invoice
+     * DRAFT -> RELEASED only. Releasing a PO does not create an Expense.
      */
     public function release(int $id): RedirectResponse
     {
@@ -375,10 +374,7 @@ class PurchaseOrderController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($id);
 
-            /*
-             * Idempotent. Double click / refresh cannot create a second Expense.
-             */
-            if (in_array($purchaseOrder->status, ['released', 'completed'], true)) {
+            if (in_array($purchaseOrder->status, ['released', 'paid', 'completed'], true)) {
                 return;
             }
 
@@ -394,15 +390,14 @@ class PurchaseOrderController extends Controller
                 ]);
             }
 
-            $expenseId = $this->expenseService->createForReleasedPurchaseOrder(
-                $purchaseOrder,
-                $user?->id,
-                $user?->name
-            );
+            if ($purchaseOrder->expense_id) {
+                throw ValidationException::withMessages([
+                    'status' => 'PO DRAFT ini sudah memiliki Expense. Audit data terlebih dahulu sebelum Release.',
+                ]);
+            }
 
             $purchaseOrder->update([
                 'status' => 'released',
-                'expense_id' => $expenseId,
                 'released_by' => $user?->id,
                 'released_by_name' => $user?->name,
                 'released_at' => now(),
@@ -411,41 +406,175 @@ class PurchaseOrderController extends Controller
 
         session()->flash(
             'success',
-            'Purchase Order berhasil RELEASED dan Grand Total telah diposting sebagai Expense Invoice.'
+            'Purchase Order berhasil RELEASED dan sedang menunggu pembayaran. Expense belum dibuat.'
         );
 
         return redirect()->route('admin.purchase-orders.show', $id);
     }
 
-    public function complete(int $id): RedirectResponse
+        
+        /**
+     * PURCHASE ORDER PAID PDF PROOF V1
+     *
+     * RELEASED -> PAID. A private PDF transfer proof is mandatory and
+     * Expense is created exactly once in the same database transaction.
+     */
+    public function paid(Request $request, int $id): RedirectResponse
     {
-        $user = auth()->guard('user')->user();
-
-        $purchaseOrder = PurchaseOrder::query()->findOrFail($id);
-
-        if ($purchaseOrder->isCompleted()) {
-            return redirect()->route('admin.purchase-orders.show', $id);
-        }
-
-        if (! $purchaseOrder->isReleased()) {
-            throw ValidationException::withMessages([
-                'status' => 'PO harus RELEASED sebelum dapat ditandai COMPLETED.',
-            ]);
-        }
-
-        $purchaseOrder->update([
-            'status' => 'completed',
-            'completed_by' => $user?->id,
-            'completed_by_name' => $user?->name,
-            'completed_at' => now(),
+        $request->validate([
+            'payment_proof' => [
+                'required',
+                'file',
+                'mimes:pdf',
+                'mimetypes:application/pdf',
+                'max:10240',
+            ],
+        ], [
+            'payment_proof.required' => 'PDF bukti transfer wajib diunggah.',
+            'payment_proof.file' => 'Bukti transfer harus berupa file PDF.',
+            'payment_proof.mimes' => 'Format bukti transfer harus PDF.',
+            'payment_proof.mimetypes' => 'Isi bukti transfer harus berupa PDF yang valid.',
+            'payment_proof.max' => 'Ukuran PDF bukti transfer maksimal 10 MB.',
         ]);
 
-        session()->flash('success', 'Purchase Order ditandai COMPLETED.');
+        $user = auth()->guard('user')->user();
+        $proofPath = null;
+        $alreadyPaid = false;
+
+        try {
+            DB::transaction(function () use (
+                $request,
+                $id,
+                $user,
+                &$proofPath,
+                &$alreadyPaid
+            ) {
+                $purchaseOrder = PurchaseOrder::query()
+                    ->lockForUpdate()
+                    ->findOrFail($id);
+
+                if ($purchaseOrder->isPaid()) {
+                    $alreadyPaid = true;
+
+                    return;
+                }
+
+                if (! $purchaseOrder->isReleased()) {
+                    throw ValidationException::withMessages([
+                        'status' => 'Hanya Purchase Order RELEASED yang dapat diubah menjadi PAID.',
+                    ]);
+                }
+
+                if ((float) $purchaseOrder->grand_total <= 0) {
+                    throw ValidationException::withMessages([
+                        'grand_total' => 'Grand Total PO harus lebih besar dari 0 sebelum dibayar.',
+                    ]);
+                }
+
+                $proof = $request->file('payment_proof');
+
+                if (! $proof) {
+                    throw ValidationException::withMessages([
+                        'payment_proof' => 'PDF bukti transfer wajib diunggah.',
+                    ]);
+                }
+
+                $proofService = app(
+                    \Webkul\Invoice\Services\PurchaseOrderPaymentProofService::class
+                );
+
+                $proofPath = $proofService->store($proof, (int) $purchaseOrder->id);
+
+                $purchaseOrder->update([
+                    'status' => 'paid',
+                    'payment_proof_path' => $proofPath,
+                    'paid_by' => $user?->id,
+                    'paid_by_name' => $user?->name,
+                    'paid_at' => now(),
+                ]);
+
+                $purchaseOrder->refresh();
+
+                $expenseId = $this->expenseService->createForPaidPurchaseOrder(
+                    $purchaseOrder,
+                    $user?->id,
+                    $user?->name
+                );
+
+                $purchaseOrder->update(['expense_id' => $expenseId]);
+            });
+        } catch (\Throwable $exception) {
+            if ($proofPath) {
+                app(\Webkul\Invoice\Services\PurchaseOrderPaymentProofService::class)
+                    ->delete($proofPath);
+            }
+
+            throw $exception;
+        }
+
+        session()->flash(
+            $alreadyPaid ? 'warning' : 'success',
+            $alreadyPaid
+                ? 'Purchase Order ini sudah PAID.'
+                : 'Purchase Order berhasil PAID. PDF bukti transfer tersimpan privat dan Expense dibuat.'
+        );
 
         return redirect()->route('admin.purchase-orders.show', $id);
     }
 
-    public function cancel(int $id): RedirectResponse
+        /**
+     * Serve a PAID proof from private storage. PDF is used for new records;
+     * legacy JPEG proofs remain readable.
+     */
+    public function paymentProof(
+        int $id
+    ): \Symfony\Component\HttpFoundation\BinaryFileResponse {
+        $purchaseOrder = PurchaseOrder::query()->findOrFail($id);
+
+        abort_if(
+            ! $purchaseOrder->payment_proof_path,
+            404,
+            'Bukti transfer tidak ditemukan.'
+        );
+
+        $proofPath = (string) $purchaseOrder->payment_proof_path;
+        $absolutePath = app(
+            \Webkul\Invoice\Services\PurchaseOrderPaymentProofService::class
+        )->absolutePath($proofPath);
+
+        $extension = strtolower(pathinfo($proofPath, PATHINFO_EXTENSION));
+        $contentType = match ($extension) {
+            'pdf' => 'application/pdf',
+            'png' => 'image/png',
+            'webp' => 'image/webp',
+            default => 'image/jpeg',
+        };
+        $downloadExtension = in_array($extension, ['pdf', 'png', 'webp', 'jpg', 'jpeg'], true)
+            ? $extension
+            : 'bin';
+        $safeNumber = preg_replace('/[^A-Za-z0-9_-]+/', '-', $purchaseOrder->po_number);
+
+        return response()->file($absolutePath, [
+            'Content-Type' => $contentType,
+            'Content-Disposition' => 'inline; filename="bukti-transfer-'.$safeNumber.'.'.$downloadExtension.'"',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate',
+            'X-Content-Type-Options' => 'nosniff',
+            'X-Frame-Options' => 'SAMEORIGIN',
+        ]);
+    }
+
+/**
+     * COMPLETED is retained only for legacy route compatibility.
+     * New workflow ends at PAID.
+     */
+    public function complete(int $id): RedirectResponse
+    {
+        throw ValidationException::withMessages([
+            'status' => 'Status COMPLETED sudah digantikan oleh PAID. Upload bukti transfer dari halaman PO.',
+        ]);
+    }
+
+        public function cancel(int $id): RedirectResponse
     {
         $user = auth()->guard('user')->user();
 
@@ -458,27 +587,40 @@ class PurchaseOrderController extends Controller
                 return;
             }
 
-            if ($purchaseOrder->isCompleted()) {
+            if ($purchaseOrder->isPaid() || $purchaseOrder->isCompleted()) {
                 throw ValidationException::withMessages([
-                    'status' => 'PO COMPLETED tidak dapat dibatalkan. Buat koreksi finansial terpisah jika diperlukan.',
+                    'status' => 'PO PAID bersifat final dan tidak dapat dibatalkan. Buat koreksi finansial terpisah jika diperlukan.',
                 ]);
             }
 
+            if (! in_array($purchaseOrder->status, ['draft', 'released'], true)) {
+                throw ValidationException::withMessages([
+                    'status' => 'Hanya PO DRAFT atau RELEASED yang dapat dibatalkan.',
+                ]);
+            }
+
+            /* Remove only a legacy Expense that was posted by the old release flow. */
             $this->expenseService->removeForCancelledPurchaseOrder($purchaseOrder);
+
+            if ($purchaseOrder->payment_proof_path) {
+                app(\Webkul\Invoice\Services\PurchaseOrderPaymentProofService::class)
+                    ->delete($purchaseOrder->payment_proof_path);
+            }
 
             $purchaseOrder->update([
                 'status' => 'cancelled',
                 'expense_id' => null,
+                'payment_proof_path' => null,
+                'paid_by' => null,
+                'paid_by_name' => null,
+                'paid_at' => null,
                 'cancelled_by' => $user?->id,
                 'cancelled_by_name' => $user?->name,
                 'cancelled_at' => now(),
             ]);
         });
 
-        session()->flash(
-            'success',
-            'Purchase Order dibatalkan. Expense PO yang terkait juga telah dibatalkan.'
-        );
+        session()->flash('success', 'Purchase Order berhasil dibatalkan.');
 
         return redirect()->route('admin.purchase-orders.show', $id);
     }

@@ -5,7 +5,8 @@
         $statusBadge = static function ($status) {
             return match ($status) {
                 'released' => ['RELEASED', '#dbeafe', '#1d4ed8'],
-                'completed' => ['COMPLETED', '#dcfce7', '#15803d'],
+                'paid' => ['PAID', '#dcfce7', '#15803d'],
+                'completed' => ['COMPLETED (LEGACY)', '#f3f4f6', '#4b5563'],
                 'cancelled' => ['CANCELLED', '#fee2e2', '#b91c1c'],
                 default => ['DRAFT', '#f3f4f6', '#4b5563'],
             };
@@ -21,7 +22,7 @@
                 <div>
                     <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Purchase Orders</h1>
                     <p class="mt-1 text-sm text-gray-500">
-                        Vendor / outsource cost untuk event. Expense baru diposting ketika PO di-Release.
+                        Vendor / outsource cost untuk event. Expense baru diposting setelah admin menandai PO sebagai PAID dan mengunggah bukti transfer.
                     </p>
                 </div>
 
@@ -53,7 +54,7 @@
             </div>
 
             <div class="mt-5" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
-                @foreach (['draft' => 'Draft', 'released' => 'Released', 'completed' => 'Completed', 'cancelled' => 'Cancelled'] as $status => $label)
+                @foreach (['draft' => 'Draft', 'released' => 'Released', 'paid' => 'Paid', 'cancelled' => 'Cancelled'] as $status => $label)
                     <a
                         href="{{ route('admin.purchase-orders.index', ['status' => $status]) }}"
                         class="rounded-lg border border-gray-200 bg-gray-50 p-4 transition hover:border-blue-300 dark:border-gray-800 dark:bg-gray-950"
@@ -90,7 +91,7 @@
                         <option value="">All Status</option>
                         <option value="draft" @selected(request('status') === 'draft')>Draft</option>
                         <option value="released" @selected(request('status') === 'released')>Released</option>
-                        <option value="completed" @selected(request('status') === 'completed')>Completed</option>
+                        <option value="paid" @selected(request('status') === 'paid')>Paid</option>
                         <option value="cancelled" @selected(request('status') === 'cancelled')>Cancelled</option>
                     </select>
                 </div>
@@ -187,6 +188,9 @@
                                                 <a href="{{ route('admin.purchase-orders.edit', $purchaseOrder->id) }}" class="secondary-button">Edit</a>
                                             @endif
 
+                                            @if ($purchaseOrder->status === 'released' && bouncer()->hasPermission('purchase-orders.paid'))
+                                                <a href="{{ route('admin.purchase-orders.show', $purchaseOrder->id) }}#po-payment" class="primary-button">Pay</a>
+                                            @endif
                                             @if (bouncer()->hasPermission('purchase-orders.print'))
                                                 <a href="{{ route('admin.purchase-orders.print', $purchaseOrder->id) }}" class="secondary-button">PDF</a>
                                             @endif

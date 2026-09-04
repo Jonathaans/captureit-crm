@@ -41,6 +41,16 @@
                             <td class="p-3">{{ $vendor->payment_terms ?: '-' }}</td>
                             <td class="p-3">{{ $vendor->is_active ? 'ACTIVE' : 'INACTIVE' }}</td>
                             <td class="p-3">
+                                                                {{-- VENDOR NPWP INDEX ACTION V1 --}}
+                                @if (! empty($vendor->npwp_image_path))
+                                    <a
+                                        href="{{ route('admin.vendors.npwp-image', $vendor->id) }}"
+                                        target="_blank"
+                                        rel="noopener"
+                                        class="secondary-button"
+                                    >View NPWP</a>
+                                @endif
+
                                 <a href="{{ route('admin.vendors.edit', $vendor->id) }}" class="secondary-button">Edit</a>
                             </td>
                         </tr>

@@ -18,8 +18,15 @@ use Illuminate\Support\Facades\Schedule;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
-
-Schedule::command('inbound-emails:process')->everyFiveMinutes()->withoutOverlapping(10); // MY EMAIL AUTO SYNC 5 MINUTES V1 // MY EMAIL AUTO SYNC 5 MINUTES V1
+/* CRM_SENDGRID_BULK_SCHEDULER_GUARD_V1
+ * SendGrid receives inbound messages through its webhook and does not support
+ * a bulk mailbox pull. Do not run the bulk command for that receiver.
+ */
+if (config('mail-receiver.default', 'sendgrid') !== 'sendgrid') {
+    Schedule::command('inbound-emails:process')
+        ->everyFiveMinutes()
+        ->withoutOverlapping(10);
+}
 
 // MY EMAIL PERSONAL AUTO SYNC V2 START
 Artisan::command('my-email:sync', function () {
@@ -109,3 +116,13 @@ Schedule::command('my-email:sync')
     ->everyFiveMinutes()
     ->withoutOverlapping(10);
 // MY EMAIL PERSONAL AUTO SYNC V2 END
+
+
+/* CRM_DAILY_FULL_BACKUP_SCHEDULE_V1
+ * Full database + storage backup every day at 02:00 application time.
+ */
+Schedule::command('crm:backup')
+    ->dailyAt('02:00')
+    ->timezone((string) config('app.timezone', 'Asia/Jakarta'))
+    ->withoutOverlapping(360)
+    ->appendOutputTo(storage_path('logs/crm-backup-schedule.log'));

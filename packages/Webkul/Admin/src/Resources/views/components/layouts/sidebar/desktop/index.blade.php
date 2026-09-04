@@ -1,3 +1,4 @@
+<!-- SIDEBAR_LEAD_ACTION_LAYOUT_V1 -->
 <div
     ref="sidebar"
     class="duration-80 fixed top-[60px] z-[10002] h-full w-[200px] border-gray-300 bg-white pt-4 transition-all group-[.sidebar-collapsed]/container:w-[70px] dark:border-gray-800 dark:bg-gray-900 max-lg:hidden ltr:border-r rtl:border-l"
@@ -18,8 +19,8 @@
                     >
                         <span class="{{ $menuItem->getIcon() }} text-2xl {{ $menuItem->isActive() ? 'text-white' : ''}}"></span>
 
-                        <div class="flex-1 flex justify-between items-center text-gray-600 dark:text-gray-300 font-medium whitespace-nowrap group-[.sidebar-collapsed]/container:hidden {{ $menuItem->isActive() ? 'text-white' : ''}} group">
-                            <p>{{ core()->getConfigData('general.settings.menu.'.$menuItem->getKey()) ?: $menuItem->getName() }}</p>
+                        <div class="min-w-0 flex-1 flex justify-between items-center text-gray-600 dark:text-gray-300 font-medium group-[.sidebar-collapsed]/container:hidden {{ $menuItem->isActive() ? 'text-white' : ''}} group">
+                            <p class="min-w-0 break-words whitespace-normal leading-5">{{ core()->getConfigData('general.settings.menu.'.$menuItem->getKey()) ?: $menuItem->getName() }}</p>
                         
                             @if ( ! in_array($menuItem->getKey(), ['settings', 'configuration']) && $menuItem->haveChildren())
                                 <i class="icon-right-arrow rtl:icon-left-arrow invisible text-2xl group-hover/item:visible {{ $menuItem->isActive() ? 'text-white' : ''}}"></i>

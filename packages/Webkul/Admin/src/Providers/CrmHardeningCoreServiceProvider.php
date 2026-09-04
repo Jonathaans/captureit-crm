@@ -16,13 +16,54 @@ use Webkul\Admin\Console\Commands\CrmIncidentListCommand;
 use Webkul\Admin\Console\Commands\CrmProductionReadinessCommand;
 use Webkul\Admin\Console\Commands\CrmSecurityAuditCommand;
 use Webkul\Admin\Http\Controllers\System\SystemControlController;
+use Webkul\Admin\Http\Controllers\System\CrmBackupController;
 use Webkul\Admin\Services\CrmAuditService;
 use Webkul\Admin\Services\CrmIncidentService;
+use Webkul\Admin\Services\CrmReadOnlyArchivePolicyService;
 
 class CrmHardeningCoreServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
+        /* CRM_READ_ONLY_ARCHIVE_POLICY_V1
+         * Final documents are readable/printable but cannot be modified or
+         * deleted. Inventory movements are permanently append-only.
+         */
+        Event::listen(
+            'eloquent.creating: *',
+            function (string $eventName, array $data) {
+                $model = $data[0] ?? null;
+
+                if ($model instanceof Model) {
+                    app(CrmReadOnlyArchivePolicyService::class)
+                        ->assertMutable($model, 'create');
+                }
+            }
+        );
+
+        Event::listen(
+            'eloquent.updating: *',
+            function (string $eventName, array $data) {
+                $model = $data[0] ?? null;
+
+                if ($model instanceof Model) {
+                    app(CrmReadOnlyArchivePolicyService::class)
+                        ->assertMutable($model, 'update');
+                }
+            }
+        );
+
+        Event::listen(
+            'eloquent.deleting: *',
+            function (string $eventName, array $data) {
+                $model = $data[0] ?? null;
+
+                if ($model instanceof Model) {
+                    app(CrmReadOnlyArchivePolicyService::class)
+                        ->assertMutable($model, 'delete');
+                }
+            }
+        );
         foreach (
             [
                 'created',
@@ -119,6 +160,42 @@ class CrmHardeningCoreServiceProvider extends ServiceProvider
                 }
             );
 
+
+        /*
+         * CRM_FULL_QA_BACKUP_CENTER_V1
+         * Backup is POST-only, CSRF protected by web middleware, and the
+         * controller applies an additional Administrator + ACL hard lock.
+         */
+        Route::middleware('web')
+            ->prefix('admin')
+            ->group(
+                function () {
+                    Route::post(
+                        'operations-dashboard/backups',
+                        [
+                            CrmBackupController::class,
+                            'store',
+                        ]
+                    )->name(
+                        'admin.operations-dashboard.backups.store'
+                    );
+
+                    Route::get(
+                        'operations-dashboard/backups/{filename}',
+                        [
+                            CrmBackupController::class,
+                            'download',
+                        ]
+                    )
+                        ->where(
+                            'filename',
+                            'crm-backup-[0-9]{8}-[0-9]{6}\.zip'
+                        )
+                        ->name(
+                            'admin.operations-dashboard.backups.download'
+                        );
+                }
+            );
         if ($this->app->runningInConsole()) {
             $this->commands([
                 CrmSecurityAuditCommand::class,

@@ -15,8 +15,7 @@ class PurchaseOrderExpenseExportController extends Controller
      * Export PO Expense Report.
      *
      * Default scope:
-     * - RELEASED
-     * - COMPLETED
+     * - PAID only
      *
      * If the PO index explicitly sends a status filter, the export follows it.
      *
@@ -56,13 +55,8 @@ class PurchaseOrderExpenseExportController extends Controller
              * PO Expense default = actual posted expense lifecycle.
              * Draft and Cancelled are excluded by default.
              */
-            $query->whereIn(
-                'status',
-                [
-                    'released',
-                    'completed',
-                ]
-            );
+            /* PURCHASE ORDER PAID WORKFLOW V1 EXPORT SCOPE */
+            $query->where('status', 'paid');
         }
 
         if (
@@ -251,7 +245,7 @@ class PurchaseOrderExpenseExportController extends Controller
                             ? strtoupper(
                                 $status
                             )
-                            : 'RELEASED + COMPLETED',
+                            : 'PAID',
                     ]
                 );
 
@@ -410,7 +404,8 @@ class PurchaseOrderExpenseExportController extends Controller
                         'Posted Expense Amount',
                         'Variance',
                         'Released At',
-                        'Completed At',
+                        'Paid At',
+                        'Payment Proof',
                     ]
                 );
 
@@ -568,10 +563,18 @@ class PurchaseOrderExpenseExportController extends Controller
                                 ),
 
                             $purchaseOrder
-                                ->completed_at
+                                ->paid_at
                                 ?->format(
                                     'Y-m-d H:i:s'
                                 ),
+
+                            $purchaseOrder
+                                ->payment_proof_path
+                                ? route(
+                                    'admin.purchase-orders.payment-proof',
+                                    $purchaseOrder->id
+                                )
+                                : '',
                         ]
                     );
                 }
@@ -606,6 +609,7 @@ class PurchaseOrderExpenseExportController extends Controller
             [
                 'draft',
                 'released',
+                'paid',
                 'completed',
                 'cancelled',
             ],

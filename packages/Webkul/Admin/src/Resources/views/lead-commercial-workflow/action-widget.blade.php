@@ -61,3 +61,23 @@
         {{ $quoteId ? 'Open Quotation' : 'Generate Quotation' }}
     </a>
 </div>
+<!-- LEAD_QUOTATION_ACTION_LAYOUT_V1 -->
+<style id="crm-lead-quotation-action-layout-v1">
+    #crm-lead-commercial-action {
+        top: auto !important;
+        right: 24px !important;
+        bottom: 150px !important;
+        z-index: 39 !important;
+        max-width: calc(100vw - 48px);
+    }
+
+    @media (max-width: 720px) {
+        #crm-lead-commercial-action {
+            right: 12px !important;
+            bottom: 142px !important;
+            max-width: calc(100vw - 24px);
+            gap: 6px;
+            padding: 8px 10px;
+        }
+    }
+</style>

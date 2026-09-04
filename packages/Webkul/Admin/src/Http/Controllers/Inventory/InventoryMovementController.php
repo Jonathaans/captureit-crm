@@ -15,10 +15,25 @@ use Webkul\Warehouse\Models\InventoryStockMovement;
 
 class InventoryMovementController extends Controller
 {
+    /**
+     * INVENTORY MOVEMENT LIVE V1
+     *
+     * Always return a fresh ledger response. The client refreshes this JSON
+     * endpoint every 10 seconds while the Movement page is visible.
+     */
     public function index()
     {
         if (request()->ajax() || request()->expectsJson()) {
-            return app(InventoryMovementDataGrid::class)->toJson();
+            $response = app(InventoryMovementDataGrid::class)->toJson();
+
+            $response->headers->set(
+                'Cache-Control',
+                'no-store, no-cache, must-revalidate, max-age=0'
+            );
+            $response->headers->set('Pragma', 'no-cache');
+            $response->headers->set('Expires', '0');
+
+            return $response;
         }
 
         return view('admin::inventory.movements.index');

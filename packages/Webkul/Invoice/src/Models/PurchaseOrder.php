@@ -35,6 +35,11 @@ class PurchaseOrder extends Model
         'released_by',
         'released_by_name',
         'released_at',
+        // PURCHASE ORDER PAID WORKFLOW V1
+        'payment_proof_path',
+        'paid_by',
+        'paid_by_name',
+        'paid_at',
         'completed_by',
         'completed_by_name',
         'completed_at',
@@ -46,6 +51,7 @@ class PurchaseOrder extends Model
     protected $casts = [
         'order_date' => 'date',
         'released_at' => 'datetime',
+        'paid_at' => 'datetime',
         'completed_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'sub_total' => 'decimal:2',
@@ -101,6 +107,11 @@ class PurchaseOrder extends Model
     public function isReleased(): bool
     {
         return $this->status === 'released';
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->status === 'paid';
     }
 
     public function isCompleted(): bool

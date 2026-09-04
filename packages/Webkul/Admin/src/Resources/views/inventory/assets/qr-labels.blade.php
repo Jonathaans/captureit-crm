@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
 
-    <title>Inventory Asset QR Labels - A4</title>
+    <title>Inventory Asset QR Labels - A4 - 20x10 mm</title>
 
     <style>
         @page {
@@ -78,107 +78,69 @@
             padding: 20px;
         }
 
-        /*
-         * A4 printable area:
-         * 210 x 297 mm
-         * page margin: 8 mm
-         *
-         * Usable:
-         * 194 x 281 mm
-         *
-         * Grid:
-         * 3 columns x 4 rows = 12 labels / page
-         * label: 62 x 66 mm
-         * gap: 3 mm
+        /* INVENTORY QR LABEL 20X10MM V1
+         * A4 usable area after 8 mm page margins: 194 x 281 mm.
+         * 9 columns x 25 rows = 225 physical labels per page.
+         * Every label is exactly 20 x 10 mm. The QR remains square at
+         * 8 x 8 mm so it is not distorted.
          */
         .sheet {
             display: grid;
-            grid-template-columns: repeat(3, 62mm);
-            grid-template-rows: repeat(4, 66mm);
-            gap: 3mm;
+            grid-template-columns: repeat(9, 20mm);
+            grid-template-rows: repeat(25, 10mm);
+            gap: 1mm;
             width: 194mm;
             min-height: 281mm;
             align-content: start;
-            justify-content: center;
-            padding: 4mm 1mm;
+            justify-content: start;
+            padding: 3.5mm 3mm;
             background: white;
             box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
         }
 
         .label {
-            position: relative;
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: 8mm minmax(0, 1fr);
             align-items: center;
-            justify-content: flex-start;
-            width: 62mm;
-            height: 66mm;
+            gap: 0.8mm;
+            width: 20mm;
+            height: 10mm;
             overflow: hidden;
-            border: 0.35mm dashed #9ca3af;
-            border-radius: 2mm;
-            padding: 4mm 3mm 3mm;
+            border: 0.2mm dashed #9ca3af;
+            border-radius: 0.6mm;
+            padding: 0.7mm;
             background: white;
-        }
-
-        .asset-code {
-            width: 100%;
-            overflow: hidden;
-            color: #111827;
-            font-size: 12pt;
-            font-weight: 800;
-            line-height: 1.05;
-            text-align: center;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .item-name {
-            width: 100%;
-            min-height: 4mm;
-            margin-top: 1.2mm;
-            overflow: hidden;
-            color: #4b5563;
-            font-size: 7.5pt;
-            font-weight: 600;
-            line-height: 1.1;
-            text-align: center;
-            text-overflow: ellipsis;
-            white-space: nowrap;
         }
 
         .qr {
             display: block;
-            width: 31mm;
-            height: 31mm;
-            margin: 2.5mm auto 0;
+            width: 8mm;
+            height: 8mm;
             object-fit: contain;
         }
 
-        .qr-value {
-            width: 100%;
-            margin-top: 2mm;
+        .label-copy {
+            min-width: 0;
             overflow: hidden;
-            font-family: "Courier New", Courier, monospace;
-            font-size: 8.2pt;
-            font-weight: 800;
-            line-height: 1;
-            text-align: center;
-            text-overflow: ellipsis;
-            white-space: nowrap;
         }
 
-        .label-footer {
-            width: 100%;
-            margin-top: auto;
-            padding-top: 1.5mm;
-            border-top: 0.2mm solid #e5e7eb;
-            color: #6b7280;
-            font-size: 5.8pt;
-            font-weight: 700;
-            line-height: 1;
-            text-align: center;
-            text-transform: uppercase;
-            letter-spacing: 0.2mm;
+        .asset-code {
+            overflow-wrap: anywhere;
+            color: #111827;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 5pt;
+            font-weight: 800;
+            line-height: 1.05;
+        }
+
+        .item-name {
+            max-height: 3.2mm;
+            margin-top: 0.6mm;
+            overflow: hidden;
+            color: #4b5563;
+            font-size: 3.7pt;
+            font-weight: 600;
+            line-height: 1.05;
         }
 
         .empty {
@@ -211,7 +173,6 @@
                 width: 194mm;
                 min-height: 281mm;
                 margin: 0;
-                padding: 4mm 1mm;
                 box-shadow: none;
                 page-break-after: always;
                 break-after: page;
@@ -240,13 +201,17 @@
             <span class="toolbar-info">
                 {{ $assets->count() }} label
                 &middot;
-                12 label / A4
+                225 label / A4
                 &middot;
-                {{ (int) ceil($assets->count() / 12) }} page
+                20 x 10 mm / label
+                &middot;
+                {{ (int) ceil($assets->count() / 225) }} page
             </span>
         </div>
 
         <div class="toolbar-right">
+            <span class="toolbar-info">Print scale: 100% / Actual size</span>
+
             <button type="button" onclick="window.print()">
                 Print A4 QR Sheet
             </button>
@@ -259,18 +224,10 @@
         </div>
     @else
         <div class="preview-wrapper">
-            @foreach ($assets->chunk(12) as $pageAssets)
+            @foreach ($assets->chunk(225) as $pageAssets)
                 <section class="sheet">
                     @foreach ($pageAssets as $asset)
                         <div class="label">
-                            <div class="asset-code">
-                                {{ $asset->asset_code }}
-                            </div>
-
-                            <div class="item-name">
-                                {{ $asset->item?->name ?: '-' }}
-                            </div>
-
                             <img
                                 src="{{ route(
                                     'admin.inventory.assets.qr-labels.svg',
@@ -280,12 +237,14 @@
                                 alt="QR {{ $asset->qr_value ?: $asset->asset_code }}"
                             >
 
-                            <div class="qr-value">
-                                {{ $asset->qr_value ?: $asset->asset_code }}
-                            </div>
+                            <div class="label-copy">
+                                <div class="asset-code">
+                                    {{ $asset->asset_code }}
+                                </div>
 
-                            <div class="label-footer">
-                                Inventory Asset
+                                <div class="item-name">
+                                    {{ $asset->item?->name ?: '-' }}
+                                </div>
                             </div>
                         </div>
                     @endforeach

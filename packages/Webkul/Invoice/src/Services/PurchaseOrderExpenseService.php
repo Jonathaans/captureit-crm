@@ -10,16 +10,18 @@ use Webkul\Invoice\Models\PurchaseOrder;
 
 class PurchaseOrderExpenseService
 {
-    /**
-     * RELEASED PO -> exactly one Expense on the related Invoice.
+        /**
+     * PURCHASE ORDER PAID WORKFLOW V1
+     *
+     * PAID PO -> exactly one Expense on the related Invoice.
      */
-    public function createForReleasedPurchaseOrder(
+    public function createForPaidPurchaseOrder(
         PurchaseOrder $purchaseOrder,
         ?int $userId,
         ?string $userName
     ): int {
-        if ($purchaseOrder->expense_id) {
-            return (int) $purchaseOrder->expense_id;
+        if (! $purchaseOrder->isPaid()) {
+            throw new RuntimeException('Expense PO hanya dapat dibuat ketika status PAID.');
         }
 
         $expenseTable = (new Expense())->getTable();
@@ -37,6 +39,38 @@ class PurchaseOrderExpenseService
             }
         }
 
+        /* PURCHASE ORDER PAID PDF RECEIPT V1: keep a host-independent route. */
+        $receiptUrl = route(
+            'admin.purchase-orders.payment-proof',
+            $purchaseOrder->id,
+            absolute: false
+        );
+
+        if (
+            $purchaseOrder->expense_id
+            && DB::table($expenseTable)
+                ->where('id', $purchaseOrder->expense_id)
+                ->exists()
+        ) {
+            $updates = [];
+
+            if (in_array('receipt_path', $columns, true)) {
+                $updates['receipt_path'] = $receiptUrl;
+            }
+
+            if (in_array('updated_at', $columns, true)) {
+                $updates['updated_at'] = now();
+            }
+
+            if ($updates !== []) {
+                DB::table($expenseTable)
+                    ->where('id', $purchaseOrder->expense_id)
+                    ->update($updates);
+            }
+
+            return (int) $purchaseOrder->expense_id;
+        }
+
         $description = sprintf(
             '%s - Vendor %s - %s',
             $purchaseOrder->po_number,
@@ -48,12 +82,13 @@ class PurchaseOrderExpenseService
             'invoice_id' => $purchaseOrder->invoice_id,
             'category' => $this->resolveCategory($expenseTable),
             'amount' => (float) $purchaseOrder->grand_total,
-            'expense_date' => now()->toDateString(),
+            'expense_date' => ($purchaseOrder->paid_at ?? now())->toDateString(),
         ];
 
         $optionalValues = [
             'description' => $description,
             'notes' => $description,
+            'receipt_path' => $receiptUrl,
             'reference_type' => 'purchase_order',
             'reference_id' => $purchaseOrder->id,
             'reference_number' => $purchaseOrder->po_number,
@@ -72,6 +107,19 @@ class PurchaseOrderExpenseService
         }
 
         return (int) DB::table($expenseTable)->insertGetId($payload);
+    }
+
+    /**
+     * Old release posting entry point is intentionally blocked.
+     */
+    public function createForReleasedPurchaseOrder(
+        PurchaseOrder $purchaseOrder,
+        ?int $userId,
+        ?string $userName
+    ): int {
+        throw new RuntimeException(
+            'Posting Expense saat RELEASED sudah dinonaktifkan. Gunakan workflow PAID.'
+        );
     }
 
     public function removeForCancelledPurchaseOrder(PurchaseOrder $purchaseOrder): void

@@ -2101,7 +2101,7 @@ public function generateDeliveryOrder(
         /*
          * PO-GENERATED EXPENSE GUARD
          *
-         * Expense dari RELEASED/COMPLETED PO dikunci agar PO dan
+         * Expense dari PAID/legacy PO dikunci agar PO dan
          * Financial Report tidak berbeda nominal.
          */
         $linkedPurchaseOrder =
@@ -2110,8 +2110,9 @@ public function generateDeliveryOrder(
                 ->whereIn(
                     'status',
                     [
-                        'released',
-                        'completed',
+                        'paid',
+                        'released', // legacy rows posted by the old flow
+                        'completed', // legacy rows
                     ]
                 )
                 ->first();
@@ -2272,7 +2273,7 @@ public function generateDeliveryOrder(
         /*
          * PO-GENERATED EXPENSE GUARD
          *
-         * Expense dari RELEASED/COMPLETED PO dikunci agar PO dan
+         * Expense dari PAID/legacy PO dikunci agar PO dan
          * Financial Report tidak berbeda nominal.
          */
         $linkedPurchaseOrder =
@@ -2281,8 +2282,9 @@ public function generateDeliveryOrder(
                 ->whereIn(
                     'status',
                     [
-                        'released',
-                        'completed',
+                        'paid',
+                        'released', // legacy rows posted by the old flow
+                        'completed', // legacy rows
                     ]
                 )
                 ->first();

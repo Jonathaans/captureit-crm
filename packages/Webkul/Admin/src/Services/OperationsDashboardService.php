@@ -103,8 +103,14 @@ class OperationsDashboardService
                 $this->incidentsCard();
         }
 
+        /* CRM_FULL_QA_BACKUP_CENTER_V1 */
+        $qa = app(CrmFlowQualityAssuranceService::class)->run(request()->boolean('refresh_qa'));
+        $backup = app(CrmBackupStatusService::class)->summary();
+
         return [
             'role' => $role,
+            'qa' => $qa,
+            'backup' => $backup,
             'cards' => array_values(
                 array_filter(
                     $cards
@@ -517,12 +523,6 @@ class OperationsDashboardService
                 'label' => 'Notifications',
                 'url' => $this->routeUrl(
                     'admin.crm-notifications.index'
-                ),
-            ],
-            [
-                'label' => 'Vendor Master',
-                'url' => $this->routeUrl(
-                    'admin.vendors.index'
                 ),
             ],
         ];

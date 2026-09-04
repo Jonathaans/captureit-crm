@@ -206,14 +206,11 @@ class DeliveryOrderReturnController extends Controller
     /**
      * Save all quantity returns in one submit.
      */
-    /**
-     * Finalize inspection and quantity return in one submit.
+        /**
+     * RETURN DAMAGED NOTE V1
      *
-     * Operator flow:
-     * 1. Scan all physical serialized assets first.
-     * 2. Review / change only Fair or Damaged.
-     * 3. Fill quantity return.
-     * 4. Click Finalize Return once.
+     * Finalize inspection and quantity return in one submit. A damage reason
+     * is mandatory for every serialized asset marked DAMAGED.
      */
     public function finalize(
         Request $request,
@@ -236,6 +233,17 @@ class DeliveryOrderReturnController extends Controller
                 ]),
             ],
 
+            'return_notes' => [
+                'nullable',
+                'array',
+            ],
+
+            'return_notes.*' => [
+                'nullable',
+                'string',
+                'max:2000',
+            ],
+
             'quantities' => [
                 'nullable',
                 'array',
@@ -248,11 +256,33 @@ class DeliveryOrderReturnController extends Controller
             ],
         ]);
 
+        $conditions = $validated['conditions'] ?? [];
+        $returnNotes = $validated['return_notes'] ?? [];
+        $damageErrors = [];
+
+        foreach ($conditions as $allocationId => $condition) {
+            if (strtolower((string) $condition) !== 'damaged') {
+                continue;
+            }
+
+            $damageNote = trim((string) ($returnNotes[$allocationId] ?? ''));
+
+            if ($damageNote === '') {
+                $damageErrors['return_notes.'.$allocationId] =
+                    'Alasan kerusakan wajib diisi untuk barang DAMAGED.';
+            }
+        }
+
+        if ($damageErrors !== []) {
+            throw ValidationException::withMessages($damageErrors);
+        }
+
         $this->returnService->finalizeReturnBatch(
             $deliveryOrder,
-            $validated['conditions'] ?? [],
+            $conditions,
             $validated['quantities'] ?? [],
-            auth()->guard('user')->id()
+            auth()->guard('user')->id(),
+            $returnNotes
         );
 
         return redirect()
@@ -262,7 +292,7 @@ class DeliveryOrderReturnController extends Controller
             )
             ->with(
                 'success',
-                'Return berhasil difinalisasi. Condition dan quantity return sudah disimpan.'
+                'Return berhasil difinalisasi. Condition, alasan kerusakan, dan quantity return sudah disimpan.'
             );
     }
 

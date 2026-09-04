@@ -269,28 +269,23 @@ class DeliveryOrderReturnService
         });
     }
 
-    /**
-     * Finalize all received serialized assets and all quantity returns
-     * in one transaction.
+        /**
+     * RETURN DAMAGED NOTE V1
      *
-     * Serialized:
-     * RETURN_PENDING -> AVAILABLE / DAMAGED
-     *
-     * Quantity:
-     * OUT / RETURN_PENDING -> RETURNED
-     *
-     * Serialized assets that are still OUT block finalization because
-     * they have not been physically scanned back yet. Missing assets must
-     * be explicitly marked Missing before finalization.
+     * Finalize all received serialized assets and all quantity returns in one
+     * transaction. Damage notes are mandatory and are persisted on the
+     * allocation and its inventory movement.
      *
      * @param array<int, string> $conditions
      * @param array<int, float|int|string> $quantities
+     * @param array<int, string> $returnNotes
      */
     public function finalizeReturnBatch(
         DeliveryOrder $deliveryOrder,
         array $conditions,
         array $quantities,
-        ?int $performedBy = null
+        ?int $performedBy = null,
+        array $returnNotes = []
     ): void {
         $this->assertDelivered($deliveryOrder);
 
@@ -298,7 +293,8 @@ class DeliveryOrderReturnService
             $deliveryOrder,
             $conditions,
             $quantities,
-            $performedBy
+            $performedBy,
+            $returnNotes
         ) {
             $notReceived = DeliveryOrderInventoryAllocation::query()
                 ->where('delivery_order_id', $deliveryOrder->id)
@@ -360,11 +356,31 @@ class DeliveryOrderReturnService
                     ]);
                 }
 
+                $damageNote = null;
+
+                if ($condition === 'damaged') {
+                    $damageNote = trim((string) ($returnNotes[$key] ?? ''));
+
+                    if ($damageNote === '') {
+                        throw ValidationException::withMessages([
+                            'return_notes.'.$allocation->id =>
+                                'Alasan kerusakan wajib diisi untuk barang DAMAGED.',
+                        ]);
+                    }
+
+                    if (mb_strlen($damageNote) > 2000) {
+                        throw ValidationException::withMessages([
+                            'return_notes.'.$allocation->id =>
+                                'Alasan kerusakan maksimal 2000 karakter.',
+                        ]);
+                    }
+                }
+
                 $this->finalizeSerializedCheckIn(
                     $deliveryOrder,
                     $allocation,
                     $condition,
-                    null,
+                    $damageNote,
                     $performedBy
                 );
             }
@@ -624,6 +640,21 @@ class DeliveryOrderReturnService
         ?string $notes,
         ?int $performedBy
     ): void {
+        // RETURN DAMAGED NOTE V1: enforce the rule at the service boundary too.
+        $notes = $notes !== null ? trim($notes) : null;
+
+        if ($condition === 'damaged' && ($notes === null || $notes === '')) {
+            throw ValidationException::withMessages([
+                'notes' => 'Alasan kerusakan wajib diisi untuk barang DAMAGED.',
+            ]);
+        }
+
+        if ($notes !== null && mb_strlen($notes) > 2000) {
+            throw ValidationException::withMessages([
+                'notes' => 'Alasan kerusakan maksimal 2000 karakter.',
+            ]);
+        }
+
         if ($allocation->status !== 'return_pending') {
             throw ValidationException::withMessages([
                 'condition' => sprintf(

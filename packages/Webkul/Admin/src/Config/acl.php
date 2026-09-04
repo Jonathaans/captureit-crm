@@ -980,6 +980,19 @@ return [
     ],
 
     [
+        'key'   => 'contacts.vendors',
+        'name'  => 'Vendor Master',
+        'route' => [
+            'admin.vendors.index',
+            'admin.vendors.create',
+            'admin.vendors.store',
+            'admin.vendors.edit',
+            'admin.vendors.update',
+            'admin.vendors.npwp-image',
+        ],
+        'sort'  => 3,
+    ],
+    [
         'key'   => 'purchase-orders',
         'name'  => 'Purchase Orders',
         'route' => 'admin.purchase-orders.index',
@@ -1003,13 +1016,22 @@ return [
     ], [
         'key'   => 'purchase-orders.view',
         'name'  => 'View Purchase Order',
-        'route' => 'admin.purchase-orders.show',
+        'route' => [
+            'admin.purchase-orders.show',
+            'admin.purchase-orders.payment-proof',
+        ],
         'sort'  => 3,
     ], [
         'key'   => 'purchase-orders.release',
         'name'  => 'Release Purchase Order',
         'route' => 'admin.purchase-orders.release',
         'sort'  => 4,
+    ], [
+        /* PURCHASE ORDER PAID WORKFLOW V1 ACL */
+        'key'   => 'purchase-orders.paid',
+        'name'  => 'Mark Purchase Order Paid',
+        'route' => 'admin.purchase-orders.paid',
+        'sort'  => 5,
     ], [
         'key'   => 'purchase-orders.complete',
         'name'  => 'Complete Purchase Order',
